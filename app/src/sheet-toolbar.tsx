@@ -199,7 +199,7 @@ class ToolbarMenuControl extends React.Component {
     }
 
     return (
-      <div className="toolbar-menu-control" style={{ order: -100 }}>
+      <div className="toolbar-menu-control" style={{ order: -200 }}>
         <button
           tabIndex={0}
           className="btn btn-toolbar"
