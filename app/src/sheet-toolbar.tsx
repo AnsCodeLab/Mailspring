@@ -155,12 +155,6 @@ class ToolbarWindowControls extends React.Component<Record<string, unknown>, { a
         >
           <button
             tabIndex={-1}
-            className="close"
-            aria-label={localized('Close window')}
-            onClick={() => AppEnv.close()}
-          />
-          <button
-            tabIndex={-1}
             className="minimize"
             aria-label={localized('Minimize window')}
             onClick={() => AppEnv.minimize()}
@@ -170,6 +164,12 @@ class ToolbarWindowControls extends React.Component<Record<string, unknown>, { a
             className="maximize"
             aria-label={localized('Maximize window')}
             onClick={this._onMaximize}
+          />
+          <button
+            tabIndex={-1}
+            className="close"
+            aria-label={localized('Close window')}
+            onClick={() => AppEnv.close()}
           />
         </RovingTabIndexToolbar>
       </div>
