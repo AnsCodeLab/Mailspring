@@ -148,7 +148,7 @@ class ToolbarWindowControls extends React.Component<Record<string, unknown>, { a
     }
 
     return (
-      <div style={{ order: 100 }}>
+      <div style={{ order: 1000 }}>
         <RovingTabIndexToolbar
           label={localized('Window Controls')}
           className={`toolbar-window-controls alt-${this.state.alt}`}
