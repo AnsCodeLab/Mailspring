@@ -377,6 +377,7 @@ export function BuildFontSizeInput(config: {
   default?: string;
   iconClass?: string;
 }) {
+  const PRESET_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
   const legacyToPt: Record<number, number> = { 1: 8, 2: 10, 3: 12, 4: 14, 5: 18, 6: 24 };
 
   function ptFromMarkValue(val: any): string {
@@ -392,35 +393,14 @@ export function BuildFontSizeInput(config: {
 
   return class FontSizeInput extends React.Component<
     ComposerEditorPluginToolbarComponentProps,
-    { editing: boolean; inputValue: string }
+    { open: boolean; inputValue: string }
   > {
-    state = { editing: false, inputValue: '' };
+    state = { open: false, inputValue: '' };
     _savedMarks: Mark[] = [];
-    _mouseDownValue: string | undefined = undefined;
+    _inputEl: HTMLInputElement;
+    _ignoreInputBlur = false;
 
-    _onMouseDown = (e: React.MouseEvent) => {
-      this._savedMarks = safeActiveMarks(this.props.value);
-      this._mouseDownValue = ptFromMarkValue(
-        getActiveValueForMark(this.props.value, config.type)
-      );
-      e.stopPropagation();
-    };
-
-    _onFocus = () => {
-      const current =
-        this._mouseDownValue !== undefined
-          ? this._mouseDownValue
-          : ptFromMarkValue(getActiveValueForMark(this.props.value, config.type));
-      this._mouseDownValue = undefined;
-      this.setState({ editing: true, inputValue: current || config.default || '' });
-    };
-
-    _onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      this.setState({ inputValue: e.target.value });
-    };
-
-    _commit = (domValue?: string) => {
-      const raw = domValue !== undefined ? domValue : this.state.inputValue;
+    _applySize = (raw: string) => {
       const pt = parseInt(raw, 10);
       const markValue = pt >= 1 && pt <= 200 ? String(pt) + 'pt' : null;
       applyValueForMark(this.props.editor, config.type, markValue);
@@ -435,18 +415,61 @@ export function BuildFontSizeInput(config: {
       }
     };
 
-    _onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-      this._commit(e.target.value);
-      this.setState({ editing: false });
+    _onToggleMouseDown = (e: React.MouseEvent) => {
+      this._savedMarks = safeActiveMarks(this.props.value);
+      e.preventDefault();
     };
 
-    _onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    _onToggleClick = () => {
+      if (this.state.open) {
+        this.setState({ open: false });
+        return;
+      }
+      const currentVal =
+        ptFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
+        config.default ||
+        '';
+      this.setState({ open: true, inputValue: currentVal }, () => {
+        setTimeout(() => {
+          if (this._inputEl) {
+            this._inputEl.focus();
+            this._inputEl.select();
+          }
+        }, 0);
+      });
+    };
+
+    _onPresetMouseDown = (e: React.MouseEvent, size: number) => {
+      e.preventDefault();
+      this._ignoreInputBlur = true;
+      this._applySize(String(size));
+      this.setState({ open: false });
+    };
+
+    _onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      this.setState({ inputValue: e.target.value });
+    };
+
+    _onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
-        this._commit((e.target as HTMLInputElement).value);
-        (e.target as HTMLInputElement).blur();
+        this._applySize((e.target as HTMLInputElement).value);
+        this._ignoreInputBlur = true;
+        this.setState({ open: false });
         e.preventDefault();
+      } else if (e.key === 'Escape') {
+        this._ignoreInputBlur = true;
+        this.setState({ open: false });
       }
       e.stopPropagation();
+    };
+
+    _onInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      if (this._ignoreInputBlur) {
+        this._ignoreInputBlur = false;
+        return;
+      }
+      this._applySize(e.target.value);
+      this.setState({ open: false });
     };
 
     shouldComponentUpdate(nextProps, nextState) {
@@ -458,45 +481,80 @@ export function BuildFontSizeInput(config: {
     }
 
     render() {
-      const { editing, inputValue } = this.state;
-      const displayVal =
-        editing
-          ? inputValue
-          : ptFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
-            config.default ||
-            '';
+      const { open, inputValue } = this.state;
+      const currentVal =
+        ptFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
+        config.default ||
+        '';
       return (
         <div
           className={this.props.className}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', cursor: 'default' }}
+          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', position: 'relative' }}
         >
           <i
             className={config.iconClass || 'fa fa-text-height'}
-            style={{ marginRight: 3, pointerEvents: 'none' }}
+            style={{ marginRight: 4, pointerEvents: 'none' }}
           />
-          <input
-            type="number"
-            min={6}
-            max={96}
-            step={1}
-            placeholder="pt"
-            value={displayVal}
+          <div
             style={{
-              width: 36,
-              fontSize: 12,
-              padding: '0 2px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              minWidth: 30,
+              padding: '1px 5px',
               border: '1px solid rgba(0,0,0,0.2)',
               borderRadius: 3,
-              background: 'transparent',
-              color: 'inherit',
+              cursor: 'pointer',
+              fontSize: 12,
+              userSelect: 'none',
+              background: open ? 'rgba(0,0,0,0.07)' : 'transparent',
             }}
-            tabIndex={-1}
-            onFocus={this._onFocus}
-            onChange={this._onChange}
-            onBlur={this._onBlur}
-            onKeyDown={this._onKeyDown}
-            onMouseDown={this._onMouseDown}
-          />
+            onMouseDown={this._onToggleMouseDown}
+            onClick={this._onToggleClick}
+          >
+            {currentVal}
+          </div>
+          {open && (
+            <div className="dropdown" style={{ top: '100%', left: 0, padding: '4px 0', minWidth: 56 }}>
+              <input
+                type="number"
+                min={6}
+                max={200}
+                ref={(el) => (this._inputEl = el)}
+                value={inputValue}
+                onChange={this._onInputChange}
+                onKeyDown={this._onInputKeyDown}
+                onBlur={this._onInputBlur}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                  display: 'block',
+                  width: 'calc(100% - 12px)',
+                  margin: '4px 6px',
+                  padding: '2px 4px',
+                  fontSize: 12,
+                  border: '1px solid rgba(0,0,0,0.2)',
+                  borderRadius: 3,
+                  background: 'transparent',
+                  color: 'inherit',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {PRESET_SIZES.map((size) => (
+                <div
+                  key={size}
+                  onMouseDown={(e) => this._onPresetMouseDown(e, size)}
+                  style={{
+                    padding: '3px 10px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontWeight: String(size) === currentVal ? 600 : 400,
+                    background: String(size) === currentVal ? 'rgba(0,120,215,0.12)' : 'transparent',
+                  }}
+                >
+                  {size}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
