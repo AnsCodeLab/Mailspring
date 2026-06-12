@@ -96,11 +96,22 @@ export class ComposerEditor extends React.Component<ComposerEditorProps, Compose
   componentDidMount() {
     this._mounted = true;
     this.props.onUpdatedSlateEditor && this.props.onUpdatedSlateEditor(this.editor);
-
-    // This is a bit of a hack. The toolbar requires access to the Editor model,
-    // which IS the Editor component in `slate-react`. It seems silly to copy a ref
-    // into state, but we need to re-render once after mount when we have it.
     this.forceUpdate();
+
+    // Set default font face + size for new empty composers and reply/forward
+    // drafts (which start with a blockquote). Deferred so the editor is ready.
+    requestAnimationFrame(() => {
+      if (!this._mounted || !this.editor) return;
+      const doc = this.props.value.document;
+      const texts = doc.getTexts().toArray();
+      const isEmpty = texts.length === 0 || texts.every((t) => !t.text || t.text.trim() === '');
+      const hasBlockquote = !!doc.findDescendant((n: any) => n.type === 'blockquote');
+      if (isEmpty || hasBlockquote) {
+        this.editor.focus().moveToStart();
+        this.editor.addMark({ type: 'face', data: { value: 'sans-serif' } });
+        this.editor.addMark({ type: 'size', data: { value: '11pt' } });
+      }
+    });
   }
 
   componentWillUnmount() {

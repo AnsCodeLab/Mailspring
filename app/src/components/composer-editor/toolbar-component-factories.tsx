@@ -371,3 +371,256 @@ export function BuildFontPicker(config) {
     }
   };
 }
+
+export function BuildFontSizeInput(config: {
+  type: string;
+  default?: string;
+  iconClass?: string;
+}) {
+  const legacyToPt: Record<number, number> = { 1: 8, 2: 10, 3: 12, 4: 14, 5: 18, 6: 24 };
+
+  function ptFromMarkValue(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string' && val.endsWith('pt')) return val.slice(0, -2);
+    if (typeof val === 'string' && val.endsWith('px'))
+      return String(Math.round(parseInt(val, 10) * 0.75));
+    if (typeof val === 'string' && val.endsWith('em'))
+      return String(Math.round(parseFloat(val) * 12));
+    if (typeof val === 'number') return String(legacyToPt[val] || 12);
+    return '';
+  }
+
+  return class FontSizeInput extends React.Component<
+    ComposerEditorPluginToolbarComponentProps,
+    { editing: boolean; inputValue: string }
+  > {
+    state = { editing: false, inputValue: '' };
+    _savedMarks: Mark[] = [];
+    _mouseDownValue: string | undefined = undefined;
+
+    _onMouseDown = (e: React.MouseEvent) => {
+      this._savedMarks = safeActiveMarks(this.props.value);
+      this._mouseDownValue = ptFromMarkValue(
+        getActiveValueForMark(this.props.value, config.type)
+      );
+      e.stopPropagation();
+    };
+
+    _onFocus = () => {
+      const current =
+        this._mouseDownValue !== undefined
+          ? this._mouseDownValue
+          : ptFromMarkValue(getActiveValueForMark(this.props.value, config.type));
+      this._mouseDownValue = undefined;
+      this.setState({ editing: true, inputValue: current || config.default || '' });
+    };
+
+    _onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      this.setState({ inputValue: e.target.value });
+    };
+
+    _commit = (domValue?: string) => {
+      const raw = domValue !== undefined ? domValue : this.state.inputValue;
+      const pt = parseInt(raw, 10);
+      const markValue = pt >= 1 && pt <= 200 ? String(pt) + 'pt' : null;
+      applyValueForMark(this.props.editor, config.type, markValue);
+      for (const mark of this._savedMarks) {
+        if (mark.type === config.type) continue;
+        const stillPresent = safeActiveMarks(this.props.editor.value).some(
+          (m) => m.type === mark.type
+        );
+        if (!stillPresent) {
+          this.props.editor.addMark({ type: mark.type, data: { value: mark.data.get('value') } });
+        }
+      }
+    };
+
+    _onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      this._commit(e.target.value);
+      this.setState({ editing: false });
+    };
+
+    _onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        this._commit((e.target as HTMLInputElement).value);
+        (e.target as HTMLInputElement).blur();
+        e.preventDefault();
+      }
+      e.stopPropagation();
+    };
+
+    shouldComponentUpdate(nextProps, nextState) {
+      if (nextState !== this.state) return true;
+      return (
+        getActiveValueForMark(nextProps.value, config.type) !==
+        getActiveValueForMark(this.props.value, config.type)
+      );
+    }
+
+    render() {
+      const { editing, inputValue } = this.state;
+      const displayVal =
+        editing
+          ? inputValue
+          : ptFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
+            config.default ||
+            '';
+      return (
+        <div
+          className={this.props.className}
+          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', cursor: 'default' }}
+        >
+          <i
+            className={config.iconClass || 'fa fa-text-height'}
+            style={{ marginRight: 3, pointerEvents: 'none' }}
+          />
+          <input
+            type="number"
+            min={6}
+            max={96}
+            step={1}
+            placeholder="pt"
+            value={displayVal}
+            style={{
+              width: 36,
+              fontSize: 12,
+              padding: '0 2px',
+              border: '1px solid rgba(0,0,0,0.2)',
+              borderRadius: 3,
+              background: 'transparent',
+              color: 'inherit',
+            }}
+            tabIndex={-1}
+            onFocus={this._onFocus}
+            onChange={this._onChange}
+            onBlur={this._onBlur}
+            onKeyDown={this._onKeyDown}
+            onMouseDown={this._onMouseDown}
+          />
+        </div>
+      );
+    }
+  };
+}
+
+const FONT_DATALIST_ID = 'mailspring-font-list';
+
+export function BuildFontFacePicker(config: {
+  type: string;
+  default?: string;
+  options: Array<{ name: string; value: string }>;
+}) {
+  function faceFromMarkValue(val: any): string {
+    if (!val) return '';
+    const opt = config.options.find((o) =>
+      val.toLowerCase().includes(o.value.toLowerCase())
+    );
+    return opt ? opt.value : val;
+  }
+
+  return class FontFacePicker extends React.Component<
+    ComposerEditorPluginToolbarComponentProps,
+    { editing: boolean; inputValue: string }
+  > {
+    state = { editing: false, inputValue: '' };
+    _savedMarks: Mark[] = [];
+    _mouseDownValue: string | undefined = undefined;
+
+    _onMouseDown = (e: React.MouseEvent) => {
+      this._savedMarks = safeActiveMarks(this.props.value);
+      this._mouseDownValue = faceFromMarkValue(
+        getActiveValueForMark(this.props.value, config.type)
+      );
+      e.stopPropagation();
+    };
+
+    _onFocus = () => {
+      const raw =
+        this._mouseDownValue !== undefined
+          ? this._mouseDownValue
+          : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type));
+      this._mouseDownValue = undefined;
+      this.setState({ editing: true, inputValue: raw || config.default || '' });
+    };
+
+    _onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      this.setState({ inputValue: e.target.value });
+    };
+
+    _commit = (domValue?: string) => {
+      const v =
+        ((domValue !== undefined ? domValue : this.state.inputValue).trim()) ||
+        config.default ||
+        'sans-serif';
+      applyValueForMark(this.props.editor, config.type, v);
+      for (const mark of this._savedMarks) {
+        if (mark.type === config.type) continue;
+        const stillPresent = safeActiveMarks(this.props.editor.value).some(
+          (m) => m.type === mark.type
+        );
+        if (!stillPresent) {
+          this.props.editor.addMark({ type: mark.type, data: { value: mark.data.get('value') } });
+        }
+      }
+    };
+
+    _onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      this._commit(e.target.value);
+      this.setState({ editing: false });
+    };
+
+    _onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        this._commit((e.target as HTMLInputElement).value);
+        (e.target as HTMLInputElement).blur();
+        e.preventDefault();
+      }
+      e.stopPropagation();
+    };
+
+    render() {
+      const { editing, inputValue } = this.state;
+      const displayVal =
+        editing
+          ? inputValue
+          : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
+            config.default ||
+            '';
+      return (
+        <div
+          className={this.props.className}
+          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', cursor: 'default' }}
+        >
+          <input
+            type="text"
+            list={FONT_DATALIST_ID}
+            placeholder="Font"
+            value={displayVal}
+            style={{
+              width: 110,
+              fontSize: 12,
+              padding: '1px 4px',
+              border: '1px solid rgba(0,0,0,0.2)',
+              borderRadius: 3,
+              background: 'transparent',
+              color: 'inherit',
+            }}
+            tabIndex={-1}
+            onFocus={this._onFocus}
+            onChange={this._onChange}
+            onBlur={this._onBlur}
+            onKeyDown={this._onKeyDown}
+            onMouseDown={this._onMouseDown}
+          />
+          <datalist id={FONT_DATALIST_ID}>
+            {config.options.map(({ name, value }) => (
+              <option key={value} value={value}>
+                {name}
+              </option>
+            ))}
+          </datalist>
+        </div>
+      );
+    }
+  };
+}

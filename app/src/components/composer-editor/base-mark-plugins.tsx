@@ -6,6 +6,8 @@ import {
   BuildToggleButton,
   BuildColorPicker,
   BuildFontPicker,
+  BuildFontFacePicker,
+  BuildFontSizeInput,
   safeActiveMarks,
 } from './toolbar-component-factories';
 
@@ -273,47 +275,15 @@ const BaseMarkPlugin: ComposerEditorPlugin = {
     )
     .concat([
       BuildColorPicker({ type: 'color', default: '#000000' }),
-      BuildFontPicker({
+      BuildFontFacePicker({
         type: 'face',
         default: DEFAULT_FONT_FACE,
         options: DEFAULT_FONT_FACE_OPTIONS,
-        convert: (provided) => {
-          let opt = null;
-          let score = 10000;
-          for (const aopt of DEFAULT_FONT_FACE_OPTIONS) {
-            const i = provided.toLowerCase().indexOf(aopt.value);
-            if (i >= 0 && i < score) {
-              score = i;
-              opt = aopt;
-            }
-          }
-          return opt ? opt.value : 'sans-serif';
-        },
       }),
-      BuildFontPicker({
+      BuildFontSizeInput({
         type: 'size',
+        default: '11',
         iconClass: 'fa fa-text-height',
-        default: DEFAULT_FONT_SIZE,
-        options: DEFAULT_FONT_OPTIONS,
-        convert: (provided) => {
-          if (typeof provided === 'string') {
-            let size = 2;
-            if (provided.endsWith('px')) {
-              // 16px = 12pt
-              size = PT_TO_SIZE[Math.round((Number(provided.replace('px', '')) / 1) * 0.75)];
-            }
-            if (provided.endsWith('em')) {
-              // 1em = 12pt
-              size = PT_TO_SIZE[Math.round(Number(provided.replace('em', '')) * 12)];
-            }
-            if (provided.endsWith('pt')) {
-              size = PT_TO_SIZE[Math.round(Number(provided.replace('pt', '')) * 1)];
-            }
-            const opt = DEFAULT_FONT_OPTIONS.find(({ value }) => value >= size);
-            return opt ? opt.value : 2;
-          }
-          return provided;
-        },
       }),
     ]),
   renderMark,

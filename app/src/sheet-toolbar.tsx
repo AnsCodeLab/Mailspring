@@ -148,29 +148,31 @@ class ToolbarWindowControls extends React.Component<Record<string, unknown>, { a
     }
 
     return (
-      <RovingTabIndexToolbar
-        label={localized('Window Controls')}
-        className={`toolbar-window-controls alt-${this.state.alt}`}
-      >
-        <button
-          tabIndex={-1}
-          className="close"
-          aria-label={localized('Close window')}
-          onClick={() => AppEnv.close()}
-        />
-        <button
-          tabIndex={-1}
-          className="minimize"
-          aria-label={localized('Minimize window')}
-          onClick={() => AppEnv.minimize()}
-        />
-        <button
-          tabIndex={-1}
-          className="maximize"
-          aria-label={localized('Maximize window')}
-          onClick={this._onMaximize}
-        />
-      </RovingTabIndexToolbar>
+      <div style={{ order: 100 }}>
+        <RovingTabIndexToolbar
+          label={localized('Window Controls')}
+          className={`toolbar-window-controls alt-${this.state.alt}`}
+        >
+          <button
+            tabIndex={-1}
+            className="close"
+            aria-label={localized('Close window')}
+            onClick={() => AppEnv.close()}
+          />
+          <button
+            tabIndex={-1}
+            className="minimize"
+            aria-label={localized('Minimize window')}
+            onClick={() => AppEnv.minimize()}
+          />
+          <button
+            tabIndex={-1}
+            className="maximize"
+            aria-label={localized('Maximize window')}
+            onClick={this._onMaximize}
+          />
+        </RovingTabIndexToolbar>
+      </div>
     );
   }
 }
@@ -197,7 +199,7 @@ class ToolbarMenuControl extends React.Component {
     }
 
     return (
-      <div className="toolbar-menu-control">
+      <div className="toolbar-menu-control" style={{ order: -100 }}>
         <button
           tabIndex={0}
           className="btn btn-toolbar"
@@ -220,14 +222,14 @@ class ToolbarMenuControl extends React.Component {
 // to intentionally undo the flip.
 ComponentRegistry.register(ToolbarWindowControls, {
   location: isRTL
-    ? WorkspaceStore.Sheet.Global.Toolbar.Right
-    : WorkspaceStore.Sheet.Global.Toolbar.Left,
+    ? WorkspaceStore.Sheet.Global.Toolbar.Left
+    : WorkspaceStore.Sheet.Global.Toolbar.Right,
 });
 
 ComponentRegistry.register(ToolbarMenuControl, {
   location: isRTL
-    ? WorkspaceStore.Sheet.Global.Toolbar.Left
-    : WorkspaceStore.Sheet.Global.Toolbar.Right,
+    ? WorkspaceStore.Sheet.Global.Toolbar.Right
+    : WorkspaceStore.Sheet.Global.Toolbar.Left,
 });
 
 interface ToolbarProps {

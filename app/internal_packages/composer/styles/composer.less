@@ -863,3 +863,13 @@ body.platform-win32 {
     color: @text-color-very-subtle;
   }
 }
+
+// Hide spin buttons on the font-size number input
+input[type='number'] {
+  -webkit-appearance: textfield;
+  appearance: textfield;
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    display: none;
+  }
+}
