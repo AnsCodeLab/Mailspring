@@ -105,7 +105,7 @@ export function activate() {
       role: 'Composer',
     });
     ComponentRegistry.register(ComposeButton, {
-      location: WorkspaceStore.Location.RootSidebar.Toolbar,
+      location: WorkspaceStore.Location.ThreadList.Toolbar,
     });
   } else if (AppEnv.isThreadWindow()) {
     ComponentRegistry.register(ComposerViewForDraftClientId, {
