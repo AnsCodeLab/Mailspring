@@ -13,7 +13,7 @@ export default class ComposeButton extends React.Component {
     return (
       <button
         className="btn btn-toolbar item-compose"
-        style={{ order: 100 }}
+        style={{ order: -200 }}
         title={localized('Compose new message')}
         aria-label={localized('Compose new message')}
         onClick={this._onNewCompose}
