@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            software-properties-common \
+            autoconf automake build-essential clang cmake fakeroot git \
+            libc-ares-dev libctemplate-dev libcurl4-openssl-dev libglib2.0-dev \
+            libicu-dev libsasl2-dev libsasl2-modules libsasl2-modules-gssapi-mit \
+            libsecret-1-dev libssl-dev libnss3 libnss3-dev libtidy-dev libtool \
+            libxext-dev libxkbfile-dev libxml2-dev libxtst-dev pkg-config rpm \
+            uuid-dev xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Mailspring ${{ github.ref_name }}
+          body: |
+            Custom build of Mailspring based on v1.21.1 with UI customizations:
+            - Toolbar reorder: hamburger left, window controls right (minimize → maximize → close)
+            - Compose, Refresh, Apply Rules, and Preferences buttons in message toolbar
+            - Font size dropdown picker that preserves text selection
+            - 11pt sans-serif default font in composer
+          files: |
+            app/dist/*.deb
+            app/dist/*.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
