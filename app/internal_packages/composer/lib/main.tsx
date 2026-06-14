@@ -12,6 +12,7 @@ import {
 import ComposeButton from './compose-button';
 import RefreshButton from './refresh-button';
 import ApplyRulesButton from './apply-rules-button';
+import PreferencesButton from './preferences-button';
 import ComposerView from './composer-view';
 
 const ComposerViewForDraftClientId = InflatesDraftClientId(ComposerView);
@@ -115,6 +116,9 @@ export function activate() {
     ComponentRegistry.register(ApplyRulesButton, {
       location: WorkspaceStore.Location.MessageList.Toolbar,
     });
+    ComponentRegistry.register(PreferencesButton, {
+      location: WorkspaceStore.Location.MessageList.Toolbar,
+    });
   } else if (AppEnv.isThreadWindow()) {
     ComponentRegistry.register(ComposerViewForDraftClientId, {
       role: 'Composer',
@@ -143,6 +147,7 @@ export function deactivate() {
     ComponentRegistry.unregister(ComposeButton);
     ComponentRegistry.unregister(RefreshButton);
     ComponentRegistry.unregister(ApplyRulesButton);
+    ComponentRegistry.unregister(PreferencesButton);
   } else {
     ComponentRegistry.unregister(ComposerWithWindowProps);
   }
