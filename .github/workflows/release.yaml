@@ -91,6 +91,7 @@ jobs:
 
       - name: Sign application files with Azure Trusted Signing
         uses: azure/trusted-signing-action@v0
+        continue-on-error: true
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -110,6 +111,7 @@ jobs:
 
       - name: Sign Windows installer with Azure Trusted Signing
         uses: azure/trusted-signing-action@v0
+        continue-on-error: true
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
