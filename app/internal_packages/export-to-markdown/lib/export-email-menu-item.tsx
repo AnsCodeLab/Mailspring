@@ -1,5 +1,5 @@
 import React from 'react';
-import { Message, Thread, DatabaseStore, localized } from 'mailspring-exports';
+import { Message, Thread, DatabaseStore, localized, AppEnv } from 'mailspring-exports';
 import { buildSingleMessageMarkdown, saveMarkdownFile } from './export-utils';
 
 export default class ExportEmailMenuItem extends React.Component {
@@ -9,15 +9,22 @@ export default class ExportEmailMenuItem extends React.Component {
     return {
       label: localized('Export as Markdown'),
       click: async () => {
-        let msg = message;
-        if (!msg.body) {
-          msg = await DatabaseStore.find<Message>(Message, message.id).include(
-            Message.attributes.body
-          );
-          if (!msg) return;
+        try {
+          let msg = message;
+          if (!msg.body) {
+            msg = await DatabaseStore.find<Message>(Message, message.id).include(
+              Message.attributes.body
+            );
+            if (!msg) return;
+          }
+          const content = buildSingleMessageMarkdown(msg);
+          await saveMarkdownFile(content, msg.subject || thread.subject);
+        } catch (err) {
+          AppEnv.showErrorDialog({
+            title: localized('Export Failed'),
+            message: String(err),
+          });
         }
-        const content = buildSingleMessageMarkdown(msg);
-        await saveMarkdownFile(content, msg.subject || thread.subject);
       },
     };
   }

@@ -68,7 +68,7 @@ function messageToMarkdownBlock(message: Message): string {
   const from = (message.from || []).map(formatContact).join(', ');
   const to = (message.to || []).map(formatContact).join(', ');
   const cc = (message.cc || []).map(formatContact).join(', ');
-  const date = message.date ? formatDate(new Date(message.date as unknown as number)) : '';
+  const date = message.date ? formatDate(message.date) : '';
 
   const lines = [`## From: ${from}`, `**Date:** ${date}  `, `**To:** ${to}  `];
   if (cc) {
@@ -81,11 +81,11 @@ function messageToMarkdownBlock(message: Message): string {
 
 export function buildThreadMarkdown(thread: Thread, messages: Message[]): string {
   if (!messages.length) return '';
-  const sorted = [...messages].sort(
-    (a, b) =>
-      new Date(a.date as unknown as number).getTime() -
-      new Date(b.date as unknown as number).getTime()
-  );
+  const sorted = [...messages].sort((a, b) => {
+    const aTime = a.date ? a.date.getTime() : 0;
+    const bTime = b.date ? b.date.getTime() : 0;
+    return aTime - bTime;
+  });
   const subject = thread.subject || 'Email Thread';
   const blocks = sorted.map(messageToMarkdownBlock);
   return `# ${subject}\n\n---\n\n${blocks.join('\n\n---\n\n')}`;
@@ -124,5 +124,8 @@ export async function saveMarkdownFile(content: string, defaultFilename: string)
 }
 
 export async function fetchThreadMessages(threadId: string): Promise<Message[]> {
-  return DatabaseStore.findAll<Message>(Message, { threadId }).include(Message.attributes.body);
+  const messages = await DatabaseStore.findAll<Message>(Message, { threadId }).include(
+    Message.attributes.body
+  );
+  return messages.filter((m) => !m.isHidden());
 }

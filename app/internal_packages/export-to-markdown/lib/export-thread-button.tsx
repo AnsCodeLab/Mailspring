@@ -1,5 +1,5 @@
 import React from 'react';
-import { Thread, localized } from 'mailspring-exports';
+import { Thread, localized, AppEnv } from 'mailspring-exports';
 import { RetinaImg } from 'mailspring-component-kit';
 import { fetchThreadMessages, buildThreadMarkdown, saveMarkdownFile } from './export-utils';
 
@@ -13,12 +13,17 @@ export default class ExportThreadButton extends React.Component<{
   _onClick = async () => {
     const thread = this.props.thread || this.props.items?.[0];
     if (!thread) return;
-
-    const messages = await fetchThreadMessages(thread.id);
-    if (!messages.length) return;
-
-    const content = buildThreadMarkdown(thread, messages);
-    await saveMarkdownFile(content, thread.subject);
+    try {
+      const messages = await fetchThreadMessages(thread.id);
+      if (!messages.length) return;
+      const content = buildThreadMarkdown(thread, messages);
+      await saveMarkdownFile(content, thread.subject);
+    } catch (err) {
+      AppEnv.showErrorDialog({
+        title: localized('Export Failed'),
+        message: String(err),
+      });
+    }
   };
 
   render() {
