@@ -52,8 +52,82 @@ jobs:
             - Compose, Refresh, Apply Rules, and Preferences buttons in message toolbar
             - Font size dropdown picker that preserves text selection
             - 11pt sans-serif default font in composer
+            - Export emails/threads to self-contained Markdown files (with inline images embedded as Base64)
           files: |
             app/dist/*.deb
             app/dist/*.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache NodeJS modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./node_modules
+            ./app/node_modules
+          key: windows-2022-deps-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/package-lock.json') }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          DEBUG: electron-packager
+
+      - name: Sign application files with Azure Trusted Signing
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_TRUSTED_SIGNING_CERT_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\app\dist\mailspring-win32-x64
+          files-folder-filter: exe,dll,node
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Create Windows installer
+        run: node app/build/create-signed-windows-installer.js
+
+      - name: Sign Windows installer with Azure Trusted Signing
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_TRUSTED_SIGNING_CERT_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\app\dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Upload Windows installer to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: app/dist/MailspringSetup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
