@@ -1,5 +1,5 @@
 import React from 'react';
-import { Message, Thread, DatabaseStore, localized, AppEnv } from 'mailspring-exports';
+import { Message, Thread, DatabaseStore, localized } from 'mailspring-exports';
 import { buildSingleMessageMarkdown, saveMarkdownFile } from './export-utils';
 
 export default class ExportEmailMenuItem extends React.Component {

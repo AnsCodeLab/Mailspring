@@ -6,7 +6,6 @@ import {
   DatabaseStore,
   QuotedHTMLTransformer,
   AttachmentStore,
-  AppEnv,
   localized,
 } from 'mailspring-exports';
 

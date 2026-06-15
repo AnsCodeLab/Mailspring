@@ -1,5 +1,5 @@
 import React from 'react';
-import { Thread, localized, AppEnv } from 'mailspring-exports';
+import { Thread, localized } from 'mailspring-exports';
 import { RetinaImg } from 'mailspring-component-kit';
 import { fetchThreadMessages, buildThreadMarkdown, saveMarkdownFile } from './export-utils';
 
