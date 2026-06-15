@@ -8,7 +8,9 @@ const path = require('path');
 const { createWindowsInstaller } = require('electron-winstaller');
 
 const appDir = path.join(__dirname, '..');
-const { version } = require(path.join(appDir, 'package.json'));
+const { version: rawVersion } = require(path.join(appDir, 'package.json'));
+// Squirrel requires strict SemVer (MAJOR.MINOR.PATCH). Strip any 4th segment.
+const version = rawVersion.split('.').slice(0, 3).join('.');
 
 const config = {
   usePackageJson: false,
