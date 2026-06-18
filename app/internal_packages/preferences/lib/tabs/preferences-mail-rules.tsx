@@ -1,3 +1,4 @@
+import fs from 'fs';
 import React from 'react';
 import _ from 'underscore';
 
@@ -119,6 +120,99 @@ class PreferencesMailRules extends React.Component<
 
   _onAddRule = () => {
     Actions.addMailRule({ accountId: this.state.currentAccount.id });
+  };
+
+  _onExportRules = () => {
+    const { currentAccount, rules } = this.state;
+    if (rules.length === 0) return;
+
+    const data = JSON.stringify({ version: 1, rules }, null, 2);
+    const safeLabel = (currentAccount.label || 'account').replace(/[\\/:*?"<>|]/g, '_');
+
+    AppEnv.showSaveDialog(
+      {
+        defaultPath: `mailspring-rules-${safeLabel}.json`,
+        title: localized('Export Mail Rules'),
+      },
+      (savePath: string) => {
+        if (!savePath) return;
+        try {
+          fs.writeFileSync(savePath, data, 'utf8');
+        } catch (err) {
+          AppEnv.showErrorDialog({
+            title: localized('Export Failed'),
+            message: String(err),
+          });
+        }
+      }
+    );
+  };
+
+  _onImportRules = () => {
+    AppEnv.showOpenDialog(
+      {
+        title: localized('Import Mail Rules'),
+        properties: ['openFile'],
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      },
+      (paths: string[]) => {
+        if (!paths || paths.length === 0) return;
+
+        let parsed;
+        try {
+          parsed = JSON.parse(fs.readFileSync(paths[0], 'utf8'));
+        } catch (err) {
+          AppEnv.showErrorDialog({
+            title: localized('Import Failed'),
+            message: localized('The selected file is not valid JSON.'),
+          });
+          return;
+        }
+
+        const rules = Array.isArray(parsed) ? parsed : parsed && parsed.rules;
+        if (!Array.isArray(rules) || rules.length === 0) {
+          AppEnv.showErrorDialog({
+            title: localized('Import Failed'),
+            message: localized('The selected file does not contain any mail rules.'),
+          });
+          return;
+        }
+
+        const accountId = this.state.currentAccount.id;
+        let imported = 0;
+        for (const rule of rules) {
+          if (!rule || !Array.isArray(rule.conditions) || !Array.isArray(rule.actions)) {
+            continue;
+          }
+          // Reuse the tested add path: each imported rule gets a fresh id and is
+          // reassigned to the currently-selected account. Account-specific action
+          // values (e.g. folder/label ids) that don't resolve will be auto-disabled
+          // by Mailspring the same way broken rules already are.
+          const properties: {
+            accountId: string;
+            conditions: unknown[];
+            actions: unknown[];
+            name?: string;
+            conditionMode?: string;
+          } = {
+            accountId,
+            conditions: rule.conditions,
+            actions: rule.actions,
+          };
+          if (rule.name) properties.name = rule.name;
+          if (rule.conditionMode) properties.conditionMode = rule.conditionMode;
+          Actions.addMailRule(properties);
+          imported += 1;
+        }
+
+        if (imported === 0) {
+          AppEnv.showErrorDialog({
+            title: localized('Import Failed'),
+            message: localized('The selected file does not contain any valid mail rules.'),
+          });
+        }
+      }
+    );
   };
 
   _onSelectRule = (rule: ReturnType<typeof MailRulesStore.rulesForAccountId>[0]) => {
@@ -329,6 +423,19 @@ class PreferencesMailRules extends React.Component<
             <div className="dropdown">{this._renderAccountPicker()}</div>
           </Flexbox>
           <p>{localized('Rules only apply to the selected account.')}</p>
+
+          <div style={{ marginBottom: 15 }}>
+            <button className="btn" style={{ marginRight: 10 }} onClick={this._onImportRules}>
+              {localized('Import Rules')}
+            </button>
+            <button
+              className="btn"
+              onClick={this._onExportRules}
+              disabled={this.state.rules.length === 0}
+            >
+              {localized('Export Rules')}
+            </button>
+          </div>
 
           {this._renderMailRules()}
 
