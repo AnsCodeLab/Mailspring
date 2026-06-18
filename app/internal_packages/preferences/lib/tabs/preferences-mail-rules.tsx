@@ -179,11 +179,40 @@ class PreferencesMailRules extends React.Component<
         }
 
         const accountId = this.state.currentAccount.id;
+
+        // Signature used to merge: two rules are "the same" when their name,
+        // condition mode, conditions and actions match. Re-importing a file is
+        // therefore idempotent — rules already present are skipped, not duplicated.
+        const signatureOf = (r: {
+          name?: string;
+          conditionMode?: string;
+          conditions?: { templateKey?: string; comparatorKey?: string; value?: string }[];
+          actions?: { templateKey?: string; value?: string }[];
+        }) =>
+          JSON.stringify([
+            r.name || '',
+            r.conditionMode || '',
+            (r.conditions || []).map((c) => [c.templateKey, c.comparatorKey, c.value]),
+            (r.actions || []).map((a) => [a.templateKey, a.value]),
+          ]);
+
+        const seen = new Set(MailRulesStore.rulesForAccountId(accountId).map(signatureOf));
+
         let imported = 0;
+        let skipped = 0;
+        let invalid = 0;
         for (const rule of rules) {
           if (!rule || !Array.isArray(rule.conditions) || !Array.isArray(rule.actions)) {
+            invalid += 1;
             continue;
           }
+          const signature = signatureOf(rule);
+          if (seen.has(signature)) {
+            skipped += 1;
+            continue;
+          }
+          seen.add(signature);
+
           // Reuse the tested add path: each imported rule gets a fresh id and is
           // reassigned to the currently-selected account. Account-specific action
           // values (e.g. folder/label ids) that don't resolve will be auto-disabled
@@ -205,10 +234,27 @@ class PreferencesMailRules extends React.Component<
           imported += 1;
         }
 
-        if (imported === 0) {
+        if (imported === 0 && skipped > 0) {
+          // Nothing new to add — every rule in the file is already present.
+          AppEnv.showErrorDialog({
+            title: localized('Nothing to Import'),
+            message: localized('All of the rules in this file have already been imported.'),
+          });
+        } else if (imported === 0) {
           AppEnv.showErrorDialog({
             title: localized('Import Failed'),
             message: localized('The selected file does not contain any valid mail rules.'),
+          });
+        } else if (skipped > 0 || invalid > 0) {
+          // Imported some, but skipped duplicates and/or invalid entries — let the
+          // user know why the count may not match the file.
+          AppEnv.showErrorDialog({
+            title: localized('Rules Imported'),
+            message: localized(
+              'Imported %@ rule(s). %@ duplicate(s) already present were skipped.',
+              `${imported}`,
+              `${skipped}`
+            ),
           });
         }
       }
