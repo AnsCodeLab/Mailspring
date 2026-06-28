@@ -92,14 +92,22 @@ app/internal_packages/ai-assistant/
 - `in-app.ts` (default): transformers.js with a small model (`all-MiniLM-L6-v2`, 384-dim). Model is **downloaded once on first enable** into the app data dir and cached, then runs offline. Lazy-loaded only when the knowledge base is enabled.
 - `server.ts`: POST to the configured local endpoint (`/v1/embeddings`, e.g. Ollama `nomic-embed-text`).
 
-**Vector store (`vector-store.ts`)** — a **plugin-owned** `better-sqlite3` file at `<configDirPath>/ai-index.db`, opened **writable** (independent of the read-only main DB). Schema: `(id, messageId, threadId, accountId, date, sender, subject, chunkText, embedding BLOB, dim)`. Retrieval computes **cosine top-K in JS** over candidate vectors (`similarity.ts`) — adequate for tens of thousands of chunks; an ANN index is a later optimization.
+**Vector store (`vector-store.ts`)** — a **plugin-owned** `better-sqlite3` file at `<configDirPath>/ai-index.db`, opened **writable** (independent of the read-only main DB). Tables:
+- `chunks(id, messageId, threadId, accountId, date, sender, subject, chunkText, embedding BLOB, dim)` — one row per passage.
+- `indexed_messages(messageId PRIMARY KEY, contentHash, model, dim, indexedAt)` — one row per message: what's indexed and at what content/model version (drives idempotency, change detection, and the reconciliation sweep).
+- `meta(key, value)` — the embedding `model`/`dim` the store was built with, and persisted bulk-index progress.
+
+Retrieval computes **cosine top-K in JS** over candidate vectors (`similarity.ts`) — adequate for tens of thousands of chunks; an ANN index is a later optimization.
 
 **Chunking (`chunking.ts`)** — PURE: HTML→plain text, split into ~500-token passages with small overlap; attach message metadata. Unit-tested.
 
-**Indexer (`indexer.ts`)**
-- *Bulk*: on knowledge-base enable, a background **idle-throttled, batched** pass over existing messages (read bodies from `DatabaseStore`); resumable across restarts via persisted progress.
-- *Incremental*: subscribe to `DatabaseStore` Message persists → embed new mail as it arrives.
-- *Controls*: pause/resume, re-index, clear. Indexes all accounts by default.
+**Indexer (`indexer.ts`)** — the index stays current automatically; manual controls are an override, not the norm.
+- *Initial bulk*: on knowledge-base enable, one background **idle-throttled, batched** pass over existing messages (read bodies from `DatabaseStore`); resumable across restarts via persisted progress (`meta`).
+- *Real-time incremental (primary mechanism)*: subscribe to `DatabaseStore` change deltas — on Message **persist** → embed + upsert; on Message **unpersist** (delete/expunge) → remove that message's chunks and `indexed_messages` row. Day-to-day the index tracks the mailbox with no user action.
+- *Idempotency + change detection*: each message is recorded in `indexed_messages` with a **content hash**. Re-processing an unchanged message is a no-op; a changed message (different hash) is re-embedded. Makes every path safe to re-run.
+- *Startup reconciliation sweep*: on launch, a lightweight diff catches anything real-time updates missed — index messages present in the mail DB but absent (or hash-stale) in `indexed_messages` (e.g. mail that arrived while the app was closed), and drop index rows for messages no longer in the mail DB.
+- *Model/version guard*: the active embedding `model`/`dim` is compared against `meta`. If it changed (incompatible vectors), the user is prompted to **re-index** rather than silently mixing dimensions.
+- *Controls*: pause/resume, re-index (rebuild from scratch), clear. Indexes all accounts by default. Drafts are not indexed.
 - Progress surfaced in the settings tab ("Indexed 3,200 / 12,000").
 
 **Retriever (`retriever.ts`)** — embed the query → `vector-store` cosine top-K → return matching chunks (with `messageId`/`threadId` for source links) as `retrievedContext` for the prompt builders. This makes chat/compose mailbox-aware.
@@ -114,7 +122,7 @@ app/internal_packages/ai-assistant/
 
 ## Testing
 
-- **Unit (Jasmine, `app/spec/`):** prompt builders; HTML→text + chunking; cosine similarity / top-K; SSE stream parsing; retriever and vector-store with small fixtures (a temp SQLite file).
+- **Unit (Jasmine, `app/spec/`):** prompt builders; HTML→text + chunking; cosine similarity / top-K; SSE stream parsing; retriever and vector-store with small fixtures (a temp SQLite file); indexer maintenance against a temp store — idempotent re-index (unchanged hash = no-op), change detection re-embeds, unpersist removes rows, the reconciliation sweep adds missing / drops orphaned messages, and the model/dim guard triggers re-index.
 - **Manual / e2e:** chat panel, composer assist commands, next-line ghost text, settings + Test connection, and a small end-to-end index→retrieve→answer flow — verified in the live app via the Playwright `_electron` + CDP harness (see `memory/dev-verify-workflow`).
 - Lint + tsc clean; specs run via the Electron test harness.
 
