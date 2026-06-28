@@ -122,10 +122,38 @@ export function collectMarkValues(value: Value, type: string): any[] {
   } catch (err) {
     return [];
   }
+  const { start, end } = selection as any;
   texts.forEach((node: any) => {
-    node.getMarks().forEach((m: any) => {
-      if (m.type === type) seen.add(m.data.get('value'));
-    });
+    // Characters of this leaf actually covered by the selection (getTextsAtRange
+    // also returns a node the selection only touches at a boundary — 0 chars).
+    let from = 0;
+    let to = node.text.length;
+    if (node.key === start.key) from = start.offset;
+    if (node.key === end.key) to = end.offset;
+    if (to - from <= 0) return;
+
+    // A Slate Text node groups characters into "leaves" — contiguous runs of
+    // uniform marks. node.getMarks() returns the UNION across the whole node, so a
+    // node holding "Hello "(sans-serif) + "world"(georgia) reports BOTH faces and a
+    // selection of just "world" looks mixed. Walk the leaves and collect only from
+    // those overlapping the covered range.
+    const leaves = typeof node.getLeaves === 'function' ? node.getLeaves() : null;
+    if (leaves) {
+      let offset = 0;
+      leaves.forEach((leaf: any) => {
+        const ls = offset;
+        const le = offset + leaf.text.length;
+        offset = le;
+        if (le <= from || ls >= to) return; // leaf outside the covered range
+        leaf.marks.forEach((m: any) => {
+          if (m.type === type) seen.add(m.data.get('value'));
+        });
+      });
+    } else {
+      node.getMarks().forEach((m: any) => {
+        if (m.type === type) seen.add(m.data.get('value'));
+      });
+    }
   });
   return Array.from(seen);
 }

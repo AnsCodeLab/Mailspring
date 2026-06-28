@@ -33,6 +33,30 @@ describe('faceFromMarkValue', () => {
   it('returns the raw value when unknown', () =>
     expect(faceFromMarkValue('Wingdings', FACE_OPTIONS)).toBe('Wingdings'));
   it('returns empty for falsy', () => expect(faceFromMarkValue('', FACE_OPTIONS)).toBe(''));
+
+  // Regression: with the real option list, each value is a CSS family list with a
+  // generic fallback (e.g. "georgia, serif"). A loose substring match would collapse
+  // every such value onto the generic "Serif"/"Sans Serif"/"Fixed Width" option. The
+  // resolver must map a value back to ITS OWN option.
+  const REAL_OPTIONS = [
+    { name: 'Sans Serif', value: 'sans-serif' },
+    { name: 'Serif', value: 'serif' },
+    { name: 'Fixed Width', value: 'monospace' },
+    { name: 'Georgia', value: 'georgia, serif' },
+    { name: 'Calibri', value: 'calibri, sans-serif' },
+    { name: 'Consolas', value: 'consolas, monospace' },
+  ];
+  it('resolves a comma-fallback value to its own option, not the generic', () => {
+    expect(faceFromMarkValue('georgia, serif', REAL_OPTIONS)).toBe('georgia, serif');
+    expect(faceFromMarkValue('calibri, sans-serif', REAL_OPTIONS)).toBe('calibri, sans-serif');
+    expect(faceFromMarkValue('consolas, monospace', REAL_OPTIONS)).toBe('consolas, monospace');
+  });
+  it('still resolves a bare primary family to its option', () =>
+    expect(faceFromMarkValue('Georgia', REAL_OPTIONS)).toBe('georgia, serif'));
+  it('keeps the generic options resolving to themselves', () => {
+    expect(faceFromMarkValue('serif', REAL_OPTIONS)).toBe('serif');
+    expect(faceFromMarkValue('sans-serif', REAL_OPTIONS)).toBe('sans-serif');
+  });
 });
 
 describe('resolveDisplay', () => {

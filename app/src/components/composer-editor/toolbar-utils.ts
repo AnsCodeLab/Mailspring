@@ -18,9 +18,18 @@ export function ptFromMarkValue(val: any): string {
   return '';
 }
 
+const primaryFamily = (s: string) => String(s).toLowerCase().split(',')[0].trim();
+
 export function faceFromMarkValue(val: any, options: { name: string; value: string }[]): string {
   if (!val) return '';
-  const opt = options.find((o) => String(val).toLowerCase().includes(o.value.toLowerCase()));
+  const v = String(val).toLowerCase().trim();
+  // Prefer an exact full-value match — this is what the dropdown stores, e.g.
+  // "georgia, serif". Only fall back to comparing the PRIMARY family token so an
+  // externally-pasted value like "Georgia" or "Times New Roman, serif" still resolves
+  // to its option. We must NOT substring-match (the old bug): "georgia, serif" would
+  // match the generic "serif"/"sans-serif" option and every font collapsed to a generic.
+  let opt = options.find((o) => o.value.toLowerCase() === v);
+  if (!opt) opt = options.find((o) => primaryFamily(o.value) === primaryFamily(val));
   return opt ? opt.value : String(val);
 }
 
