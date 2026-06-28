@@ -444,8 +444,11 @@ export function BuildFontSizeInput(config: { type: string; default?: string; ico
 
     _toggleOpen = (e: React.MouseEvent) => {
       e.preventDefault();
-      const current = this._displayed();
-      this.setState({ open: !this.state.open, inputValue: current.display });
+      if (!this.state.open) {
+        this.setState({ open: true, inputValue: this._displayed().display });
+      } else {
+        this.setState({ open: false });
+      }
     };
 
     _onBlur = (e: React.FocusEvent) => {
