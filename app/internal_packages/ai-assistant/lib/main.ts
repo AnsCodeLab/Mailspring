@@ -1,12 +1,10 @@
-import {
-  ComponentRegistry,
-  PreferencesUIStore,
-  WorkspaceStore,
-  localized,
-} from 'mailspring-exports';
+import { ComponentRegistry, PreferencesUIStore, localized } from 'mailspring-exports';
 import { AIConfig } from './config';
 
-let disposables: Array<() => void> = [];
+// Config subscriptions + prefs tab teardown — live for the whole package lifetime.
+let coreDisposables: Array<() => void> = [];
+// Feature UI + indexer — gated by the enabled/kb toggles, torn down on each sync.
+let featureDisposables: Array<() => void> = [];
 let prefsTab: any = null;
 
 function registerPreferences() {
@@ -22,11 +20,11 @@ function registerFeatureUI() {
   // Filled in by later tasks (chat panel, composer assist). Guarded by AIConfig.isEnabled().
   const ChatPanel = require('./chat-panel').default;
   ComponentRegistry.register(ChatPanel, { role: 'MessageListSidebar:ContactCard' });
-  disposables.push(() => ComponentRegistry.unregister(ChatPanel));
+  featureDisposables.push(() => ComponentRegistry.unregister(ChatPanel));
 
   const ComposerAssist = require('./composer-assist').default;
   ComponentRegistry.register(ComposerAssist, { role: 'Composer:ActionButton' });
-  disposables.push(() => ComponentRegistry.unregister(ComposerAssist));
+  featureDisposables.push(() => ComponentRegistry.unregister(ComposerAssist));
 }
 
 export function activate() {
@@ -39,14 +37,14 @@ export function activate() {
       registerFeatureUI();
       if (AIConfig.isKnowledgeBaseEnabled()) {
         require('./indexer').Indexer.start();
-        disposables.push(() => require('./indexer').Indexer.stop());
+        featureDisposables.push(() => require('./indexer').Indexer.stop());
       }
     }
   };
   // React to the master toggle and KB toggle without a restart.
   const sub1 = AppEnv.config.onDidChange(AIConfig.keys.enabled, sync);
   const sub2 = AppEnv.config.onDidChange(AIConfig.keys.kbEnabled, sync);
-  disposables.push(
+  coreDisposables.push(
     () => sub1.dispose(),
     () => sub2.dispose()
   );
@@ -54,15 +52,14 @@ export function activate() {
 }
 
 function teardownFeature() {
-  // Tear down everything except the config subscriptions + prefs tab.
-  const keep = disposables.slice(-2); // the two onDidChange disposers added in activate
-  const toRun = disposables.slice(0, -2);
-  toRun.forEach((d) => d());
-  disposables = keep;
+  // Tear down only the gated feature UI + indexer; leave core subscriptions intact.
+  featureDisposables.forEach((d) => d());
+  featureDisposables = [];
 }
 
 export function deactivate() {
-  disposables.forEach((d) => d());
-  disposables = [];
+  teardownFeature();
+  coreDisposables.forEach((d) => d());
+  coreDisposables = [];
   if (prefsTab) PreferencesUIStore.unregisterPreferencesTab(prefsTab.sectionId);
 }
