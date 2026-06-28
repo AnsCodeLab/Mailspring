@@ -23,35 +23,28 @@ export const DEFAULT_FONT_OPTIONS = [
 ];
 
 export const DEFAULT_FONT_FACE = 'sans-serif';
-// `value` is the family string written into the mark/HTML. Office-only fonts get a
-// generic fallback appended so recipients without the font still render sensibly.
+// Only the generic CSS font families are offered by default — they are free, always
+// available, and map to whatever sans/serif/mono face the user's (and the recipient's)
+// system provides. The named typefaces previously listed here (Arial, Calibri, Georgia,
+// Times New Roman, etc.) are all proprietary/commercial fonts that can't be bundled and
+// won't render where they aren't installed. Use the "Custom…" entry to apply any other
+// font family by name.
 export const DEFAULT_FONT_FACE_OPTIONS = [
-  // Generic (always available)
   { name: 'Sans Serif', value: 'sans-serif' },
   { name: 'Serif', value: 'serif' },
   { name: 'Fixed Width', value: 'monospace' },
-  // Theme / common (mostly Windows + Office)
-  { name: 'Calibri', value: 'calibri, sans-serif' },
-  { name: 'Cambria', value: 'cambria, serif' },
-  { name: 'Candara', value: 'candara, sans-serif' },
-  { name: 'Consolas', value: 'consolas, monospace' },
-  { name: 'Constantia', value: 'constantia, serif' },
-  { name: 'Corbel', value: 'corbel, sans-serif' },
-  { name: 'Segoe UI', value: 'segoe ui, sans-serif' },
-  // Classic web-safe
-  { name: 'Arial', value: 'arial, sans-serif' },
-  { name: 'Arial Black', value: 'arial black, sans-serif' },
-  { name: 'Comic Sans MS', value: 'comic sans ms, cursive' },
-  { name: 'Courier New', value: 'courier new, monospace' },
-  { name: 'Garamond', value: 'garamond, serif' },
-  { name: 'Georgia', value: 'georgia, serif' },
-  { name: 'Impact', value: 'impact, sans-serif' },
-  { name: 'Lucida Console', value: 'lucida console, monospace' },
-  { name: 'Palatino Linotype', value: 'palatino linotype, serif' },
-  { name: 'Tahoma', value: 'tahoma, sans-serif' },
-  { name: 'Times New Roman', value: 'times new roman, serif' },
-  { name: 'Trebuchet MS', value: 'trebuchet ms, sans-serif' },
-  { name: 'Verdana', value: 'verdana, sans-serif' },
+  // Bundled open-source fonts (OFL / Apache-2.0). The font files ship with the composer
+  // (see styles/bundled-fonts.less + fonts/), so these render for every user and are free
+  // to redistribute — unlike the proprietary Office/web-safe fonts. The generic fallback
+  // keeps mail readable for recipients who don't have the face installed.
+  { name: 'Roboto', value: 'Roboto, sans-serif' },
+  { name: 'Open Sans', value: 'Open Sans, sans-serif' },
+  { name: 'Lato', value: 'Lato, sans-serif' },
+  { name: 'Montserrat', value: 'Montserrat, sans-serif' },
+  { name: 'Poppins', value: 'Poppins, sans-serif' },
+  { name: 'Merriweather', value: 'Merriweather, serif' },
+  { name: 'Lora', value: 'Lora, serif' },
+  { name: 'Source Code Pro', value: 'Source Code Pro, monospace' },
 ];
 
 const PT_TO_SIZE = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 7];
