@@ -48,11 +48,14 @@ jobs:
           name: "Mailspring ${{ github.ref_name }}"
           body: |
             Custom build of Mailspring based on v1.21.1 with UI customizations:
+            - Composer toolbar: clipboard section (Cut / Copy / Paste / Paste as plain text) + one-shot Format Painter
+            - Rebuilt font family & size controls as styled dropdowns (show the current value, blank on a mixed selection, "Custom…" entry); the dropdown now reflects the selected text's font
+            - Bundled free fonts (Roboto, Open Sans, Lato, Montserrat, Poppins, Merriweather, Lora, Source Code Pro) in place of proprietary fonts, so they render for everyone
             - Toolbar reorder: hamburger left, window controls right (minimize → maximize → close)
             - Compose, Refresh, Apply Rules, and Preferences buttons in message toolbar
-            - Font size dropdown picker that preserves text selection
             - 11pt sans-serif default font in composer
             - Export emails/threads to self-contained Markdown files (with inline images embedded as Base64)
+            - Linux: set window class for correct taskbar grouping
           files: |
             app/dist/*.deb
             app/dist/*.rpm
