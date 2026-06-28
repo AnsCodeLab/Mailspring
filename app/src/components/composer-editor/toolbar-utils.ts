@@ -50,6 +50,10 @@ export function captureCharacterMarks(marks: MarkLike[]): CapturedMark[] {
     }));
 }
 
+// Returns the saved character marks (value scoped to value-types) that are NOT in
+// presentTypes and are not the just-applied type — i.e. the marks that need re-adding
+// after an apply. Callers that want to re-add ALL saved non-target marks unconditionally
+// (e.g. the collapsed-cursor safety path) may pass an empty presentTypes set.
 export function marksToReapply(
   saved: MarkLike[],
   presentTypes: Set<string>,
