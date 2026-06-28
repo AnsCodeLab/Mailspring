@@ -183,22 +183,14 @@ class FormatPainterButton extends React.Component<
   _captured: CapturedMark[] = [];
   state = { armed: false };
 
-  componentDidUpdate(prevProps: ComposerEditorPluginToolbarComponentProps) {
-    if (!this.state.armed) {
-      return;
-    }
-    const sel = this.props.value.selection;
-    const prevSel = prevProps.value.selection;
-    // Apply once the user has made a NEW non-collapsed selection.
-    if (!sel.isCollapsed && sel !== prevSel) {
-      applyCapturedMarks(this.props.editor, this._captured);
-      this._disarm();
-    }
+  componentWillUnmount() {
+    this._removeListeners();
   }
 
-  componentWillUnmount() {
-    document.removeEventListener('keydown', this._onKeyDown);
-  }
+  _removeListeners = () => {
+    document.removeEventListener('keydown', this._onKeyDown, true);
+    document.removeEventListener('mouseup', this._onMouseUp, true);
+  };
 
   _onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -206,8 +198,30 @@ class FormatPainterButton extends React.Component<
     }
   };
 
+  // Apply the captured formatting once the user has FINISHED selecting a range. We key
+  // off mouseup (not selection-change) so a multi-word drag paints the whole selection
+  // rather than the first character the selection touches. The arming click itself is a
+  // mouseup on the toolbar button — ignore mouseups inside the toolbar. Defer to a
+  // microtask so Slate has synced the final selection from the DOM before we read it.
+  _onMouseUp = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target && target.closest && target.closest('.RichEditor-toolbar')) {
+      return;
+    }
+    setTimeout(() => {
+      if (!this.state.armed) {
+        return;
+      }
+      const sel = this.props.editor.value.selection;
+      if (sel && !sel.isCollapsed) {
+        applyCapturedMarks(this.props.editor, this._captured);
+        this._disarm();
+      }
+    }, 0);
+  };
+
   _disarm = () => {
-    document.removeEventListener('keydown', this._onKeyDown);
+    this._removeListeners();
     if (this.state.armed) {
       this.setState({ armed: false });
     }
@@ -222,7 +236,8 @@ class FormatPainterButton extends React.Component<
     if (!canPaint(this._captured)) {
       return;
     }
-    document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('keydown', this._onKeyDown, true);
+    document.addEventListener('mouseup', this._onMouseUp, true);
     this.setState({ armed: true });
   };
 
