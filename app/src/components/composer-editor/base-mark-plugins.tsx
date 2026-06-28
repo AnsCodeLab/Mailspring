@@ -23,16 +23,35 @@ export const DEFAULT_FONT_OPTIONS = [
 ];
 
 export const DEFAULT_FONT_FACE = 'sans-serif';
+// `value` is the family string written into the mark/HTML. Office-only fonts get a
+// generic fallback appended so recipients without the font still render sensibly.
 export const DEFAULT_FONT_FACE_OPTIONS = [
+  // Generic (always available)
   { name: 'Sans Serif', value: 'sans-serif' },
   { name: 'Serif', value: 'serif' },
   { name: 'Fixed Width', value: 'monospace' },
-  { name: 'Comic Sans MS', value: 'comic sans ms' },
-  { name: 'Garamond', value: 'garamond' },
-  { name: 'Georgia', value: 'georgia' },
-  { name: 'Tahoma', value: 'tahoma' },
-  { name: 'Trebuchet MS', value: 'trebuchet ms' },
-  { name: 'Verdana', value: 'verdana' },
+  // Theme / common (mostly Windows + Office)
+  { name: 'Calibri', value: 'calibri, sans-serif' },
+  { name: 'Cambria', value: 'cambria, serif' },
+  { name: 'Candara', value: 'candara, sans-serif' },
+  { name: 'Consolas', value: 'consolas, monospace' },
+  { name: 'Constantia', value: 'constantia, serif' },
+  { name: 'Corbel', value: 'corbel, sans-serif' },
+  { name: 'Segoe UI', value: 'segoe ui, sans-serif' },
+  // Classic web-safe
+  { name: 'Arial', value: 'arial, sans-serif' },
+  { name: 'Arial Black', value: 'arial black, sans-serif' },
+  { name: 'Comic Sans MS', value: 'comic sans ms, cursive' },
+  { name: 'Courier New', value: 'courier new, monospace' },
+  { name: 'Garamond', value: 'garamond, serif' },
+  { name: 'Georgia', value: 'georgia, serif' },
+  { name: 'Impact', value: 'impact, sans-serif' },
+  { name: 'Lucida Console', value: 'lucida console, monospace' },
+  { name: 'Palatino Linotype', value: 'palatino linotype, serif' },
+  { name: 'Tahoma', value: 'tahoma, sans-serif' },
+  { name: 'Times New Roman', value: 'times new roman, serif' },
+  { name: 'Trebuchet MS', value: 'trebuchet ms, sans-serif' },
+  { name: 'Verdana', value: 'verdana, sans-serif' },
 ];
 
 const PT_TO_SIZE = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 7];

@@ -2,6 +2,7 @@ import React from 'react';
 import { Range, Editor, Mark, Value, Block, Selection } from 'slate';
 import CompactPicker from 'react-color/lib/Compact';
 import { ComposerEditorPluginToolbarComponentProps } from './types';
+import { marksToReapply } from './toolbar-utils';
 
 // Helper Functions
 
@@ -110,6 +111,21 @@ export function applyValueForMark(editor: Editor, type: string, markValue: any) 
         value: markValue,
       },
     });
+  }
+}
+
+// Apply a value mark (size/face/color) to the current selection WITHOUT dropping the
+// other character marks that were active. Slate's remove+add dance in applyValueForMark
+// can clear sibling marks at a collapsed cursor; we snapshot first and re-add what got
+// lost. The re-apply decision is the pure marksToReapply helper (unit-tested).
+export function applyValueForMarkSafe(editor: Editor, type: string, markValue: any) {
+  const saved = safeActiveMarks(editor.value);
+  applyValueForMark(editor, type, markValue);
+  // Pass an empty presentTypes set so all saved non-target marks are unconditionally
+  // re-added. At a collapsed cursor Slate's remove+add dance may clear sibling marks
+  // entirely; re-applying them is safe because Slate deduplicates on real text ranges.
+  for (const m of marksToReapply(saved as any, new Set<string>(), type)) {
+    editor.addMark({ type: m.type, data: { value: m.value } });
   }
 }
 
@@ -372,11 +388,7 @@ export function BuildFontPicker(config) {
   };
 }
 
-export function BuildFontSizeInput(config: {
-  type: string;
-  default?: string;
-  iconClass?: string;
-}) {
+export function BuildFontSizeInput(config: { type: string; default?: string; iconClass?: string }) {
   const PRESET_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
   const legacyToPt: Record<number, number> = { 1: 8, 2: 10, 3: 12, 4: 14, 5: 18, 6: 24 };
 
@@ -489,7 +501,12 @@ export function BuildFontSizeInput(config: {
       return (
         <div
           className={this.props.className}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', position: 'relative' }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '0 3px',
+            position: 'relative',
+          }}
         >
           <i
             className={config.iconClass || 'fa fa-text-height'}
@@ -514,7 +531,10 @@ export function BuildFontSizeInput(config: {
             {currentVal}
           </div>
           {open && (
-            <div className="dropdown" style={{ top: '100%', left: 0, padding: '4px 0', minWidth: 56 }}>
+            <div
+              className="dropdown"
+              style={{ top: '100%', left: 0, padding: '4px 0', minWidth: 56 }}
+            >
               <input
                 type="number"
                 min={6}
@@ -547,7 +567,8 @@ export function BuildFontSizeInput(config: {
                     fontSize: 12,
                     cursor: 'pointer',
                     fontWeight: String(size) === currentVal ? 600 : 400,
-                    background: String(size) === currentVal ? 'rgba(0,120,215,0.12)' : 'transparent',
+                    background:
+                      String(size) === currentVal ? 'rgba(0,120,215,0.12)' : 'transparent',
                   }}
                 >
                   {size}
@@ -570,9 +591,7 @@ export function BuildFontFacePicker(config: {
 }) {
   function faceFromMarkValue(val: any): string {
     if (!val) return '';
-    const opt = config.options.find((o) =>
-      val.toLowerCase().includes(o.value.toLowerCase())
-    );
+    const opt = config.options.find((o) => val.toLowerCase().includes(o.value.toLowerCase()));
     return opt ? opt.value : val;
   }
 
@@ -607,7 +626,7 @@ export function BuildFontFacePicker(config: {
 
     _commit = (domValue?: string) => {
       const v =
-        ((domValue !== undefined ? domValue : this.state.inputValue).trim()) ||
+        (domValue !== undefined ? domValue : this.state.inputValue).trim() ||
         config.default ||
         'sans-serif';
       applyValueForMark(this.props.editor, config.type, v);
@@ -638,16 +657,20 @@ export function BuildFontFacePicker(config: {
 
     render() {
       const { editing, inputValue } = this.state;
-      const displayVal =
-        editing
-          ? inputValue
-          : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
-            config.default ||
-            '';
+      const displayVal = editing
+        ? inputValue
+        : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
+          config.default ||
+          '';
       return (
         <div
           className={this.props.className}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', cursor: 'default' }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '0 3px',
+            cursor: 'default',
+          }}
         >
           <input
             type="text"
