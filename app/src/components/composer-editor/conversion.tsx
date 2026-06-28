@@ -22,6 +22,7 @@ import MarkdownPlugins from './markdown-plugins';
 import LinkPlugins from './link-plugins';
 import EmojiPlugins, { EMOJI_TYPE } from './emoji-plugins';
 import GrammarCheckPlugins from './grammar-check-plugins';
+import ClipboardPlugins from './clipboard-plugins';
 import { Rule, ComposerEditorPlugin } from './types';
 
 import './patch-chrome-ime';
@@ -52,6 +53,7 @@ export const schema = {
 // Note: order is important here because we deserialize HTML with rules
 // in this order. <code class="var"> before <code>, etc.
 export const plugins: ComposerEditorPlugin[] = [
+  ...ClipboardPlugins,
   ...InlineAttachmentPlugins,
   ...UneditablePlugins,
   ...BaseMarkPlugins,
