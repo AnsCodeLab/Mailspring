@@ -637,8 +637,9 @@ export function BuildFontFacePicker(config: {
     };
 
     _onBlur = (e: React.FocusEvent) => {
-      if (!this._el.contains(e.relatedTarget as Node))
+      if (!this._el.contains(e.relatedTarget as Node)) {
         this.setState({ open: false, custom: false });
+      }
     };
 
     _apply = (faceValue: string | null) => {
@@ -687,6 +688,7 @@ export function BuildFontFacePicker(config: {
                   onMouseDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && customValue.trim()) this._apply(customValue.trim());
+                    if (e.key === 'Escape') this.setState({ open: false, custom: false });
                     e.stopPropagation();
                   }}
                 />
