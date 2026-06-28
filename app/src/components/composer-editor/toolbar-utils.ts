@@ -57,7 +57,10 @@ export function marksToReapply(
 ): CapturedMark[] {
   return saved
     .filter((m) => m.type !== appliedType && !presentTypes.has(m.type))
-    .map((m) => ({ type: m.type, value: m.data.get('value') }));
+    .map((m) => ({
+      type: m.type,
+      value: VALUE_MARK_TYPES.includes(m.type) ? m.data.get('value') : undefined,
+    }));
 }
 
 export function canCopyOrCut(isCollapsed: boolean): boolean {
