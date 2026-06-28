@@ -1,8 +1,9 @@
 import React from 'react';
 import { Range, Editor, Mark, Value, Block, Selection } from 'slate';
 import CompactPicker from 'react-color/lib/Compact';
+import { localized } from 'mailspring-exports';
 import { ComposerEditorPluginToolbarComponentProps } from './types';
-import { marksToReapply } from './toolbar-utils';
+import { marksToReapply, faceFromMarkValue, resolveDisplay } from './toolbar-utils';
 
 // Helper Functions
 
@@ -98,6 +99,30 @@ export function expandSelectionToRangeOfMark(editor: Editor, type: string) {
 export function getActiveValueForMark(value: Value, type: string) {
   const active = safeActiveMarks(value).find((m) => m.type === type);
   return (active && active.data.get('value')) || '';
+}
+
+// Distinct values of `type` across the current selection's text leaves. Empty when the
+// mark is absent everywhere; length>1 means a mixed selection. Slate-dependent, verified
+// manually; the pure decision lives in resolveDisplay().
+export function collectMarkValues(value: Value, type: string): any[] {
+  const { selection, document } = value;
+  if (selection.isCollapsed) {
+    const v = getActiveValueForMark(value, type);
+    return v ? [v] : [];
+  }
+  const seen = new Set<any>();
+  let texts;
+  try {
+    texts = document.getTextsAtRange(selection as any);
+  } catch (err) {
+    return [];
+  }
+  texts.forEach((node: any) => {
+    node.getMarks().forEach((m: any) => {
+      if (m.type === type) seen.add(m.data.get('value'));
+    });
+  });
+  return Array.from(seen);
 }
 
 export function applyValueForMark(editor: Editor, type: string, markValue: any) {
@@ -582,124 +607,102 @@ export function BuildFontSizeInput(config: { type: string; default?: string; ico
   };
 }
 
-const FONT_DATALIST_ID = 'mailspring-font-list';
-
 export function BuildFontFacePicker(config: {
   type: string;
   default?: string;
   options: Array<{ name: string; value: string }>;
 }) {
-  function faceFromMarkValue(val: any): string {
-    if (!val) return '';
-    const opt = config.options.find((o) => val.toLowerCase().includes(o.value.toLowerCase()));
-    return opt ? opt.value : val;
-  }
-
   return class FontFacePicker extends React.Component<
     ComposerEditorPluginToolbarComponentProps,
-    { editing: boolean; inputValue: string }
+    { open: boolean; custom: boolean; customValue: string }
   > {
-    state = { editing: false, inputValue: '' };
-    _savedMarks: Mark[] = [];
-    _mouseDownValue: string | undefined = undefined;
+    _el: HTMLDivElement;
 
-    _onMouseDown = (e: React.MouseEvent) => {
-      this._savedMarks = safeActiveMarks(this.props.value);
-      this._mouseDownValue = faceFromMarkValue(
-        getActiveValueForMark(this.props.value, config.type)
+    state = { open: false, custom: false, customValue: '' };
+
+    _activeValue() {
+      const distinct = collectMarkValues(this.props.value, config.type).map((v) =>
+        faceFromMarkValue(v, config.options)
       );
-      e.stopPropagation();
+      // Show the option label for the resolved value, blank when mixed.
+      const { display, mixed } = resolveDisplay(distinct, config.default || '');
+      if (mixed) return { label: '', value: '' };
+      const opt = config.options.find((o) => o.value === display);
+      return { label: opt ? opt.name : display, value: display };
+    }
+
+    _toggleOpen = (e: React.MouseEvent) => {
+      e.preventDefault();
+      this.setState({ open: !this.state.open, custom: false });
     };
 
-    _onFocus = () => {
-      const raw =
-        this._mouseDownValue !== undefined
-          ? this._mouseDownValue
-          : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type));
-      this._mouseDownValue = undefined;
-      this.setState({ editing: true, inputValue: raw || config.default || '' });
+    _onBlur = (e: React.FocusEvent) => {
+      if (!this._el.contains(e.relatedTarget as Node))
+        this.setState({ open: false, custom: false });
     };
 
-    _onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      this.setState({ inputValue: e.target.value });
-    };
-
-    _commit = (domValue?: string) => {
-      const v =
-        (domValue !== undefined ? domValue : this.state.inputValue).trim() ||
-        config.default ||
-        'sans-serif';
-      applyValueForMark(this.props.editor, config.type, v);
-      for (const mark of this._savedMarks) {
-        if (mark.type === config.type) continue;
-        const stillPresent = safeActiveMarks(this.props.editor.value).some(
-          (m) => m.type === mark.type
-        );
-        if (!stillPresent) {
-          this.props.editor.addMark({ type: mark.type, data: { value: mark.data.get('value') } });
-        }
-      }
-    };
-
-    _onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-      this._commit(e.target.value);
-      this.setState({ editing: false });
-    };
-
-    _onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        this._commit((e.target as HTMLInputElement).value);
-        (e.target as HTMLInputElement).blur();
-        e.preventDefault();
-      }
-      e.stopPropagation();
+    _apply = (faceValue: string | null) => {
+      applyValueForMarkSafe(this.props.editor, config.type, faceValue);
+      this.setState({ open: false, custom: false });
     };
 
     render() {
-      const { editing, inputValue } = this.state;
-      const displayVal = editing
-        ? inputValue
-        : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
-          config.default ||
-          '';
+      const { open, custom, customValue } = this.state;
+      const active = this._activeValue();
       return (
         <div
-          className={this.props.className}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '0 3px',
-            cursor: 'default',
-          }}
+          className={`${this.props.className} font-face-picker`}
+          tabIndex={-1}
+          ref={(el) => (this._el = el)}
+          onBlur={this._onBlur}
         >
-          <input
-            type="text"
-            list={FONT_DATALIST_ID}
-            placeholder="Font"
-            value={displayVal}
-            style={{
-              width: 110,
-              fontSize: 12,
-              padding: '1px 4px',
-              border: '1px solid rgba(0,0,0,0.2)',
-              borderRadius: 3,
-              background: 'transparent',
-              color: 'inherit',
-            }}
-            tabIndex={-1}
-            onFocus={this._onFocus}
-            onChange={this._onChange}
-            onBlur={this._onBlur}
-            onKeyDown={this._onKeyDown}
-            onMouseDown={this._onMouseDown}
-          />
-          <datalist id={FONT_DATALIST_ID}>
-            {config.options.map(({ name, value }) => (
-              <option key={value} value={value}>
-                {name}
-              </option>
-            ))}
-          </datalist>
+          <button className="dropdown-toggle" onMouseDown={this._toggleOpen}>
+            <span className="value">{active.label || localized('Font')}</span>
+            <i className="fa fa-caret-down" />
+          </button>
+          {open && (
+            <div className="dropdown menu">
+              {config.options.map((o) => (
+                <div
+                  key={o.value}
+                  className={`item ${o.value === active.value ? 'active' : ''}`}
+                  style={{ fontFamily: o.value }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    this._apply(o.value);
+                  }}
+                >
+                  {o.value === active.value && <i className="fa fa-check" />}
+                  {o.name}
+                </div>
+              ))}
+              <div className="divider" />
+              {custom ? (
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder={localized('Custom font…')}
+                  value={customValue}
+                  onChange={(e) => this.setState({ customValue: e.target.value })}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customValue.trim()) this._apply(customValue.trim());
+                    e.stopPropagation();
+                  }}
+                />
+              ) : (
+                <div
+                  className="item"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    this.setState({ custom: true });
+                  }}
+                >
+                  {localized('Custom…')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       );
     }
