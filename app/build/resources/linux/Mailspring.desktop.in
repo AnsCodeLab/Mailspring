@@ -2,9 +2,10 @@
 Name=<%= productName %>
 Comment=<%= description %>
 GenericName=Mail Client
-Exec=mailspring %U
+Exec=mailspring --class=Mailspring %U
 Icon=mailspring
 Type=Application
+StartupWMClass=Mailspring
 Categories=GNOME;GTK;Network;Email;
 Keywords=email;internet;
 MimeType=x-scheme-handler/mailto;x-scheme-handler/mailspring;
@@ -108,4 +109,4 @@ Name[zh_CN]=新邮件
 Name[zh_TW]=新增郵件
 Name[zh]=新信息
 Name[zu]=Umyalezo omusha
-Exec=mailspring mailto:
+Exec=mailspring --class=Mailspring mailto:
