@@ -1,7 +1,14 @@
 import React from 'react';
 import { Range, Editor, Mark, Value, Block, Selection } from 'slate';
 import CompactPicker from 'react-color/lib/Compact';
+import { localized } from 'mailspring-exports';
 import { ComposerEditorPluginToolbarComponentProps } from './types';
+import {
+  marksToReapply,
+  faceFromMarkValue,
+  resolveDisplay,
+  ptFromMarkValue,
+} from './toolbar-utils';
 
 // Helper Functions
 
@@ -99,6 +106,58 @@ export function getActiveValueForMark(value: Value, type: string) {
   return (active && active.data.get('value')) || '';
 }
 
+// Distinct values of `type` across the current selection's text leaves. Empty when the
+// mark is absent everywhere; length>1 means a mixed selection. Slate-dependent, verified
+// manually; the pure decision lives in resolveDisplay().
+export function collectMarkValues(value: Value, type: string): any[] {
+  const { selection, document } = value;
+  if (selection.isCollapsed) {
+    const v = getActiveValueForMark(value, type);
+    return v ? [v] : [];
+  }
+  const seen = new Set<any>();
+  let texts;
+  try {
+    texts = document.getTextsAtRange(selection as any);
+  } catch (err) {
+    return [];
+  }
+  const { start, end } = selection as any;
+  texts.forEach((node: any) => {
+    // Characters of this leaf actually covered by the selection (getTextsAtRange
+    // also returns a node the selection only touches at a boundary — 0 chars).
+    let from = 0;
+    let to = node.text.length;
+    if (node.key === start.key) from = start.offset;
+    if (node.key === end.key) to = end.offset;
+    if (to - from <= 0) return;
+
+    // A Slate Text node groups characters into "leaves" — contiguous runs of
+    // uniform marks. node.getMarks() returns the UNION across the whole node, so a
+    // node holding "Hello "(sans-serif) + "world"(georgia) reports BOTH faces and a
+    // selection of just "world" looks mixed. Walk the leaves and collect only from
+    // those overlapping the covered range.
+    const leaves = typeof node.getLeaves === 'function' ? node.getLeaves() : null;
+    if (leaves) {
+      let offset = 0;
+      leaves.forEach((leaf: any) => {
+        const ls = offset;
+        const le = offset + leaf.text.length;
+        offset = le;
+        if (le <= from || ls >= to) return; // leaf outside the covered range
+        leaf.marks.forEach((m: any) => {
+          if (m.type === type) seen.add(m.data.get('value'));
+        });
+      });
+    } else {
+      node.getMarks().forEach((m: any) => {
+        if (m.type === type) seen.add(m.data.get('value'));
+      });
+    }
+  });
+  return Array.from(seen);
+}
+
 export function applyValueForMark(editor: Editor, type: string, markValue: any) {
   editor.focus();
   removeMarksOfTypeInRange(editor, editor.value.selection, type);
@@ -110,6 +169,21 @@ export function applyValueForMark(editor: Editor, type: string, markValue: any) 
         value: markValue,
       },
     });
+  }
+}
+
+// Apply a value mark (size/face/color) to the current selection WITHOUT dropping the
+// other character marks that were active. Slate's remove+add dance in applyValueForMark
+// can clear sibling marks at a collapsed cursor; we snapshot first and re-add what got
+// lost. The re-apply decision is the pure marksToReapply helper (unit-tested).
+export function applyValueForMarkSafe(editor: Editor, type: string, markValue: any) {
+  const saved = safeActiveMarks(editor.value);
+  applyValueForMark(editor, type, markValue);
+  // Pass an empty presentTypes set so all saved non-target marks are unconditionally
+  // re-added. At a collapsed cursor Slate's remove+add dance may clear sibling marks
+  // entirely; re-applying them is safe because Slate deduplicates on real text ranges.
+  for (const m of marksToReapply(saved as any, new Set<string>(), type)) {
+    editor.addMark({ type: m.type, data: { value: m.value } });
   }
 }
 
@@ -372,184 +446,112 @@ export function BuildFontPicker(config) {
   };
 }
 
-export function BuildFontSizeInput(config: {
-  type: string;
-  default?: string;
-  iconClass?: string;
-}) {
+export function BuildFontSizeInput(config: { type: string; default?: string; iconClass?: string }) {
   const PRESET_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
-  const legacyToPt: Record<number, number> = { 1: 8, 2: 10, 3: 12, 4: 14, 5: 18, 6: 24 };
-
-  function ptFromMarkValue(val: any): string {
-    if (!val) return '';
-    if (typeof val === 'string' && val.endsWith('pt')) return val.slice(0, -2);
-    if (typeof val === 'string' && val.endsWith('px'))
-      return String(Math.round(parseInt(val, 10) * 0.75));
-    if (typeof val === 'string' && val.endsWith('em'))
-      return String(Math.round(parseFloat(val) * 12));
-    if (typeof val === 'number') return String(legacyToPt[val] || 12);
-    return '';
-  }
 
   return class FontSizeInput extends React.Component<
     ComposerEditorPluginToolbarComponentProps,
     { open: boolean; inputValue: string }
   > {
+    _el: HTMLDivElement;
     state = { open: false, inputValue: '' };
-    _savedMarks: Mark[] = [];
-    _inputEl: HTMLInputElement;
-    _ignoreInputBlur = false;
 
-    _applySize = (raw: string) => {
-      const pt = parseInt(raw, 10);
-      const markValue = pt >= 1 && pt <= 200 ? String(pt) + 'pt' : null;
-      applyValueForMark(this.props.editor, config.type, markValue);
-      for (const mark of this._savedMarks) {
-        if (mark.type === config.type) continue;
-        const stillPresent = safeActiveMarks(this.props.editor.value).some(
-          (m) => m.type === mark.type
-        );
-        if (!stillPresent) {
-          this.props.editor.addMark({ type: mark.type, data: { value: mark.data.get('value') } });
-        }
-      }
-    };
-
-    _onToggleMouseDown = (e: React.MouseEvent) => {
-      this._savedMarks = safeActiveMarks(this.props.value);
-      e.preventDefault();
-    };
-
-    _onToggleClick = () => {
-      if (this.state.open) {
-        this.setState({ open: false });
-        return;
-      }
-      const currentVal =
-        ptFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
-        config.default ||
-        '';
-      this.setState({ open: true, inputValue: currentVal }, () => {
-        setTimeout(() => {
-          if (this._inputEl) {
-            this._inputEl.focus();
-            this._inputEl.select();
-          }
-        }, 0);
-      });
-    };
-
-    _onPresetMouseDown = (e: React.MouseEvent, size: number) => {
-      e.preventDefault();
-      this._ignoreInputBlur = true;
-      this._applySize(String(size));
-      this.setState({ open: false });
-    };
-
-    _onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      this.setState({ inputValue: e.target.value });
-    };
-
-    _onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        this._applySize((e.target as HTMLInputElement).value);
-        this._ignoreInputBlur = true;
-        this.setState({ open: false });
-        e.preventDefault();
-      } else if (e.key === 'Escape') {
-        this._ignoreInputBlur = true;
-        this.setState({ open: false });
-      }
-      e.stopPropagation();
-    };
-
-    _onInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-      if (this._ignoreInputBlur) {
-        this._ignoreInputBlur = false;
-        return;
-      }
-      this._applySize(e.target.value);
-      this.setState({ open: false });
-    };
-
-    shouldComponentUpdate(nextProps, nextState) {
-      if (nextState !== this.state) return true;
-      return (
-        getActiveValueForMark(nextProps.value, config.type) !==
-        getActiveValueForMark(this.props.value, config.type)
+    _displayed() {
+      const distinct = collectMarkValues(this.props.value, config.type).map((v) =>
+        ptFromMarkValue(v)
       );
+      return resolveDisplay(distinct, config.default || '');
+    }
+
+    _apply = (raw: string) => {
+      const pt = parseInt(raw, 10);
+      const markValue = pt >= 6 && pt <= 200 ? String(pt) + 'pt' : null;
+      applyValueForMarkSafe(this.props.editor, config.type, markValue);
+      this.setState({ open: false });
+    };
+
+    _toggleOpen = (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (!this.state.open) {
+        this.setState({ open: true, inputValue: this._displayed().display });
+      } else {
+        this.setState({ open: false });
+      }
+    };
+
+    _onBlur = (e: React.FocusEvent) => {
+      if (!this._el.contains(e.relatedTarget as Node)) {
+        this.setState({ open: false });
+      }
+    };
+
+    // The toolbar toggles preventDefault() on mousedown (to keep the editor's
+    // selection), which suppresses the blur that would otherwise close us. So we
+    // close on any mousedown outside this picker — e.g. clicking the sibling font
+    // dropdown — using a capture-phase document listener while open.
+    _onDocMouseDown = (e: MouseEvent) => {
+      if (this._el && !this._el.contains(e.target as Node)) {
+        this.setState({ open: false });
+      }
+    };
+
+    componentDidUpdate(_prevProps, prevState: { open: boolean }) {
+      if (this.state.open && !prevState.open) {
+        document.addEventListener('mousedown', this._onDocMouseDown, true);
+      } else if (!this.state.open && prevState.open) {
+        document.removeEventListener('mousedown', this._onDocMouseDown, true);
+      }
+    }
+
+    componentWillUnmount() {
+      document.removeEventListener('mousedown', this._onDocMouseDown, true);
     }
 
     render() {
       const { open, inputValue } = this.state;
-      const currentVal =
-        ptFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
-        config.default ||
-        '';
+      const { display } = this._displayed();
       return (
         <div
-          className={this.props.className}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', position: 'relative' }}
+          className={`${this.props.className} font-size-picker`}
+          tabIndex={-1}
+          ref={(el) => (this._el = el)}
+          onBlur={this._onBlur}
         >
-          <i
-            className={config.iconClass || 'fa fa-text-height'}
-            style={{ marginRight: 4, pointerEvents: 'none' }}
-          />
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              minWidth: 30,
-              padding: '1px 5px',
-              border: '1px solid rgba(0,0,0,0.2)',
-              borderRadius: 3,
-              cursor: 'pointer',
-              fontSize: 12,
-              userSelect: 'none',
-              background: open ? 'rgba(0,0,0,0.07)' : 'transparent',
-            }}
-            onMouseDown={this._onToggleMouseDown}
-            onClick={this._onToggleClick}
-          >
-            {currentVal}
-          </div>
+          <button className="dropdown-toggle" onMouseDown={this._toggleOpen}>
+            <i className={config.iconClass || 'fa fa-text-height'} />
+            <span className="value">{display}</span>
+            <i className="fa fa-caret-down" />
+          </button>
           {open && (
-            <div className="dropdown" style={{ top: '100%', left: 0, padding: '4px 0', minWidth: 56 }}>
+            <div className="dropdown menu">
               <input
                 type="number"
                 min={6}
                 max={200}
-                ref={(el) => (this._inputEl = el)}
+                autoFocus
                 value={inputValue}
-                onChange={this._onInputChange}
-                onKeyDown={this._onInputKeyDown}
-                onBlur={this._onInputBlur}
+                onChange={(e) => this.setState({ inputValue: e.target.value })}
                 onMouseDown={(e) => e.stopPropagation()}
-                style={{
-                  display: 'block',
-                  width: 'calc(100% - 12px)',
-                  margin: '4px 6px',
-                  padding: '2px 4px',
-                  fontSize: 12,
-                  border: '1px solid rgba(0,0,0,0.2)',
-                  borderRadius: 3,
-                  background: 'transparent',
-                  color: 'inherit',
-                  boxSizing: 'border-box',
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    this._apply((e.target as HTMLInputElement).value);
+                  }
+                  if (e.key === 'Escape') {
+                    this.setState({ open: false });
+                  }
+                  e.stopPropagation();
                 }}
               />
               {PRESET_SIZES.map((size) => (
                 <div
                   key={size}
-                  onMouseDown={(e) => this._onPresetMouseDown(e, size)}
-                  style={{
-                    padding: '3px 10px',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontWeight: String(size) === currentVal ? 600 : 400,
-                    background: String(size) === currentVal ? 'rgba(0,120,215,0.12)' : 'transparent',
+                  className={`item ${String(size) === display ? 'active' : ''}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    this._apply(String(size));
                   }}
                 >
+                  {String(size) === display && <i className="fa fa-check" />}
                   {size}
                 </div>
               ))}
@@ -561,122 +563,125 @@ export function BuildFontSizeInput(config: {
   };
 }
 
-const FONT_DATALIST_ID = 'mailspring-font-list';
-
 export function BuildFontFacePicker(config: {
   type: string;
   default?: string;
   options: Array<{ name: string; value: string }>;
 }) {
-  function faceFromMarkValue(val: any): string {
-    if (!val) return '';
-    const opt = config.options.find((o) =>
-      val.toLowerCase().includes(o.value.toLowerCase())
-    );
-    return opt ? opt.value : val;
-  }
-
   return class FontFacePicker extends React.Component<
     ComposerEditorPluginToolbarComponentProps,
-    { editing: boolean; inputValue: string }
+    { open: boolean; custom: boolean; customValue: string }
   > {
-    state = { editing: false, inputValue: '' };
-    _savedMarks: Mark[] = [];
-    _mouseDownValue: string | undefined = undefined;
+    _el: HTMLDivElement;
 
-    _onMouseDown = (e: React.MouseEvent) => {
-      this._savedMarks = safeActiveMarks(this.props.value);
-      this._mouseDownValue = faceFromMarkValue(
-        getActiveValueForMark(this.props.value, config.type)
+    state = { open: false, custom: false, customValue: '' };
+
+    _activeValue() {
+      const distinct = collectMarkValues(this.props.value, config.type).map((v) =>
+        faceFromMarkValue(v, config.options)
       );
-      e.stopPropagation();
+      // Show the option label for the resolved value, blank when mixed.
+      const { display, mixed } = resolveDisplay(distinct, config.default || '');
+      if (mixed) return { label: '', value: '' };
+      const opt = config.options.find((o) => o.value === display);
+      return { label: opt ? opt.name : display, value: display };
+    }
+
+    _toggleOpen = (e: React.MouseEvent) => {
+      e.preventDefault();
+      this.setState({ open: !this.state.open, custom: false });
     };
 
-    _onFocus = () => {
-      const raw =
-        this._mouseDownValue !== undefined
-          ? this._mouseDownValue
-          : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type));
-      this._mouseDownValue = undefined;
-      this.setState({ editing: true, inputValue: raw || config.default || '' });
-    };
-
-    _onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      this.setState({ inputValue: e.target.value });
-    };
-
-    _commit = (domValue?: string) => {
-      const v =
-        ((domValue !== undefined ? domValue : this.state.inputValue).trim()) ||
-        config.default ||
-        'sans-serif';
-      applyValueForMark(this.props.editor, config.type, v);
-      for (const mark of this._savedMarks) {
-        if (mark.type === config.type) continue;
-        const stillPresent = safeActiveMarks(this.props.editor.value).some(
-          (m) => m.type === mark.type
-        );
-        if (!stillPresent) {
-          this.props.editor.addMark({ type: mark.type, data: { value: mark.data.get('value') } });
-        }
+    _onBlur = (e: React.FocusEvent) => {
+      if (!this._el.contains(e.relatedTarget as Node)) {
+        this.setState({ open: false, custom: false });
       }
     };
 
-    _onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-      this._commit(e.target.value);
-      this.setState({ editing: false });
+    // Close on any mousedown outside this picker (e.g. clicking the sibling font-size
+    // dropdown). The toggles preventDefault() on mousedown to preserve the editor
+    // selection, which suppresses blur, so we rely on a capture-phase document listener.
+    _onDocMouseDown = (e: MouseEvent) => {
+      if (this._el && !this._el.contains(e.target as Node)) {
+        this.setState({ open: false, custom: false });
+      }
     };
 
-    _onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        this._commit((e.target as HTMLInputElement).value);
-        (e.target as HTMLInputElement).blur();
-        e.preventDefault();
+    componentDidUpdate(_prevProps, prevState: { open: boolean }) {
+      if (this.state.open && !prevState.open) {
+        document.addEventListener('mousedown', this._onDocMouseDown, true);
+      } else if (!this.state.open && prevState.open) {
+        document.removeEventListener('mousedown', this._onDocMouseDown, true);
       }
-      e.stopPropagation();
+    }
+
+    componentWillUnmount() {
+      document.removeEventListener('mousedown', this._onDocMouseDown, true);
+    }
+
+    _apply = (faceValue: string | null) => {
+      applyValueForMarkSafe(this.props.editor, config.type, faceValue);
+      this.setState({ open: false, custom: false });
     };
 
     render() {
-      const { editing, inputValue } = this.state;
-      const displayVal =
-        editing
-          ? inputValue
-          : faceFromMarkValue(getActiveValueForMark(this.props.value, config.type)) ||
-            config.default ||
-            '';
+      const { open, custom, customValue } = this.state;
+      const active = this._activeValue();
       return (
         <div
-          className={this.props.className}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '0 3px', cursor: 'default' }}
+          className={`${this.props.className} font-face-picker`}
+          tabIndex={-1}
+          ref={(el) => (this._el = el)}
+          onBlur={this._onBlur}
         >
-          <input
-            type="text"
-            list={FONT_DATALIST_ID}
-            placeholder="Font"
-            value={displayVal}
-            style={{
-              width: 110,
-              fontSize: 12,
-              padding: '1px 4px',
-              border: '1px solid rgba(0,0,0,0.2)',
-              borderRadius: 3,
-              background: 'transparent',
-              color: 'inherit',
-            }}
-            tabIndex={-1}
-            onFocus={this._onFocus}
-            onChange={this._onChange}
-            onBlur={this._onBlur}
-            onKeyDown={this._onKeyDown}
-            onMouseDown={this._onMouseDown}
-          />
-          <datalist id={FONT_DATALIST_ID}>
-            {config.options.map(({ name, value }) => (
-              <option key={value} value={value}>
-                {name}
-              </option>
-            ))}
-          </datalist>
+          <button className="dropdown-toggle" onMouseDown={this._toggleOpen}>
+            <span className="value">{active.label || localized('Font')}</span>
+            <i className="fa fa-caret-down" />
+          </button>
+          {open && (
+            <div className="dropdown menu">
+              {config.options.map((o) => (
+                <div
+                  key={o.value}
+                  className={`item ${o.value === active.value ? 'active' : ''}`}
+                  style={{ fontFamily: o.value }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    this._apply(o.value);
+                  }}
+                >
+                  {o.value === active.value && <i className="fa fa-check" />}
+                  {o.name}
+                </div>
+              ))}
+              <div className="divider" />
+              {custom ? (
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder={localized('Custom font…')}
+                  value={customValue}
+                  onChange={(e) => this.setState({ customValue: e.target.value })}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customValue.trim()) this._apply(customValue.trim());
+                    if (e.key === 'Escape') this.setState({ open: false, custom: false });
+                    e.stopPropagation();
+                  }}
+                />
+              ) : (
+                <div
+                  className="item"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    this.setState({ custom: true });
+                  }}
+                >
+                  {localized('Custom…')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       );
     }

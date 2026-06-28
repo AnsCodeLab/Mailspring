@@ -23,16 +23,28 @@ export const DEFAULT_FONT_OPTIONS = [
 ];
 
 export const DEFAULT_FONT_FACE = 'sans-serif';
+// Only the generic CSS font families are offered by default — they are free, always
+// available, and map to whatever sans/serif/mono face the user's (and the recipient's)
+// system provides. The named typefaces previously listed here (Arial, Calibri, Georgia,
+// Times New Roman, etc.) are all proprietary/commercial fonts that can't be bundled and
+// won't render where they aren't installed. Use the "Custom…" entry to apply any other
+// font family by name.
 export const DEFAULT_FONT_FACE_OPTIONS = [
   { name: 'Sans Serif', value: 'sans-serif' },
   { name: 'Serif', value: 'serif' },
   { name: 'Fixed Width', value: 'monospace' },
-  { name: 'Comic Sans MS', value: 'comic sans ms' },
-  { name: 'Garamond', value: 'garamond' },
-  { name: 'Georgia', value: 'georgia' },
-  { name: 'Tahoma', value: 'tahoma' },
-  { name: 'Trebuchet MS', value: 'trebuchet ms' },
-  { name: 'Verdana', value: 'verdana' },
+  // Bundled open-source fonts (OFL / Apache-2.0). The font files ship with the composer
+  // (see styles/bundled-fonts.less + fonts/), so these render for every user and are free
+  // to redistribute — unlike the proprietary Office/web-safe fonts. The generic fallback
+  // keeps mail readable for recipients who don't have the face installed.
+  { name: 'Roboto', value: 'Roboto, sans-serif' },
+  { name: 'Open Sans', value: 'Open Sans, sans-serif' },
+  { name: 'Lato', value: 'Lato, sans-serif' },
+  { name: 'Montserrat', value: 'Montserrat, sans-serif' },
+  { name: 'Poppins', value: 'Poppins, sans-serif' },
+  { name: 'Merriweather', value: 'Merriweather, serif' },
+  { name: 'Lora', value: 'Lora, serif' },
+  { name: 'Source Code Pro', value: 'Source Code Pro, monospace' },
 ];
 
 const PT_TO_SIZE = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 7];
