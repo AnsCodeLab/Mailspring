@@ -457,6 +457,28 @@ export function BuildFontSizeInput(config: { type: string; default?: string; ico
       }
     };
 
+    // The toolbar toggles preventDefault() on mousedown (to keep the editor's
+    // selection), which suppresses the blur that would otherwise close us. So we
+    // close on any mousedown outside this picker — e.g. clicking the sibling font
+    // dropdown — using a capture-phase document listener while open.
+    _onDocMouseDown = (e: MouseEvent) => {
+      if (this._el && !this._el.contains(e.target as Node)) {
+        this.setState({ open: false });
+      }
+    };
+
+    componentDidUpdate(_prevProps, prevState: { open: boolean }) {
+      if (this.state.open && !prevState.open) {
+        document.addEventListener('mousedown', this._onDocMouseDown, true);
+      } else if (!this.state.open && prevState.open) {
+        document.removeEventListener('mousedown', this._onDocMouseDown, true);
+      }
+    }
+
+    componentWillUnmount() {
+      document.removeEventListener('mousedown', this._onDocMouseDown, true);
+    }
+
     render() {
       const { open, inputValue } = this.state;
       const { display } = this._displayed();
@@ -547,6 +569,27 @@ export function BuildFontFacePicker(config: {
         this.setState({ open: false, custom: false });
       }
     };
+
+    // Close on any mousedown outside this picker (e.g. clicking the sibling font-size
+    // dropdown). The toggles preventDefault() on mousedown to preserve the editor
+    // selection, which suppresses blur, so we rely on a capture-phase document listener.
+    _onDocMouseDown = (e: MouseEvent) => {
+      if (this._el && !this._el.contains(e.target as Node)) {
+        this.setState({ open: false, custom: false });
+      }
+    };
+
+    componentDidUpdate(_prevProps, prevState: { open: boolean }) {
+      if (this.state.open && !prevState.open) {
+        document.addEventListener('mousedown', this._onDocMouseDown, true);
+      } else if (!this.state.open && prevState.open) {
+        document.removeEventListener('mousedown', this._onDocMouseDown, true);
+      }
+    }
+
+    componentWillUnmount() {
+      document.removeEventListener('mousedown', this._onDocMouseDown, true);
+    }
 
     _apply = (faceValue: string | null) => {
       applyValueForMarkSafe(this.props.editor, config.type, faceValue);

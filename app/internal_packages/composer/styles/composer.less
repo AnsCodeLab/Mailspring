@@ -279,13 +279,16 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 4px 10px;
+        min-height: 26px;
+        padding: 3px 10px;
+        font-size: 13px;
+        line-height: 1.5;
         cursor: pointer;
         white-space: nowrap;
 
         &:hover { background: color-mix(in srgb, @component-active-color 12%, transparent); }
         &.active { font-weight: 600; }
-        .fa-check { width: 12px; }
+        .fa-check { width: 12px; flex: 0 0 12px; }
       }
       .divider {
         height: 1px;
