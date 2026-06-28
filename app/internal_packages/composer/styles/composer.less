@@ -221,7 +221,7 @@
       cursor: default;
     }
     button.active {
-      background: fade(@component-active-color, 20%);
+      background: color-mix(in srgb, @component-active-color 20%, transparent);
     }
   }
 
@@ -279,7 +279,7 @@
         cursor: pointer;
         white-space: nowrap;
 
-        &:hover { background: fade(@component-active-color, 12%); }
+        &:hover { background: color-mix(in srgb, @component-active-color 12%, transparent); }
         &.active { font-weight: 600; }
         .fa-check { width: 12px; }
       }
