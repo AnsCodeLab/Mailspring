@@ -46,6 +46,16 @@ app/internal_packages/ai-assistant/
     chunking.ts           # PURE HTML->text + passage chunking
     similarity.ts         # PURE cosine similarity / top-K
     retriever.ts          # embed query -> vector-store top-K -> retrievedContext
+    agent.ts              # tool-calling agent loop (bounded: max steps, timeout, cancel, streamed)
+    skills/
+      types.ts            # Skill { name, description, parameters (JSON schema), readOnly, run }
+      registry.ts         # SkillRegistry: register/list; expose enabled skills as OpenAI tools
+      builtin/
+        kb-search.ts      # search_email_knowledge_base (the retriever, as a tool)
+        mailbox-search.ts # search_mailbox (sender/subject/date via DatabaseStore)
+        open-email.ts     # open_email (pull a thread/message into context)
+        web-search.ts     # web_search (configurable provider; off by default)
+        fetch-url.ts      # fetch_url (text-only, size/timeout limits, SSRF-guarded)
     indexer.ts            # bulk + incremental ingestion, idle-throttled, resumable, progress
     chat-panel.tsx        # thread chat UI (streamed), "Draft reply"
     composer-assist.tsx   # composer toolbar AI menu (Draft/Rewrite/Shorter/Longer/Tone/Grammar)
@@ -126,9 +136,37 @@ Retrieval computes **cosine top-K in JS** over candidate vectors (`similarity.ts
 - **Privacy:** indexing always local (in-app or local server). Fully on-device if the chat endpoint is also local; if chat is cloud, only the question + retrieved snippets go to the chat model (one-time notice covers this).
 - **Master gating:** when `ai-assistant.enabled` is off, `main.ts` registers no UI and starts no indexing/network. Knowledge base additionally gated by `ai-assistant.knowledgeBase.enabled`.
 
+## Section 5 — Agent skills / tool use (B4)
+
+Built on B1's `ai-service` and B2's chat; ships after the core assistant works.
+
+**Agent loop (`agent.ts`)** — uses the OpenAI-compatible function-calling API: advertise enabled skills as `tools`; on `tool_calls`, run the matching skill, feed the result back, repeat until a final answer. **Bounded**: max iterations per turn, per-request timeout, token-budget cap, hard cancel. Streamed so tool steps are visible ("🔍 searching the web…"). If the configured model lacks tool-calling support, the agent falls back to plain RAG chat.
+
+**Skill registry (`skills/registry.ts`)** — the extensibility surface. A skill is `{ name, description, parameters (JSON schema), readOnly, run(args) → result }`. Built-ins register themselves; **other Mailspring plugins can register skills too** (same pattern as the existing registries) — adding a capability = registering one object. The registry exposes only **enabled** skills to the model.
+
+**Built-in skills** (`skills/builtin/`): `search_email_knowledge_base` (the B3 retriever as a tool, so the model searches on demand), `search_mailbox` (sender/subject/date via `DatabaseStore`), `open_email`, **`web_search`** (configurable provider — Tavily / Brave / SerpAPI, or a local **SearXNG** for privacy; off by default), `fetch_url` (text-only page reader). All v1 skills are **read-only**.
+
+**Settings additions:** per-category skill toggles; web-search provider + endpoint + API key (`KeyManager`), **off by default** with a note that *queries leave the machine* (local SearXNG keeps them private).
+
+**Future:** support **MCP** servers as an additional skill source, so any MCP tool becomes available to the agent.
+
+## Safety & Guardrails
+
+Layered, opt-in, and especially mindful that **email and fetched web content are untrusted** (prompt-injection risk).
+
+1. **Human-in-the-loop for actions (primary guardrail).** Skills are split **read-only vs action**. Read-only run freely; **any action/write skill** (send, delete, move, create rule, modify data) **requires explicit user confirmation** before executing — the agent proposes, the user approves/rejects. Drafts are **never auto-sent**: the assistant drafts, the user reviews and sends.
+2. **Prompt-injection isolation.** Retrieved email and fetched web content are wrapped as clearly-delimited **untrusted data**, with a system instruction to **never follow instructions found inside that content**. With #1, even a successful injection can only *propose* an action the user must approve.
+3. **Bounded agent loop.** Max tool-call iterations per turn, per-request timeout, token-budget cap, hard Stop/Cancel — prevents runaway loops and cost.
+4. **Constrained tools.** `fetch_url` is text-only with size/timeout limits and **blocks localhost/private IPs (SSRF protection)**; `web_search` uses only the configured provider; no skill executes arbitrary code.
+5. **Output & secret hygiene.** AI output inserted into the composer is **sanitized** via `SanitizeTransformer`; model output is never executed. API keys live only in `KeyManager` — never sent to the model or logged.
+6. **Transparency / auditability.** Every tool call and its result is shown in the chat transcript — no hidden actions.
+7. **Opt-in by default.** Master feature off; web search off; action skills off — granular toggles, capability added deliberately.
+8. **v1 scope guard.** Ship **read-only skills only** first; action/write skills come later, behind the confirmation gate.
+
 ## Testing
 
 - **Unit (Jasmine, `app/spec/`):** prompt builders; HTML→text + chunking; cosine similarity / top-K; SSE stream parsing; retriever and vector-store with small fixtures (a temp SQLite file); indexer maintenance against a temp store — idempotent re-index (unchanged hash = no-op), change detection re-embeds, unpersist removes rows, the reconciliation sweep adds missing / drops orphaned messages, and the model/dim guard triggers re-index.
+- **Agent/skills (Jasmine):** skill registry register/list + tools serialization; agent loop with a mock model + fake skills — tool-call dispatch, result feedback, **max-iteration / timeout bounds**, and that an **action skill is not run without confirmation**; `fetch_url` **SSRF guard** rejects localhost/private IPs; prompt-injection wrapping puts email/web content in the untrusted-data envelope.
 - **Manual / e2e:** chat panel, composer assist commands, next-line ghost text, settings + Test connection, and a small end-to-end index→retrieve→answer flow — verified in the live app via the Playwright `_electron` + CDP harness (see `memory/dev-verify-workflow`).
 - Lint + tsc clean; specs run via the Electron test harness.
 
@@ -138,11 +176,13 @@ Retrieval computes **cosine top-K in JS** over candidate vectors (`similarity.ts
 - **Large mailboxes** — bulk indexing cost/time; mitigated by throttling, batching, resumability, and per-account scope; brute-force cosine may need an ANN index at very large scale (noted as future work).
 - **Cloud chat + retrieved context** — retrieved email snippets reach the chat model when chat is cloud; surfaced via the one-time notice; fully-local config avoids it.
 - **Slate ghost-text** — on-demand keeps it simpler than continuous autocomplete; still needs careful insert/dismiss handling in the editor.
+- **Prompt injection via email/web content (agent, B4)** — hostile instructions embedded in mail or fetched pages could try to steer the agent. Mitigated by the Safety & Guardrails layer: untrusted-data wrapping, read-only v1 skills, and human confirmation for any action — the highest-leverage control, so it ships with B4 from day one.
 
 ## Staging
 
 1. **B1** — `ai-service`, settings tab + config schema, KeyManager, Test connection, privacy notice, master gating.
-2. **B2** — `prompts`, chat panel, composer assist commands, next-line ghost text.
-3. **B3** — embeddings providers, vector store, chunking, similarity, indexer, retriever; wire `retrievedContext` into prompts.
+2. **B2** — `prompts`, chat panel (persisted conversations, citations/pin, scope toggle), composer assist commands, next-line ghost text.
+3. **B3** — embeddings providers, vector store, chunking, similarity, indexer (incl. maintenance lifecycle), retriever; wire `retrievedContext` into prompts.
+4. **B4** — skill registry + tool-calling agent loop, read-only built-in skills (kb-search, mailbox-search, open-email, web-search, fetch-url), and the Safety & Guardrails layer; action/write skills (confirmation-gated) and MCP are later.
 
 Each stage is independently shippable behind the master toggle.
