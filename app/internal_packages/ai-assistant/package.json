@@ -1,0 +1,11 @@
+{
+  "name": "ai-assistant",
+  "version": "0.1.0",
+  "isOptional": true,
+  "title": "AI Assistant",
+  "description": "AI chat, compose assistance, and a local knowledge base over your mail.",
+  "main": "./lib/main",
+  "private": true,
+  "engines": { "mailspring": "*" },
+  "license": "GPL-3.0"
+}
