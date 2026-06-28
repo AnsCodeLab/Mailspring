@@ -21,7 +21,7 @@ Add an AI assistant to Mailspring, implemented as a new internal package `app/in
 ## Non-Goals (this cycle)
 
 - Automatic Copilot-style continuous autocomplete (on-demand only).
-- Persistent cross-session chat history (chat is ephemeral per-thread).
+- Global ChatGPT-style standalone chat sessions (conversations are anchored to threads — but they can reference and cite emails from anywhere).
 - Cloud embeddings (indexing is local-only by decision).
 - Multi-model orchestration / agents calling external tools.
 - An ANN/vector index extension (brute-force cosine is sufficient at this scale; revisit later).
@@ -42,6 +42,7 @@ app/internal_packages/ai-assistant/
       in-app.ts           # transformers.js backend (lazy-loaded model, cached in app data)
       server.ts           # local-server backend (POST /v1/embeddings)
     vector-store.ts       # plugin-owned better-sqlite3 file; upsert/query; cosine top-K
+    chat-store.ts         # persisted per-thread conversations + cited/pinned message refs (same DB)
     chunking.ts           # PURE HTML->text + passage chunking
     similarity.ts         # PURE cosine similarity / top-K
     retriever.ts          # embed query -> vector-store top-K -> retrievedContext
@@ -55,7 +56,7 @@ app/internal_packages/ai-assistant/
 
 ### Data flow
 
-- **Chat:** question + thread messages (+ optional retrievedContext from B3) → `buildChatPrompt` → `ai-service.chatStream` → render tokens → optional "Draft reply" → `DraftStore` opens a reply draft with the text.
+- **Chat:** question + saved thread conversation (token-budgeted) + thread messages + pinned emails (+ retrievedContext from B3) → `buildChatPrompt` → `ai-service.chatStream` → render tokens with **citation markers** → persist the turn and its `chat_refs` → render a clickable **Sources** list → optional "Draft reply" → `DraftStore` opens a reply draft with the text.
 - **Composer command:** button → read draft/selection → prompt builder → `ai-service` (stream) → insert/replace in the Slate editor (sanitized, undoable).
 - **Next-line:** Tab → `buildNextLinePrompt(draftSoFar)` → `ai-service` → ghost text → Tab inserts / Esc dismisses.
 - **Index:** messages (`DatabaseStore`) → `chunking` (HTML→text, passages) → `EmbeddingProvider.embed` (local) → `vector-store` (SQLite).
@@ -78,7 +79,11 @@ app/internal_packages/ai-assistant/
 
 ## Section 2 — Chat panel + composer assist (B2)
 
-**Chat panel (`chat-panel.tsx`)** — injected into the thread/message view via `ComponentRegistry` (right-side region). Reads the open thread via `FocusedContentStore` + `thread.messages()`. Streams answers; keeps **ephemeral per-thread** history (resets on thread switch; cancels in-flight request via AbortController). Actions: free chat ("summarize", "what are they asking?") and **Draft reply** → opens a composer draft with the generated reply.
+**Chat panel (`chat-panel.tsx`)** — injected into the thread/message view via `ComponentRegistry` (right-side region). Reads the open thread via `FocusedContentStore` + `thread.messages()`. Streams answers; cancels in-flight requests on thread switch (AbortController). Actions: free chat ("summarize", "what are they asking?") and **Draft reply** → opens a composer draft with the generated reply.
+
+*Conversation persistence (per-thread, local):* conversations are **saved per thread** in the plugin SQLite (`chats` table) and **restored** when the thread is reopened — the assistant remembers what you discussed about each email. When sending to the model, history is included up to a **token budget** (oldest turns trimmed, optionally with a short rolling summary of what was dropped). Controls: **Clear conversation** (this thread) and **Clear all**. Conversations are local-only — sent out only as context to the configured chat model. Chat history does **not** feed the knowledge base (separate stores).
+
+*Cross-thread referencing & citations:* retrieval is **global** — even anchored to one thread, the retriever searches the whole index, so same-topic emails in other threads surface by meaning. The model is prompted to ground answers in the retrieved context with **citation markers** (`[1]`, `[2]`); the panel renders a **Sources** list of clickable chips (sender · subject · date) that **open that email/thread** on click. Each chat message stores the `messageId`s it referenced (`chat_refs`), so reopening keeps the links live. A **scope toggle** — *This thread* (default: thread is primary context, retrieval augments) vs *All mail* (retrieval is primary context) — controls mailbox-wide questions. Users can also **pin** specific emails into a conversation via a **"Discuss with AI / Add to chat"** action on any email or thread (toolbar / context menu), to deliberately gather same-topic emails from different threads as explicit context alongside automatic retrieval.
 
 **Composer assist (`composer-assist.tsx`)** — an AI menu/button in the composer toolbar; commands operate on the **draft or selected text**: Draft reply, Rewrite, Make shorter, Make longer, Change tone (formal/casual), Fix grammar. Each: read text → prompt builder → stream → insert/replace in the Slate editor (sanitized via `SanitizeTransformer`, undoable).
 
@@ -96,6 +101,7 @@ app/internal_packages/ai-assistant/
 - `chunks(id, messageId, threadId, accountId, date, sender, subject, chunkText, embedding BLOB, dim)` — one row per passage.
 - `indexed_messages(messageId PRIMARY KEY, contentHash, model, dim, indexedAt)` — one row per message: what's indexed and at what content/model version (drives idempotency, change detection, and the reconciliation sweep).
 - `meta(key, value)` — the embedding `model`/`dim` the store was built with, and persisted bulk-index progress.
+- `chats(id, threadId, role, content, createdAt)` + `chat_refs(chatId, messageId, threadId)` — persisted per-thread conversations and the emails each assistant turn cited/pinned. Distinct from the email index above.
 
 Retrieval computes **cosine top-K in JS** over candidate vectors (`similarity.ts`) — adequate for tens of thousands of chunks; an ANN index is a later optimization.
 
