@@ -164,9 +164,25 @@ Layered, opt-in, and especially mindful that **email and fetched web content are
 7. **Opt-in by default.** Master feature off; web search off; action skills off — granular toggles, capability added deliberately.
 8. **v1 scope guard.** Ship **read-only + draft/reversible-write skills**; **`send` and `delete` are confirmation-gated** (never auto-run). Other outbound/destructive actions follow the same confirmation gate as they're added.
 
+## Grounding & Answer Verification
+
+An LLM can hallucinate; correctness can't be *guaranteed*. The design instead makes every answer **verifiable**, reduces ungrounded guessing, and signals uncertainty — the user stays the final checker (dovetails with the send/delete gate).
+
+1. **Grounded-only answering.** The system prompt instructs the model to answer **only from the provided context** (retrieved/pinned emails, fetched pages) and to explicitly reply *"I don't find that in your emails"* when the context doesn't support an answer, rather than guess. This is the biggest lever against hallucination.
+2. **Verifiable citations.** Every factual claim carries a citation marker (`[1]`) mapping to the **Sources** list of clickable email links; the user clicks through to the real email to check the claim. Traceability, not trust.
+3. **Evidence inline.** Each source is expandable to the **exact retrieved snippet** that supports the claim, so the evidence is visible without leaving the chat.
+4. **No fabricated sources.** The app **validates that every citation maps to a real retrieved document** (the model can't invent source IDs); unmatched citations are dropped and flagged.
+5. **Source tiering.** Each fact is labeled by origin — **your email** (verifiable by click), **web** (external), or **model general knowledge** (unverified) — so the user knows what to double-check.
+6. **Tool/retrieval transparency.** The transcript shows what the agent searched and retrieved, so an answer not backed by retrieved content is visibly unsupported.
+7. **Verifier pass (future, opt-in).** For high-stakes answers, a second model pass checks "does this claim follow from the cited emails?" — an automated grounding check. Heavier/costlier; not v1.
+8. **Feedback loop (future).** Thumbs up/down to flag bad answers for later tuning.
+
+v1 ships items 1–6; 7–8 are later.
+
 ## Testing
 
 - **Unit (Jasmine, `app/spec/`):** prompt builders; HTML→text + chunking; cosine similarity / top-K; SSE stream parsing; retriever and vector-store with small fixtures (a temp SQLite file); indexer maintenance against a temp store — idempotent re-index (unchanged hash = no-op), change detection re-embeds, unpersist removes rows, the reconciliation sweep adds missing / drops orphaned messages, and the model/dim guard triggers re-index.
+- **Grounding (Jasmine):** citation validator drops/flags markers that don't map to a real retrieved source; the grounded-only prompt assembly includes the "say I don't know" instruction and the labeled source envelope.
 - **Agent/skills (Jasmine):** skill registry register/list + tools serialization; agent loop with a mock model + fake skills — tool-call dispatch, result feedback, **max-iteration / timeout bounds**, that **`create_draft` runs but `send`/`delete` are blocked pending explicit confirmation**, and that a draft is never auto-sent; `fetch_url` **SSRF guard** rejects localhost/private IPs; prompt-injection wrapping puts email/web content in the untrusted-data envelope.
 - **Manual / e2e:** chat panel, composer assist commands, next-line ghost text, settings + Test connection, and a small end-to-end index→retrieve→answer flow — verified in the live app via the Playwright `_electron` + CDP harness (see `memory/dev-verify-workflow`).
 - Lint + tsc clean; specs run via the Electron test harness.
