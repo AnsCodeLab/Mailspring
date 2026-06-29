@@ -14,15 +14,17 @@ export function chunkText(text: string, opts: { size?: number; overlap?: number 
   const size = opts.size ?? 2000;
   const overlap = opts.overlap ?? 200;
   if (text.length <= size) return text ? [text] : [];
+  const step = Math.max(1, size - overlap);
   const chunks: string[] = [];
   let i = 0;
   while (i < text.length) {
     chunks.push(text.slice(i, i + size));
-    i += size - overlap;
+    i += step;
   }
   return chunks;
 }
 
 export function contentHash(text: string): string {
+  // change-detection only, not security-critical
   return crypto.createHash('sha1').update(text).digest('hex');
 }

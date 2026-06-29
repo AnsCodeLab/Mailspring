@@ -4,6 +4,10 @@ describe('htmlToText', () => {
   it('strips tags and collapses whitespace', () => {
     expect(htmlToText('<p>Hello <b>world</b></p>\n<p>bye</p>')).toBe('Hello world bye');
   });
+  it('strips script and style content', () => {
+    expect(htmlToText('<style>.foo{color:red}</style><p>Hi</p>')).toBe('Hi');
+    expect(htmlToText('<script>alert(1)</script><p>Hi</p>')).toBe('Hi');
+  });
 });
 describe('chunkText', () => {
   it('returns one chunk for short text', () => {
@@ -13,6 +17,12 @@ describe('chunkText', () => {
     const chunks = chunkText('a'.repeat(2500), { size: 1000, overlap: 200 });
     expect(chunks.length).toBeGreaterThan(2);
     expect(chunks[0].length).toBe(1000);
+  });
+  it('returns [] for empty text', () => {
+    expect(chunkText('', { size: 100, overlap: 10 })).toEqual([]);
+  });
+  it('does not infinite-loop when overlap >= size', () => {
+    expect(chunkText('abcdef', { size: 3, overlap: 5 }).length).toBeGreaterThan(0);
   });
 });
 describe('contentHash', () => {
