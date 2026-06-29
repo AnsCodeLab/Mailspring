@@ -5,6 +5,7 @@ import {
   Actions,
   TaskQueue,
   SyncbackDraftTask,
+  SanitizeTransformer,
   localized,
 } from 'mailspring-exports';
 import { AIService, ChatMessage } from './ai-service';
@@ -20,6 +21,7 @@ export default class AIChatPanel extends React.Component<
 > {
   _unsub: () => void;
   _abort: AbortController | null = null;
+  _composing = false;
   state = {
     thread: FocusedContentStore.focused('thread'),
     turns: [] as Turn[],
@@ -74,6 +76,7 @@ export default class AIChatPanel extends React.Component<
         this.setState({ turns: [...turns] });
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError') return; // intentional cancel; turns reset by thread switch
       turns[turns.length - 1].content = `⚠️ ${err.message || err}`;
       this.setState({ turns: [...turns] });
     } finally {
@@ -83,27 +86,34 @@ export default class AIChatPanel extends React.Component<
 
   _draftReply = async () => {
     const last = [...this.state.turns].reverse().find((t) => t.role === 'assistant');
-    if (!last || !this.state.thread) return;
+    if (!last || !this.state.thread || this._composing) return;
+    this._composing = true;
+    try {
+      // Get the last non-hidden message from the thread to reply to.
+      const messages: any[] = await this.state.thread.messages({ includeHidden: false });
+      if (!messages || messages.length === 0) return;
+      const lastMessage = messages[messages.length - 1];
 
-    // Get the last non-hidden message from the thread to reply to.
-    const messages: any[] = await this.state.thread.messages({ includeHidden: false });
-    if (!messages || messages.length === 0) return;
-    const lastMessage = messages[messages.length - 1];
+      // Create a reply draft pre-filled with quoting, then prepend the AI text.
+      const draft = await DraftFactory.createDraftForReply({
+        thread: this.state.thread,
+        message: lastMessage,
+        type: 'reply',
+      });
+      // AI/model output is untrusted (thread content fed to it is attacker-controlled);
+      // sanitize before injecting into the draft body to prevent stored XSS.
+      const rawHtml = `<div>${last.content.replace(/\n/g, '<br/>')}</div>`;
+      const aiHtml = SanitizeTransformer.runSync(rawHtml);
+      draft.body = aiHtml + (draft.body || '');
 
-    // Create a reply draft pre-filled with quoting, then prepend the AI text.
-    const draft = await DraftFactory.createDraftForReply({
-      thread: this.state.thread,
-      message: lastMessage,
-      type: 'reply',
-    });
-    const aiHtml = `<div>${last.content.replace(/\n/g, '<br/>')}</div>`;
-    draft.body = aiHtml + (draft.body || '');
-
-    // Persist the draft via the task system, then pop open the composer window.
-    const task = new SyncbackDraftTask({ draft });
-    Actions.queueTask(task);
-    await TaskQueue.waitForPerformLocal(task);
-    Actions.composePopoutDraft(draft.headerMessageId);
+      // Persist the draft via the task system, then pop open the composer window.
+      const task = new SyncbackDraftTask({ draft });
+      Actions.queueTask(task);
+      await TaskQueue.waitForPerformLocal(task);
+      Actions.composePopoutDraft(draft.headerMessageId);
+    } finally {
+      this._composing = false;
+    }
   };
 
   render() {
@@ -122,7 +132,7 @@ export default class AIChatPanel extends React.Component<
           ))}
         </div>
         <div className="ai-chat-actions">
-          <button onClick={this._draftReply} disabled={this.state.busy}>
+          <button onClick={this._draftReply} disabled={this.state.busy || this._composing}>
             {localized('Draft reply')}
           </button>
         </div>
