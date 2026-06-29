@@ -13,12 +13,16 @@ describe('parseSSEChunk', () => {
 
 describe('extractDelta', () => {
   it('pulls the content delta out of an OpenAI chunk', () => {
-    expect(extractDelta('data: ' + JSON.stringify({ choices: [{ delta: { content: 'Hi' } }] }))).toBe('Hi');
+    expect(
+      extractDelta('data: ' + JSON.stringify({ choices: [{ delta: { content: 'Hi' } }] }))
+    ).toBe('Hi');
   });
   it('returns null for the [DONE] sentinel', () => {
     expect(extractDelta('data: [DONE]')).toBeNull();
   });
   it('returns null for a role-only / empty delta', () => {
-    expect(extractDelta('data: ' + JSON.stringify({ choices: [{ delta: { role: 'assistant' } }] }))).toBeNull();
+    expect(
+      extractDelta('data: ' + JSON.stringify({ choices: [{ delta: { role: 'assistant' } }] }))
+    ).toBeNull();
   });
 });
