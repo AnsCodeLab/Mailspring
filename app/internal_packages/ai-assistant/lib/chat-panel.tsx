@@ -132,13 +132,44 @@ export default class AIChatPanel extends React.Component<
         retrieved,
       });
       let answer = '';
-      for await (const tok of AIService.chatStream({
-        messages: prompt,
-        signal: this._abort.signal,
-      })) {
-        tok && (answer += tok);
-        turns[turns.length - 1].content += tok;
+      const { Skills } = require('./skills/registry');
+      const { runAgent } = require('./agent');
+
+      if (Skills.list().length > 0) {
+        const agentOut = await runAgent({
+          messages: prompt,
+          registry: Skills,
+          callModel: (msgs: any[], tools: any[]) =>
+            AIService.chatWithTools({ messages: msgs, tools, signal: this._abort?.signal }),
+          confirm: async (skillName: string, args: any) => {
+            const { response } = await require('@electron/remote').dialog.showMessageBox({
+              type: 'question',
+              buttons: ['Allow', 'Deny'],
+              message: `AI wants to run: ${skillName}`,
+              detail: JSON.stringify(args, null, 2).slice(0, 500),
+            });
+            return response === 0;
+          },
+          signal: this._abort?.signal,
+          maxSteps: 6,
+          onToolStep: (step: any) => {
+            turns[turns.length - 1].content += `\n🔧 used ${step.name}`;
+            this.setState({ turns: [...turns] });
+          },
+        });
+        answer = agentOut.answer;
+        turns[turns.length - 1].content = answer;
         this.setState({ turns: [...turns] });
+      } else {
+        // No tools — use streaming as before
+        for await (const tok of AIService.chatStream({
+          messages: prompt,
+          signal: this._abort?.signal,
+        })) {
+          tok && (answer += tok);
+          turns[turns.length - 1].content += tok;
+          this.setState({ turns: [...turns] });
+        }
       }
       const { citedSources } = validateCitations(answer, retrieved);
       this.setState({ retrieved, citedSources });

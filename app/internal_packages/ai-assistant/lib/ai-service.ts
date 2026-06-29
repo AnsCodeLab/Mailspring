@@ -91,6 +91,48 @@ export const AIService = {
     return out;
   },
 
+  async chatWithTools({
+    messages,
+    tools,
+    signal,
+  }: {
+    messages: any[];
+    tools?: any[];
+    signal?: AbortSignal;
+  }): Promise<{
+    content?: string;
+    tool_calls?: Array<{ id: string; name: string; arguments: any }>;
+  }> {
+    const endpoint = AIConfig.getEndpoint();
+    const body: any = { model: AIConfig.getModel(), messages, stream: false };
+    if (tools && tools.length) body.tools = tools;
+    let res: Response;
+    try {
+      res = await fetch(`${endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (err) {
+      throw new AIError('network', `Could not reach ${endpoint}.`);
+    }
+    if (!res.ok) throw mapHttpError(res.status, await res.text().catch(() => ''));
+    const json = await res.json();
+    const msg = json?.choices?.[0]?.message;
+    return {
+      content: msg?.content || undefined,
+      tool_calls: msg?.tool_calls?.map((tc: any) => ({
+        id: tc.id,
+        name: tc.function?.name || tc.name,
+        arguments:
+          typeof tc.function?.arguments === 'string'
+            ? JSON.parse(tc.function.arguments)
+            : tc.function?.arguments || tc.arguments || {},
+      })),
+    };
+  },
+
   async testConnection(): Promise<{ ok: boolean; error?: string }> {
     try {
       await this.chat({ messages: [{ role: 'user', content: 'ping' }] });

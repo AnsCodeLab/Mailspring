@@ -29,6 +29,32 @@ function registerFeatureUI() {
   const PinAction = require('./pin-action').default;
   ComponentRegistry.register(PinAction, { role: 'ThreadActionsToolbarButton' });
   featureDisposables.push(() => ComponentRegistry.unregister(PinAction));
+
+  const { Skills } = require('./skills/registry');
+  const { kbSearchSkill } = require('./skills/builtin/kb-search');
+  const { mailboxSearchSkill } = require('./skills/builtin/mailbox-search');
+  const { openEmailSkill } = require('./skills/builtin/open-email');
+  const { createDraftSkill } = require('./skills/builtin/create-draft');
+  const { fetchUrlSkill } = require('./skills/builtin/fetch-url');
+  const { webSearchSkill } = require('./skills/builtin/web-search');
+  [
+    kbSearchSkill,
+    mailboxSearchSkill,
+    openEmailSkill,
+    createDraftSkill,
+    fetchUrlSkill,
+    webSearchSkill,
+  ].forEach((s: any) => Skills.register(s));
+  featureDisposables.push(() =>
+    [
+      kbSearchSkill,
+      mailboxSearchSkill,
+      openEmailSkill,
+      createDraftSkill,
+      fetchUrlSkill,
+      webSearchSkill,
+    ].forEach((s: any) => Skills.unregister(s.name))
+  );
 }
 
 export function activate() {
