@@ -36,8 +36,12 @@ export function activate() {
     if (AIConfig.isEnabled()) {
       registerFeatureUI();
       if (AIConfig.isKnowledgeBaseEnabled()) {
-        require('./indexer').Indexer.start();
-        featureDisposables.push(() => require('./indexer').Indexer.stop());
+        try {
+          require('./indexer').Indexer.start();
+          featureDisposables.push(() => require('./indexer').Indexer.stop());
+        } catch (e) {
+          // indexer not yet implemented; guard prevents console error on KB toggle
+        }
       }
     }
   };
