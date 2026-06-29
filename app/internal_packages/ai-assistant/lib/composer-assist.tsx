@@ -4,7 +4,9 @@ import { AIService } from './ai-service';
 import { buildRewritePrompt, buildReplyPrompt } from './prompts';
 import { ensurePrivacyNoticeAccepted } from './privacy-notice';
 
-const COMMANDS: Array<{ key: any; label: string }> = [
+type CommandKey = 'reply' | 'rewrite' | 'shorter' | 'longer' | 'formal' | 'casual' | 'grammar';
+
+const COMMANDS: Array<{ key: CommandKey; label: string }> = [
   { key: 'reply', label: 'Draft a reply' },
   { key: 'rewrite', label: 'Rewrite' },
   { key: 'shorter', label: 'Make shorter' },
@@ -20,7 +22,7 @@ export default class AIComposerAssist extends React.Component<
 > {
   state = { open: false, busy: false };
 
-  _run = async (key: string) => {
+  _run = async (key: CommandKey) => {
     this.setState({ open: false });
     if (!(await ensurePrivacyNoticeAccepted())) return;
     const { draft, session } = this.props;
@@ -34,7 +36,7 @@ export default class AIComposerAssist extends React.Component<
         threadMessages: [{ from: 'me', date: '', text: currentText }],
         instruction: '',
       });
-    else messages = buildRewritePrompt({ text: currentText, style: key as any });
+    else messages = buildRewritePrompt({ text: currentText, style: key });
     this.setState({ busy: true });
     try {
       const result = await AIService.chat({ messages });
