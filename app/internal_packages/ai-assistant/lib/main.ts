@@ -25,6 +25,10 @@ function registerFeatureUI() {
   const ComposerAssist = require('./composer-assist').default;
   ComponentRegistry.register(ComposerAssist, { role: 'Composer:ActionButton' });
   featureDisposables.push(() => ComponentRegistry.unregister(ComposerAssist));
+
+  const PinAction = require('./pin-action').default;
+  ComponentRegistry.register(PinAction, { role: 'ThreadActionsToolbarButton' });
+  featureDisposables.push(() => ComponentRegistry.unregister(PinAction));
 }
 
 export function activate() {

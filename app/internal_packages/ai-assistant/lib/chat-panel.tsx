@@ -15,6 +15,8 @@ import { ensurePrivacyNoticeAccepted } from './privacy-notice';
 import { retrieve } from './retriever';
 import { validateCitations } from './citations';
 import { AIConfig } from './config';
+import { ChatStore } from './chat-store';
+import { getPinned } from './pin-action';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 
@@ -27,12 +29,15 @@ export default class AIChatPanel extends React.Component<
     busy: boolean;
     retrieved: RetrievedSource[];
     citedSources: RetrievedSource[];
+    scope: 'thread' | 'all';
   }
 > {
   static displayName = 'AIChatPanel'; // required by ComponentRegistry.register
   _unsub: () => void;
   _abort: AbortController | null = null;
   _composing = false;
+  private __chatStore: ChatStore | null = null;
+
   state = {
     thread: FocusedContentStore.focused('thread'),
     turns: [] as Turn[],
@@ -40,14 +45,42 @@ export default class AIChatPanel extends React.Component<
     busy: false,
     retrieved: [] as RetrievedSource[],
     citedSources: [] as RetrievedSource[],
+    scope: 'thread' as 'thread' | 'all',
   };
 
+  private _chatStore(): ChatStore {
+    if (!this.__chatStore) {
+      this.__chatStore = new ChatStore(
+        require('path').join(AppEnv.getConfigDirPath(), 'ai-index.db')
+      );
+    }
+    return this.__chatStore;
+  }
+
+  private _loadHistory(threadId: string): Turn[] {
+    try {
+      return this._chatStore()
+        .history(threadId)
+        .map((r) => ({
+          role: r.role as 'user' | 'assistant',
+          content: r.content,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
   componentDidMount() {
+    const { thread } = this.state;
+    if (thread) {
+      this.setState({ turns: this._loadHistory(thread.id) });
+    }
     this._unsub = FocusedContentStore.listen(() => {
       const thread = FocusedContentStore.focused('thread');
       if (thread !== this.state.thread) {
         if (this._abort) this._abort.abort();
-        this.setState({ thread, turns: [], busy: false, retrieved: [], citedSources: [] }); // ephemeral here; Task 14 persists per-thread
+        const turns = thread ? this._loadHistory(thread.id) : [];
+        this.setState({ thread, turns, busy: false, retrieved: [], citedSources: [] });
       }
     });
   }
@@ -67,9 +100,17 @@ export default class AIChatPanel extends React.Component<
       { role: 'assistant', content: '' },
     ];
     this.setState({ turns, input: '', busy: true, retrieved: [], citedSources: [] });
+
+    // Persist user turn immediately
+    const threadId = this.state.thread?.id;
+    if (threadId) {
+      this._chatStore().append(threadId, 'user', q, []);
+    }
+
     this._abort = new AbortController();
     try {
-      const threadMessages = await loadThreadMessages(this.state.thread);
+      const threadMessages =
+        this.state.scope === 'thread' ? await loadThreadMessages(this.state.thread) : [];
       const history: ChatMessage[] = this.state.turns.map((t) => ({
         role: t.role,
         content: t.content,
@@ -87,7 +128,7 @@ export default class AIChatPanel extends React.Component<
         question: q,
         threadMessages,
         history,
-        pinned: [],
+        pinned: getPinned(),
         retrieved,
       });
       let answer = '';
@@ -101,6 +142,16 @@ export default class AIChatPanel extends React.Component<
       }
       const { citedSources } = validateCitations(answer, retrieved);
       this.setState({ retrieved, citedSources });
+
+      // Persist assistant turn with cited message IDs
+      if (threadId) {
+        this._chatStore().append(
+          threadId,
+          'assistant',
+          answer,
+          citedSources.map((s) => s.messageId)
+        );
+      }
     } catch (err: any) {
       if (err?.name === 'AbortError') return; // intentional cancel; turns reset by thread switch
       turns[turns.length - 1].content = `⚠️ ${err.message || err}`;
@@ -108,6 +159,17 @@ export default class AIChatPanel extends React.Component<
     } finally {
       this.setState({ busy: false });
     }
+  };
+
+  _clearHistory = () => {
+    const threadId = this.state.thread?.id;
+    if (!threadId) return;
+    try {
+      this._chatStore().clearThread(threadId);
+    } catch {
+      // ignore
+    }
+    this.setState({ turns: [], retrieved: [], citedSources: [] });
   };
 
   _draftReply = async () => {
@@ -148,8 +210,32 @@ export default class AIChatPanel extends React.Component<
         <div className="ai-chat-panel empty">{localized('Open a thread to chat about it.')}</div>
       );
     }
+    const { scope } = this.state;
     return (
       <div className="ai-chat-panel">
+        <div className="ai-chat-toolbar">
+          <div className="ai-scope-toggle">
+            <button
+              className={`ai-scope-btn${scope === 'thread' ? ' active' : ''}`}
+              onClick={() => this.setState({ scope: 'thread' })}
+            >
+              {localized('This thread')}
+            </button>
+            <button
+              className={`ai-scope-btn${scope === 'all' ? ' active' : ''}`}
+              onClick={() => this.setState({ scope: 'all' })}
+            >
+              {localized('All mail')}
+            </button>
+          </div>
+          <button
+            className="ai-clear-btn"
+            title={localized('Clear conversation')}
+            onClick={this._clearHistory}
+          >
+            {localized('Clear')}
+          </button>
+        </div>
         <div className="ai-chat-scroll">
           {this.state.turns.map((t, i) => (
             <div key={i} className={`ai-turn ${t.role}`}>
