@@ -57,6 +57,28 @@ describe('faceFromMarkValue', () => {
     expect(faceFromMarkValue('serif', REAL_OPTIONS)).toBe('serif');
     expect(faceFromMarkValue('sans-serif', REAL_OPTIONS)).toBe('sans-serif');
   });
+
+  // Chromium normalizes multi-word unquoted font names by adding double-quotes when
+  // reading el.style.fontFamily. e.g. storing 'Open Sans, sans-serif' as a mark and
+  // reading it back from HTML gives '"Open Sans", sans-serif'. The resolver must
+  // strip CSS quotes before comparing so the font picker still recognizes the font.
+  const BUNDLED_OPTIONS = [
+    { name: 'Sans Serif', value: 'sans-serif' },
+    { name: 'Roboto', value: 'Roboto, sans-serif' },
+    { name: 'Open Sans', value: 'Open Sans, sans-serif' },
+    { name: 'Source Code Pro', value: 'Source Code Pro, monospace' },
+  ];
+  it('matches Chromium-normalized quoted multi-word font names back to their option', () => {
+    // Chromium reads el.style.fontFamily = 'Open Sans, sans-serif' as '"Open Sans", sans-serif'
+    expect(faceFromMarkValue('"Open Sans", sans-serif', BUNDLED_OPTIONS)).toBe(
+      'Open Sans, sans-serif'
+    );
+    expect(faceFromMarkValue('"Source Code Pro", monospace', BUNDLED_OPTIONS)).toBe(
+      'Source Code Pro, monospace'
+    );
+    // Single-word names are unaffected
+    expect(faceFromMarkValue('Roboto, sans-serif', BUNDLED_OPTIONS)).toBe('Roboto, sans-serif');
+  });
 });
 
 describe('resolveDisplay', () => {

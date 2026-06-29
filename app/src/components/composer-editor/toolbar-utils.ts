@@ -18,7 +18,11 @@ export function ptFromMarkValue(val: any): string {
   return '';
 }
 
-const primaryFamily = (s: string) => String(s).toLowerCase().split(',')[0].trim();
+// Strip CSS quotes that Chromium adds when it normalizes font-family values
+// (e.g. el.style.fontFamily for "Open Sans, sans-serif" is read back as
+// '"Open Sans", sans-serif' with double quotes around the multi-word name).
+const stripCSSQuotes = (s: string) => s.replace(/^["']|["']$/g, '');
+const primaryFamily = (s: string) => stripCSSQuotes(String(s).toLowerCase().split(',')[0].trim());
 
 export function faceFromMarkValue(val: any, options: { name: string; value: string }[]): string {
   if (!val) return '';
@@ -28,6 +32,8 @@ export function faceFromMarkValue(val: any, options: { name: string; value: stri
   // externally-pasted value like "Georgia" or "Times New Roman, serif" still resolves
   // to its option. We must NOT substring-match (the old bug): "georgia, serif" would
   // match the generic "serif"/"sans-serif" option and every font collapsed to a generic.
+  // Also handle Chromium's CSS normalization that wraps multi-word names in double quotes
+  // (e.g. '"Open Sans", sans-serif' should match option value 'Open Sans, sans-serif').
   let opt = options.find((o) => o.value.toLowerCase() === v);
   if (!opt) opt = options.find((o) => primaryFamily(o.value) === primaryFamily(val));
   return opt ? opt.value : String(val);
