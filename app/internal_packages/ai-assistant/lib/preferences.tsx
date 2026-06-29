@@ -5,17 +5,72 @@ import { AIService } from './ai-service';
 
 export default class AIPreferences extends React.Component<
   Record<string, never>,
-  { apiKey: string; testing: boolean; testResult: string }
+  {
+    apiKey: string;
+    testing: boolean;
+    testResult: string;
+    indexProgress: { done: number; total: number; running: boolean };
+    reindexing: boolean;
+  }
 > {
-  state = { apiKey: '', testing: false, testResult: '' };
+  state = {
+    apiKey: '',
+    testing: false,
+    testResult: '',
+    indexProgress: { done: 0, total: 0, running: false },
+    reindexing: false,
+  };
+  private progressInterval: ReturnType<typeof setInterval> | null = null;
 
   componentDidMount() {
     KeyManager.getPassword(KEY_API).then((k) => this.setState({ apiKey: k || '' }));
+    this._startProgressPolling();
   }
+
+  componentWillUnmount() {
+    this._stopProgressPolling();
+  }
+
+  _startProgressPolling() {
+    this._stopProgressPolling();
+    if (!AIConfig.isKnowledgeBaseEnabled()) return;
+    this.progressInterval = setInterval(() => {
+      const { Indexer } = require('./indexer');
+      this.setState({ indexProgress: Indexer.progress() });
+    }, 2000);
+  }
+
+  _stopProgressPolling() {
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+  }
+
+  _reindex = async () => {
+    this.setState({ reindexing: true });
+    try {
+      const { Indexer } = require('./indexer');
+      await Indexer.reindexAll();
+    } finally {
+      this.setState({ reindexing: false });
+    }
+  };
+
+  _clearIndex = () => {
+    const { Indexer } = require('./indexer');
+    Indexer.clear();
+    this.setState({ indexProgress: { done: 0, total: 0, running: false } });
+  };
 
   _set = (key: string, value: any) => {
     AppEnv.config.set(key, value);
-    this.setState({});
+    this.setState({}, () => {
+      // Restart progress polling when KB enabled state changes.
+      if (key === AIConfig.keys.kbEnabled) {
+        this._startProgressPolling();
+      }
+    });
   };
 
   _saveKey = (name: string, value: string) => {
@@ -117,8 +172,30 @@ export default class AIPreferences extends React.Component<
               onBlur={(e) => this._set(K.embedModel, e.target.value)}
             />
           </label>
-          {/* Index progress + Re-index / Clear buttons wired in Task 13 via require('./indexer'). */}
-          <div id="ai-index-progress" />
+          {AIConfig.isKnowledgeBaseEnabled() && (
+            <div id="ai-index-progress" style={{ marginTop: 8 }}>
+              <div style={{ marginBottom: 4 }}>
+                {localized('Indexed %1 / %2', [
+                  String(this.state.indexProgress.done),
+                  String(this.state.indexProgress.total),
+                ])}
+                {this.state.indexProgress.running ? localized(' (running…)') : ''}
+              </div>
+              {this.state.indexProgress.total > 0 && (
+                <progress
+                  value={this.state.indexProgress.done}
+                  max={this.state.indexProgress.total}
+                  style={{ width: '100%' }}
+                />
+              )}
+              <div style={{ marginTop: 6 }}>
+                <button onClick={this._reindex} disabled={this.state.reindexing}>
+                  {localized('Re-index')}
+                </button>{' '}
+                <button onClick={this._clearIndex}>{localized('Clear index')}</button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section>
