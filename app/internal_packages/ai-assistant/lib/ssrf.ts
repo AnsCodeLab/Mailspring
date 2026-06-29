@@ -6,7 +6,10 @@ export function isPublicHttpUrl(url: string): boolean {
     return false;
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-  const host = u.hostname.toLowerCase();
+  // Trim trailing dot (http://localhost./ would otherwise bypass hostname check)
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
+  // Reject IPv6 addresses (loopback ::1, link-local fe80::, etc.)
+  if (host.startsWith('[') || host.includes(':')) return false;
   if (host === 'localhost' || host.endsWith('.localhost')) return false;
   const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {

@@ -16,4 +16,11 @@ describe('isPublicHttpUrl', () => {
     expect(isPublicHttpUrl('http://192.168.1.1')).toBe(false);
     expect(isPublicHttpUrl('http://169.254.1.1')).toBe(false);
   });
+  it('rejects IPv6 loopback and addresses', () => {
+    expect(isPublicHttpUrl('http://[::1]/')).toBe(false);
+    expect(isPublicHttpUrl('http://[::ffff:127.0.0.1]/')).toBe(false);
+  });
+  it('rejects localhost with trailing dot', () => {
+    expect(isPublicHttpUrl('http://localhost./')).toBe(false);
+  });
 });
