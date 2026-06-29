@@ -30,6 +30,7 @@ export default class AIComposerAssist extends React.Component<
   any,
   { open: boolean; busy: boolean }
 > {
+  static displayName = 'AIComposerAssist'; // required by ComponentRegistry.register
   state = { open: false, busy: false };
 
   _run = async (key: CommandKey) => {

@@ -1,3 +1,5 @@
+@import 'ui-variables';
+
 .ai-chat-panel {
   display: flex;
   flex-direction: column;
@@ -8,7 +10,7 @@
   &.empty {
     align-items: center;
     justify-content: center;
-    color: @text-color-subtle;
+    color: @text-color-very-subtle;
     font-size: 13px;
     text-align: center;
     padding: 20px;
@@ -37,7 +39,7 @@
       }
 
       &.assistant {
-        background: @background-tertiary;
+        background: @background-off-primary;
         align-self: flex-start;
         max-width: 95%;
       }

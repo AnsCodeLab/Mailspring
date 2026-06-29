@@ -19,6 +19,7 @@ export default class AIChatPanel extends React.Component<
   Record<string, never>,
   { thread: any; turns: Turn[]; input: string; busy: boolean }
 > {
+  static displayName = 'AIChatPanel'; // required by ComponentRegistry.register
   _unsub: () => void;
   _abort: AbortController | null = null;
   _composing = false;
