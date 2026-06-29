@@ -2,9 +2,18 @@ import React from 'react';
 import { localized, SanitizeTransformer } from 'mailspring-exports';
 import { AIService } from './ai-service';
 import { buildRewritePrompt, buildReplyPrompt } from './prompts';
+import { suggestNextLine } from './next-line';
 import { ensurePrivacyNoticeAccepted } from './privacy-notice';
 
-type CommandKey = 'reply' | 'rewrite' | 'shorter' | 'longer' | 'formal' | 'casual' | 'grammar';
+type CommandKey =
+  | 'reply'
+  | 'rewrite'
+  | 'shorter'
+  | 'longer'
+  | 'formal'
+  | 'casual'
+  | 'grammar'
+  | 'nextline';
 
 const COMMANDS: Array<{ key: CommandKey; label: string }> = [
   { key: 'reply', label: 'Draft a reply' },
@@ -14,6 +23,7 @@ const COMMANDS: Array<{ key: CommandKey; label: string }> = [
   { key: 'formal', label: 'More formal' },
   { key: 'casual', label: 'More casual' },
   { key: 'grammar', label: 'Fix grammar' },
+  { key: 'nextline', label: 'Suggest next line' },
 ];
 
 export default class AIComposerAssist extends React.Component<
@@ -30,6 +40,20 @@ export default class AIComposerAssist extends React.Component<
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+    if (key === 'nextline') {
+      this.setState({ busy: true });
+      try {
+        const s = await suggestNextLine(draft.body);
+        session.changes.add({
+          body: (draft.body || '') + SanitizeTransformer.runSync('<span>' + s + '</span>'),
+        });
+      } catch (err: any) {
+        AppEnv.showErrorDialog(err.message || String(err));
+      } finally {
+        this.setState({ busy: false });
+      }
+      return;
+    }
     let messages;
     if (key === 'reply')
       messages = buildReplyPrompt({
