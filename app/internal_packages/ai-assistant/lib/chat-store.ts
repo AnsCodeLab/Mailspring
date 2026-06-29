@@ -34,7 +34,11 @@ export class ChatStore {
     }));
   }
   clearThread(threadId: string): void {
-    this.db.prepare('DELETE FROM chats WHERE threadId = ?').run(threadId);
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM chat_refs WHERE threadId = ?').run(threadId);
+      this.db.prepare('DELETE FROM chats WHERE threadId = ?').run(threadId);
+    });
+    tx();
   }
   clearAll(): void {
     this.db.exec('DELETE FROM chats; DELETE FROM chat_refs;');
