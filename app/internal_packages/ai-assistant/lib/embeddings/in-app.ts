@@ -20,7 +20,7 @@ export class InAppEmbeddingProvider implements EmbeddingProvider {
     this.pipe = await pipeline('feature-extraction', this.model);
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {
     await this.ensure();
     const out: number[][] = [];
     for (const t of texts) {
