@@ -9,15 +9,25 @@ import {
   localized,
 } from 'mailspring-exports';
 import { AIService, ChatMessage } from './ai-service';
-import { buildChatPrompt } from './prompts';
+import { buildChatPrompt, RetrievedSource } from './prompts';
 import { loadThreadMessages } from './thread-context';
 import { ensurePrivacyNoticeAccepted } from './privacy-notice';
+import { retrieve } from './retriever';
+import { validateCitations } from './citations';
+import { AIConfig } from './config';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 
 export default class AIChatPanel extends React.Component<
   Record<string, never>,
-  { thread: any; turns: Turn[]; input: string; busy: boolean }
+  {
+    thread: any;
+    turns: Turn[];
+    input: string;
+    busy: boolean;
+    retrieved: RetrievedSource[];
+    citedSources: RetrievedSource[];
+  }
 > {
   static displayName = 'AIChatPanel'; // required by ComponentRegistry.register
   _unsub: () => void;
@@ -28,6 +38,8 @@ export default class AIChatPanel extends React.Component<
     turns: [] as Turn[],
     input: '',
     busy: false,
+    retrieved: [] as RetrievedSource[],
+    citedSources: [] as RetrievedSource[],
   };
 
   componentDidMount() {
@@ -35,7 +47,7 @@ export default class AIChatPanel extends React.Component<
       const thread = FocusedContentStore.focused('thread');
       if (thread !== this.state.thread) {
         if (this._abort) this._abort.abort();
-        this.setState({ thread, turns: [], busy: false }); // ephemeral here; Task 14 persists per-thread
+        this.setState({ thread, turns: [], busy: false, retrieved: [], citedSources: [] }); // ephemeral here; Task 14 persists per-thread
       }
     });
   }
@@ -54,7 +66,7 @@ export default class AIChatPanel extends React.Component<
       { role: 'user', content: q },
       { role: 'assistant', content: '' },
     ];
-    this.setState({ turns, input: '', busy: true });
+    this.setState({ turns, input: '', busy: true, retrieved: [], citedSources: [] });
     this._abort = new AbortController();
     try {
       const threadMessages = await loadThreadMessages(this.state.thread);
@@ -62,20 +74,33 @@ export default class AIChatPanel extends React.Component<
         role: t.role,
         content: t.content,
       }));
+      let retrieved: RetrievedSource[] = [];
+      try {
+        const { Indexer } = require('./indexer');
+        if (AIConfig.isKnowledgeBaseEnabled() && Indexer.store()) {
+          retrieved = await retrieve(q, Indexer.store());
+        }
+      } catch {
+        // indexer not yet available
+      }
       const prompt = buildChatPrompt({
         question: q,
         threadMessages,
         history,
         pinned: [],
-        retrieved: [],
+        retrieved,
       });
+      let answer = '';
       for await (const tok of AIService.chatStream({
         messages: prompt,
         signal: this._abort.signal,
       })) {
+        tok && (answer += tok);
         turns[turns.length - 1].content += tok;
         this.setState({ turns: [...turns] });
       }
+      const { citedSources } = validateCitations(answer, retrieved);
+      this.setState({ retrieved, citedSources });
     } catch (err: any) {
       if (err?.name === 'AbortError') return; // intentional cancel; turns reset by thread switch
       turns[turns.length - 1].content = `⚠️ ${err.message || err}`;
@@ -131,6 +156,21 @@ export default class AIChatPanel extends React.Component<
               {t.content}
             </div>
           ))}
+          {this.state.citedSources.length > 0 && (
+            <div className="ai-sources">
+              {this.state.citedSources.map((s) => (
+                <button
+                  key={s.id}
+                  className="ai-source-chip"
+                  onClick={() => {
+                    Actions.setFocus({ collection: 'thread', item: { id: s.threadId } });
+                  }}
+                >
+                  [{s.id}] {s.sender} — {s.subject}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="ai-chat-actions">
           <button onClick={this._draftReply} disabled={this.state.busy || this._composing}>
