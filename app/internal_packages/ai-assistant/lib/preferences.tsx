@@ -1,6 +1,6 @@
 import React from 'react';
 import { localized, KeyManager } from 'mailspring-exports';
-import { AIConfig, KEY_API, KEY_EMBED_API, KEY_WEBSEARCH_API } from './config';
+import { AIConfig, KEY_API, KEY_WEBSEARCH_API } from './config';
 import { AIService } from './ai-service';
 
 export default class AIPreferences extends React.Component<
@@ -15,7 +15,7 @@ export default class AIPreferences extends React.Component<
 
   _set = (key: string, value: any) => {
     AppEnv.config.set(key, value);
-    this.forceUpdate();
+    this.setState({});
   };
 
   _saveKey = (name: string, value: string) => {
