@@ -1,0 +1,72 @@
+.ai-chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+
+  &.empty {
+    align-items: center;
+    justify-content: center;
+    color: @text-color-subtle;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .ai-chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .ai-turn {
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+
+      &.user {
+        background: @background-secondary;
+        align-self: flex-end;
+        max-width: 90%;
+      }
+
+      &.assistant {
+        background: @background-tertiary;
+        align-self: flex-start;
+        max-width: 95%;
+      }
+    }
+  }
+
+  .ai-chat-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+
+    button {
+      font-size: 12px;
+      padding: 4px 10px;
+    }
+  }
+
+  .ai-chat-input {
+    textarea {
+      width: 100%;
+      min-height: 56px;
+      resize: none;
+      font-size: 13px;
+      padding: 6px 8px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid @border-color-divider;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+  }
+}
