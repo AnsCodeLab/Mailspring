@@ -19,6 +19,10 @@ export class AIError extends Error {
 
 async function authHeaders(): Promise<Record<string, string>> {
   const key = await KeyManager.getPassword(KEY_API);
+  // Local/custom endpoints (e.g. Ollama) need no key; only require one for OpenAI cloud.
+  if (!key && AIConfig.getEndpoint().includes('api.openai.com')) {
+    throw new AIError('missing-config', 'No API key configured. Go to Preferences › AI Assistant.');
+  }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (key) headers['Authorization'] = `Bearer ${key}`;
   return headers;
@@ -63,16 +67,21 @@ export const AIService = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const { events, rest } = parseSSEChunk(buffer);
-      buffer = rest;
-      for (const ev of events) {
-        const delta = extractDelta(ev);
-        if (delta) yield delta;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const { events, rest } = parseSSEChunk(buffer);
+        buffer = rest;
+        for (const ev of events) {
+          const delta = extractDelta(ev);
+          if (delta) yield delta;
+        }
       }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') throw err;
+      throw new AIError('network', `Stream interrupted: ${err?.message ?? String(err)}`);
     }
   },
 
