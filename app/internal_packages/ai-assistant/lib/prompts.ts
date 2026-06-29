@@ -23,7 +23,7 @@ function clip(s: string, n: number): string {
 
 function sourcesBlock(sources: RetrievedSource[], budgetChars: number): string {
   if (!sources.length) return '';
-  const per = Math.max(200, Math.floor(budgetChars / sources.length));
+  const per = Math.max(120, Math.floor(budgetChars / Math.max(1, sources.length)));
   const lines = sources.map(
     (s, i) => `[${i + 1}] from ${s.sender} — "${s.subject}" (${s.date})\n${clip(s.text, per)}`
   );
@@ -39,15 +39,26 @@ export function buildChatPrompt(args: {
   budgetChars?: number;
 }): ChatMessage[] {
   const budget = args.budgetChars ?? 8000;
+  // keep most-recent history within a fraction of the budget
+  const histBudget = Math.floor(budget * 0.4);
+  const kept: ChatMessage[] = [];
+  let used = 0;
+  for (let i = args.history.length - 1; i >= 0; i--) {
+    const len = args.history[i].content.length;
+    if (used + len > histBudget) break;
+    kept.unshift(args.history[i]);
+    used += len;
+  }
+  const ctxBudget = Math.max(1000, budget - used);
   const allSources = [...args.pinned, ...args.retrieved];
   const thread = args.threadMessages
     .map((m) => `${m.from} (${m.date}): ${clip(m.text, 1200)}`)
     .join('\n\n');
   const ctx: ChatMessage[] = [{ role: 'system', content: GROUNDED_SYSTEM }];
-  if (thread) ctx.push({ role: 'system', content: clip('CURRENT THREAD:\n' + thread, budget) });
-  const sb = sourcesBlock(allSources, budget);
-  if (sb) ctx.push({ role: 'system', content: clip(sb, budget) });
-  return [...ctx, ...args.history, { role: 'user', content: args.question }];
+  if (thread) ctx.push({ role: 'system', content: clip('CURRENT THREAD:\n' + thread, ctxBudget) });
+  const sb = sourcesBlock(allSources, ctxBudget);
+  if (sb) ctx.push({ role: 'system', content: clip(sb, ctxBudget) });
+  return [...ctx, ...kept, { role: 'user', content: args.question }];
 }
 
 export function buildReplyPrompt(args: {

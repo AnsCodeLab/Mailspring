@@ -23,6 +23,11 @@ describe('buildChatPrompt', () => {
     const msgs = buildChatPrompt({ question: 'q', threadMessages: [], history: [], pinned: [], retrieved: [big], budgetChars: 500 });
     expect(msgs.map((m) => m.content).join('').length).toBeLessThan(1500);
   });
+  it('bounds total size even with long history', () => {
+    const history = Array.from({ length: 50 }, () => ({ role: 'user' as const, content: 'x'.repeat(500) }));
+    const msgs = buildChatPrompt({ question: 'q', threadMessages: [], history, pinned: [], retrieved: [], budgetChars: 2000 });
+    expect(msgs.map((m) => m.content).join('').length).toBeLessThan(4000);
+  });
 });
 
 describe('buildRewritePrompt', () => {
