@@ -3,7 +3,6 @@ import { DatabaseStore } from 'mailspring-exports';
 import { VectorStore } from './vector-store';
 import { getEmbeddingProvider } from './embeddings/provider';
 import { htmlToText, chunkText, contentHash } from './chunking';
-import { AIConfig } from './config';
 
 export function reconcile(dbIds: Set<string>, indexedIds: Set<string>): { toRemove: string[] } {
   return { toRemove: [...indexedIds].filter((id) => !dbIds.has(id)) };
