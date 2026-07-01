@@ -24,7 +24,7 @@ function registerPreferences() {
 function registerFeatureUI() {
   const React = require('react');
   const ReactDOM = require('react-dom');
-  const { default: ChatPanel, AIToggleButton } = require('./chat-panel');
+  const { default: ChatPanel } = require('./chat-panel');
 
   // Render the chat panel as a real flex sibling to the email content column so it
   // pushes the email left rather than floating on top of it.
@@ -50,9 +50,6 @@ function registerFeatureUI() {
     ReactDOM.unmountComponentAtNode(panelContainer);
     panelContainer.remove();
   });
-
-  ComponentRegistry.register(AIToggleButton, { role: 'ThreadActionsToolbarButton' });
-  featureDisposables.push(() => ComponentRegistry.unregister(AIToggleButton));
 
   const ThreadChatBadge = require('./thread-chat-badge').default;
   ComponentRegistry.register(ThreadChatBadge, { role: 'ThreadListIcon' });

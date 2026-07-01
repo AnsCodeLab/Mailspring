@@ -137,43 +137,6 @@ function renderMarkdown(text: string): React.ReactNode {
   return nodes;
 }
 
-// ─── AI Panel Toggle Button ───────────────────────────────────────────────────
-
-export class AIToggleButton extends React.Component<Record<string, never>, { open: boolean }> {
-  static displayName = 'AIToggleButton';
-  static containerStyles = { order: -1 };
-
-  private _sub: { dispose: () => void } | null = null;
-
-  state = { open: AIConfig.isPanelOpen() };
-
-  componentDidMount() {
-    this._sub = AppEnv.config.onDidChange(AIConfig.keys.panelOpen, () => {
-      this.setState({ open: AIConfig.isPanelOpen() });
-    });
-  }
-
-  componentWillUnmount() {
-    if (this._sub) this._sub.dispose();
-  }
-
-  _toggle = () => {
-    AppEnv.config.set(AIConfig.keys.panelOpen, !this.state.open);
-  };
-
-  render() {
-    return (
-      <button
-        title={localized('Toggle AI chat panel')}
-        className={`btn btn-toolbar ai-toggle-btn ${this.state.open ? 'active' : ''}`}
-        onClick={this._toggle}
-      >
-        ✦ AI
-      </button>
-    );
-  }
-}
-
 // ─── Floating Chat Panel ──────────────────────────────────────────────────────
 
 export default class AIChatPanel extends React.Component<
@@ -582,7 +545,18 @@ export default class AIChatPanel extends React.Component<
 
   render() {
     const { open, width } = this.state;
-    if (!open) return <div style={{ width: 0, flexShrink: 0 }} />;
+    if (!open) {
+      return (
+        <button
+          className="ai-panel-reopen-tab"
+          title={localized('Open AI Assistant')}
+          onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, true)}
+        >
+          <span className="ai-tab-icon">✦</span>
+          <span className="ai-tab-label">AI</span>
+        </button>
+      );
+    }
     return this._renderPanel(width);
   }
 
@@ -594,8 +568,7 @@ export default class AIChatPanel extends React.Component<
       const now = new Date();
       const diffMs = now.getTime() - d.getTime();
       const diffDays = Math.floor(diffMs / 86400000);
-      if (diffDays === 0)
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
       return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
@@ -624,9 +597,7 @@ export default class AIChatPanel extends React.Component<
                 </div>
                 <div className="ai-history-preview">{item.preview}</div>
                 <div className="ai-history-item-footer">
-                  <span className="ai-history-turns">
-                    {localized('%@ messages', item.count)}
-                  </span>
+                  <span className="ai-history-turns">{localized('%@ messages', item.count)}</span>
                   <button
                     className="ai-history-resume-btn"
                     onClick={() => this._resumeConversation(item.threadId)}
