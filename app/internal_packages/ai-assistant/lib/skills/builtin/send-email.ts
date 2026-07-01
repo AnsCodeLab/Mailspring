@@ -1,6 +1,113 @@
 import { Skill, ConfirmResult } from '../types';
 import { AIConfig } from '../../config';
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function inlineMarkdown(text: string): string {
+  return (
+    escapeHtml(text)
+      // **bold** and __bold__
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      // *italic* and _italic_
+      .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+      .replace(/_([^_\n]+?)_/g, '<em>$1</em>')
+      // `code`
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // [text](url)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+  );
+}
+
+function markdownToHtml(md: string): string {
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let i = 0;
+  let listItems: string[] = [];
+  let listOrdered = false;
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    const tag = listOrdered ? 'ol' : 'ul';
+    out.push(`<${tag}>${listItems.map((li) => `<li>${li}</li>`).join('')}</${tag}>`);
+    listItems = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // fenced code block
+    if (line.startsWith('```')) {
+      flushList();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(escapeHtml(lines[i]));
+        i++;
+      }
+      out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`);
+      i++;
+      continue;
+    }
+
+    // ATX headings
+    const hm = line.match(/^(#{1,3}) (.+)/);
+    if (hm) {
+      flushList();
+      const level = Math.min(hm[1].length + 2, 6);
+      out.push(`<h${level}>${inlineMarkdown(hm[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // unordered list
+    const ulm = line.match(/^[-*] (.+)/);
+    if (ulm) {
+      if (listOrdered) flushList();
+      listOrdered = false;
+      listItems.push(inlineMarkdown(ulm[1]));
+      i++;
+      continue;
+    }
+
+    // ordered list
+    const olm = line.match(/^\d+\. (.+)/);
+    if (olm) {
+      if (!listOrdered) flushList();
+      listOrdered = true;
+      listItems.push(inlineMarkdown(olm[1]));
+      i++;
+      continue;
+    }
+
+    // blank line = paragraph break
+    if (line.trim() === '') {
+      flushList();
+      i++;
+      continue;
+    }
+
+    // regular paragraph line — collect consecutive non-blank lines
+    flushList();
+    const para: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !lines[i].startsWith('#') &&
+      !lines[i].startsWith('```') &&
+      !/^[-*\d]/.test(lines[i])
+    ) {
+      para.push(inlineMarkdown(lines[i]));
+      i++;
+    }
+    out.push(`<p>${para.join('<br>')}</p>`);
+  }
+  flushList();
+  return out.join('\n');
+}
+
 async function buildAndOpenDraft(args: {
   to: string;
   subject?: string;
@@ -14,9 +121,7 @@ async function buildAndOpenDraft(args: {
     SyncbackDraftTask,
     TaskQueue,
   } = require('mailspring-exports');
-  const html = SanitizeTransformer.runSync(
-    `<div>${String(args.body || '').replace(/\n/g, '<br/>')}</div>`
-  );
+  const html = SanitizeTransformer.runSync(markdownToHtml(String(args.body || '')));
   const draft = await DraftFactory.createDraft({
     subject: args.subject || '',
     to: [{ email: args.to, name: args.to }],
@@ -78,9 +183,7 @@ export const sendEmailSkill: Skill = {
       SyncbackDraftTask,
       TaskQueue,
     } = require('mailspring-exports');
-    const html = SanitizeTransformer.runSync(
-      `<div>${String(args.body || '').replace(/\n/g, '<br/>')}</div>`
-    );
+    const html = SanitizeTransformer.runSync(markdownToHtml(String(args.body || '')));
     const draft = await DraftFactory.createDraft({
       subject: args.subject || '',
       to: [{ email: args.to, name: args.to }],
