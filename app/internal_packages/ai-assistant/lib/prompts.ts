@@ -37,6 +37,8 @@ export function buildChatPrompt(args: {
   threadMessages: ThreadMsg[];
   history: ChatMessage[];
   retrieved: RetrievedSource[];
+  threadId?: string;
+  threadSubject?: string;
   budgetChars?: number;
   historyFraction?: number;
 }): ChatMessage[] {
@@ -64,7 +66,12 @@ export function buildChatPrompt(args: {
     })
     .join('\n\n');
   const ctx: ChatMessage[] = [{ role: 'system', content: GROUNDED_SYSTEM }];
-  if (thread) ctx.push({ role: 'system', content: clip('CURRENT THREAD:\n' + thread, ctxBudget) });
+  if (thread || args.threadId) {
+    const meta = args.threadId
+      ? `[threadId: ${args.threadId}${args.threadSubject ? `, subject: "${args.threadSubject}"` : ''}]\n`
+      : '';
+    ctx.push({ role: 'system', content: clip('CURRENT THREAD:\n' + meta + thread, ctxBudget) });
+  }
   const sb = sourcesBlock(allSources, ctxBudget);
   if (sb) ctx.push({ role: 'system', content: clip(sb, ctxBudget) });
   return [...ctx, ...kept, { role: 'user', content: args.question }];

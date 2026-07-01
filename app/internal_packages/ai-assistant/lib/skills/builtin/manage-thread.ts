@@ -21,18 +21,21 @@ async function confirmAndRun(
 }
 
 async function fetchThread(threadId: string) {
-  const { DatabaseStore, Thread } = require('mailspring-exports');
-  return DatabaseStore.find(Thread, threadId);
+  const { DatabaseStore, Thread, FocusedContentStore } = require('mailspring-exports');
+  const thread = threadId ? await DatabaseStore.find(Thread, threadId) : null;
+  // Fall back to the currently focused thread when id is missing or stale
+  return thread || (FocusedContentStore.focused('thread') ?? null);
 }
 
 export const trashThreadSkill: Skill = {
   name: 'trash_thread',
   tier: 'confirm',
-  description: 'Move a thread to Trash. Provide the threadId; include the subject for context.',
+  description:
+    'Move a thread to Trash. Pass the threadId from the CURRENT THREAD context header; also pass the subject.',
   parameters: {
     type: 'object',
     properties: {
-      threadId: { type: 'string' },
+      threadId: { type: 'string', description: 'Thread ID from the CURRENT THREAD context header' },
       subject: { type: 'string', description: 'Thread subject shown in the confirmation prompt' },
     },
     required: ['threadId'],
@@ -67,11 +70,12 @@ export const trashThreadSkill: Skill = {
 export const archiveThreadSkill: Skill = {
   name: 'archive_thread',
   tier: 'confirm',
-  description: 'Archive a thread. Provide the threadId; include the subject for context.',
+  description:
+    'Archive a thread. Pass the threadId from the CURRENT THREAD context header; also pass the subject.',
   parameters: {
     type: 'object',
     properties: {
-      threadId: { type: 'string' },
+      threadId: { type: 'string', description: 'Thread ID from the CURRENT THREAD context header' },
       subject: { type: 'string', description: 'Thread subject shown in the confirmation prompt' },
     },
     required: ['threadId'],

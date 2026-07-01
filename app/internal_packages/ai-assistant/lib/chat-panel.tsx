@@ -376,11 +376,14 @@ export default class AIChatPanel extends React.Component<
       } catch {
         // indexer not yet available
       }
+      const thread = this.state.thread;
       const prompt = buildChatPrompt({
         question: q,
         threadMessages,
         history,
         retrieved,
+        threadId: thread?.id,
+        threadSubject: thread?.subject || undefined,
       });
       let answer = '';
       const { Skills } = require('./skills/registry');
@@ -415,13 +418,16 @@ export default class AIChatPanel extends React.Component<
             try {
               return await doStream(tools);
             } catch (err: any) {
-              // Some local LLM servers can't parse tool schemas (Jinja2 template error).
-              // Fall back to plain chat so the user gets a response instead of a hard error.
+              // Some local LLM servers reject tool schemas (Jinja2 template parse error).
+              // Surface a clear message rather than silently falling back to plain chat,
+              // which would make the AI claim to perform actions it cannot execute.
               if (tools.length && /parser|template|function.call|tool/i.test(err?.message || '')) {
-                answer = '';
-                turns[turns.length - 1].content = priorContent;
-                if (isActive()) this.setState({ turns: [...turns] });
-                return doStream([]);
+                throw new Error(
+                  'Skills require function calling, which your AI model does not support. ' +
+                    'To use Send Email, Move to Trash, etc., switch to a model with tool-use support ' +
+                    '(e.g. gpt-4o, claude-3-haiku, llama-3.1 with tools). ' +
+                    'To chat without skills, disable them in Preferences > AI Assistant > Agent skills.'
+                );
               }
               throw err;
             }
