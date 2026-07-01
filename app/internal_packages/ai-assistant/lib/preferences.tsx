@@ -595,8 +595,8 @@ export default class AIPreferences extends React.Component<
                 <input
                   type="number"
                   min={200}
-                  max={8000}
-                  step={100}
+                  max={4000}
+                  step={50}
                   defaultValue={AIConfig.getChunkSize()}
                   onBlur={(e) => this._set(K.chunkSize, Number(e.target.value))}
                 />
@@ -606,8 +606,8 @@ export default class AIPreferences extends React.Component<
                 <input
                   type="number"
                   min={0}
-                  max={1000}
-                  step={50}
+                  max={800}
+                  step={25}
                   defaultValue={AIConfig.getChunkOverlap()}
                   onBlur={(e) => this._set(K.chunkOverlap, Number(e.target.value))}
                 />
@@ -617,7 +617,7 @@ export default class AIPreferences extends React.Component<
                 <input
                   type="number"
                   min={1}
-                  max={20}
+                  max={30}
                   defaultValue={AIConfig.getRetrieveK()}
                   onBlur={(e) => this._set(K.retrieveK, Number(e.target.value))}
                 />
@@ -627,7 +627,7 @@ export default class AIPreferences extends React.Component<
                 <input
                   type="number"
                   min={1000}
-                  max={64000}
+                  max={128000}
                   step={1000}
                   defaultValue={AIConfig.getContextBudget()}
                   onBlur={(e) => this._set(K.contextBudget, Number(e.target.value))}

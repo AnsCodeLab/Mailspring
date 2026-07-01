@@ -25,13 +25,20 @@ const K = {
 };
 
 export const RAG_DEFAULTS = {
-  chunkSize: 2000,
-  chunkOverlap: 200,
-  retrieveK: 6,
-  contextBudget: 8000,
-  historyFraction: 0.4,
-  maxAgentSteps: 6,
-  webSearchResults: 5,
+  // Smaller chunks give more precise semantic matches; 800 chars ≈ 1-2 email paragraphs
+  chunkSize: 800,
+  // ~19% overlap preserves sentence context across chunk boundaries
+  chunkOverlap: 150,
+  // More chunks needed when each is smaller; 10 covers ~8k chars of KB context
+  retrieveK: 10,
+  // Modern LLMs support 128k+ tokens; 24k chars lets a full thread fit without clipping
+  contextBudget: 24000,
+  // Give 70% of budget to thread + sources rather than chat history
+  historyFraction: 0.3,
+  // Extra headroom for multi-hop research (find → read → synthesize)
+  maxAgentSteps: 8,
+  // More results improve coverage without overwhelming the prompt
+  webSearchResults: 8,
 } as const;
 
 export const KEY_API = 'ai-assistant.apiKey';
