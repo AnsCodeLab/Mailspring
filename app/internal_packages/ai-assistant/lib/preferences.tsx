@@ -147,6 +147,15 @@ export default class AIPreferences extends React.Component<
     endpointValue: string;
     selectedProvider: string;
     advancedResetKey: number;
+    adv: {
+      chunkSize: number;
+      chunkOverlap: number;
+      retrieveK: number;
+      contextBudget: number;
+      historyFraction: number;
+      maxAgentSteps: number;
+      webSearchResults: number;
+    };
   }
 > {
   state = {
@@ -164,6 +173,15 @@ export default class AIPreferences extends React.Component<
     endpointValue: AIConfig.getEndpoint(),
     selectedProvider: detectChatProvider(AIConfig.getEndpoint()),
     advancedResetKey: 0,
+    adv: {
+      chunkSize: AIConfig.getChunkSize(),
+      chunkOverlap: AIConfig.getChunkOverlap(),
+      retrieveK: AIConfig.getRetrieveK(),
+      contextBudget: AIConfig.getContextBudget(),
+      historyFraction: AIConfig.getHistoryFraction(),
+      maxAgentSteps: AIConfig.getMaxAgentSteps(),
+      webSearchResults: AIConfig.getWebSearchResults(),
+    },
   };
   private progressInterval: ReturnType<typeof setInterval> | null = null;
   private _endpointSub: { dispose: () => void } | null = null;
@@ -280,7 +298,18 @@ export default class AIPreferences extends React.Component<
       [K.maxAgentSteps]: RAG_DEFAULTS.maxAgentSteps,
       [K.webSearchResults]: RAG_DEFAULTS.webSearchResults,
     }).forEach(([key, val]) => AppEnv.config.set(key, val));
-    this.setState({ advancedResetKey: this.state.advancedResetKey + 1 });
+    this.setState({
+      advancedResetKey: this.state.advancedResetKey + 1,
+      adv: {
+        chunkSize: RAG_DEFAULTS.chunkSize,
+        chunkOverlap: RAG_DEFAULTS.chunkOverlap,
+        retrieveK: RAG_DEFAULTS.retrieveK,
+        contextBudget: RAG_DEFAULTS.contextBudget,
+        historyFraction: RAG_DEFAULTS.historyFraction,
+        maxAgentSteps: RAG_DEFAULTS.maxAgentSteps,
+        webSearchResults: RAG_DEFAULTS.webSearchResults,
+      },
+    });
   };
 
   _test = async () => {
@@ -581,96 +610,193 @@ export default class AIPreferences extends React.Component<
             >
               {localized('Advanced settings (click to expand)')}
             </summary>
-            <div
-              key={this.state.advancedResetKey}
-              style={{
-                marginTop: 10,
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '0 20px',
-              }}
-            >
-              <label>
-                {localized('Chunk size (chars)')}
-                <input
-                  type="number"
-                  min={200}
-                  max={4000}
-                  step={50}
-                  defaultValue={AIConfig.getChunkSize()}
-                  onBlur={(e) => this._set(K.chunkSize, Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {localized('Chunk overlap (chars)')}
-                <input
-                  type="number"
-                  min={0}
-                  max={800}
-                  step={25}
-                  defaultValue={AIConfig.getChunkOverlap()}
-                  onBlur={(e) => this._set(K.chunkOverlap, Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {localized('Top-K sources retrieved')}
-                <input
-                  type="number"
-                  min={1}
-                  max={30}
-                  defaultValue={AIConfig.getRetrieveK()}
-                  onBlur={(e) => this._set(K.retrieveK, Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {localized('Context budget (chars)')}
-                <input
-                  type="number"
-                  min={1000}
-                  max={128000}
-                  step={1000}
-                  defaultValue={AIConfig.getContextBudget()}
-                  onBlur={(e) => this._set(K.contextBudget, Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {localized('History fraction (0.1 – 0.9)')}
-                <input
-                  type="number"
-                  min={0.1}
-                  max={0.9}
-                  step={0.05}
-                  defaultValue={AIConfig.getHistoryFraction()}
-                  onBlur={(e) => this._set(K.historyFraction, Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {localized('Max agent steps')}
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  defaultValue={AIConfig.getMaxAgentSteps()}
-                  onBlur={(e) => this._set(K.maxAgentSteps, Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {localized('Web search results')}
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  defaultValue={AIConfig.getWebSearchResults()}
-                  onBlur={(e) => this._set(K.webSearchResults, Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-              <button onClick={this._resetAdvanced}>{localized('Reset to defaults')}</button>
-              <span style={{ fontSize: 11, color: 'var(--text-color-subtle)' }}>
-                {localized('Changing chunk size or overlap requires re-indexing.')}
-              </span>
-            </div>
+            {(() => {
+              const { adv } = this.state;
+              const overlapPct =
+                adv.chunkSize > 0 ? Math.round((adv.chunkOverlap / adv.chunkSize) * 100) : 0;
+              const kbChars = adv.retrieveK * adv.chunkSize;
+              const histChars = Math.round(adv.contextBudget * adv.historyFraction);
+              const ctxChars = adv.contextBudget - histChars;
+              const hint = (msg: string, warn = false) => (
+                <div
+                  style={{
+                    fontSize: 11,
+                    marginTop: 3,
+                    color: warn ? 'var(--color-warning, #c0832a)' : 'var(--text-color-subtle)',
+                  }}
+                >
+                  {msg}
+                </div>
+              );
+              const _adv = (field: keyof typeof adv, val: number) =>
+                this.setState({ adv: { ...this.state.adv, [field]: val } });
+              return (
+                <div key={this.state.advancedResetKey} style={{ marginTop: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
+                    {/* Chunk size */}
+                    <label>
+                      {localized('Chunk size (chars)')}
+                      <input
+                        type="number"
+                        min={200}
+                        max={4000}
+                        step={50}
+                        defaultValue={adv.chunkSize}
+                        onChange={(e) => _adv('chunkSize', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.chunkSize, Number(e.target.value))}
+                      />
+                      {adv.chunkSize < 400
+                        ? hint('Very small — may split topic mid-sentence', true)
+                        : adv.chunkSize > 2000
+                          ? hint('Large chunks reduce retrieval precision', true)
+                          : hint(
+                              `~${Math.round(adv.chunkSize / 5)} words per segment. Smaller = more precise matches.`
+                            )}
+                    </label>
+
+                    {/* Chunk overlap */}
+                    <label>
+                      {localized('Chunk overlap (chars)')}
+                      <input
+                        type="number"
+                        min={0}
+                        max={800}
+                        step={25}
+                        defaultValue={adv.chunkOverlap}
+                        onChange={(e) => _adv('chunkOverlap', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.chunkOverlap, Number(e.target.value))}
+                      />
+                      {adv.chunkOverlap >= adv.chunkSize * 0.5
+                        ? hint(`${overlapPct}% of chunk — overlap > 50% bloats the index`, true)
+                        : adv.chunkOverlap < adv.chunkSize * 0.08
+                          ? hint(
+                              `${overlapPct}% of chunk — low overlap may miss context at boundaries`,
+                              true
+                            )
+                          : hint(
+                              `${overlapPct}% of chunk — text shared between adjacent segments to preserve context.`
+                            )}
+                    </label>
+
+                    {/* Top-K */}
+                    <label>
+                      {localized('Top-K sources retrieved')}
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        defaultValue={adv.retrieveK}
+                        onChange={(e) => _adv('retrieveK', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.retrieveK, Number(e.target.value))}
+                      />
+                      {kbChars > adv.contextBudget * 0.7
+                        ? hint(
+                            `~${kbChars.toLocaleString()} chars of KB — may crowd out thread content. Raise context budget or lower K.`,
+                            true
+                          )
+                        : hint(
+                            `~${kbChars.toLocaleString()} chars of knowledge base injected per turn.`
+                          )}
+                    </label>
+
+                    {/* Context budget */}
+                    <label>
+                      {localized('Context budget (chars)')}
+                      <input
+                        type="number"
+                        min={1000}
+                        max={128000}
+                        step={1000}
+                        defaultValue={adv.contextBudget}
+                        onChange={(e) => _adv('contextBudget', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.contextBudget, Number(e.target.value))}
+                      />
+                      {adv.contextBudget < 8000
+                        ? hint(
+                            `≈ ${Math.round(adv.contextBudget / 4).toLocaleString()} tokens — threads will be heavily truncated`,
+                            true
+                          )
+                        : hint(
+                            `≈ ${Math.round(adv.contextBudget / 4).toLocaleString()} tokens · History ${histChars.toLocaleString()} / Thread+KB ${ctxChars.toLocaleString()} chars`
+                          )}
+                    </label>
+
+                    {/* History fraction */}
+                    <label>
+                      {localized('History fraction')}
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={0.9}
+                        step={0.05}
+                        defaultValue={adv.historyFraction}
+                        onChange={(e) => _adv('historyFraction', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.historyFraction, Number(e.target.value))}
+                      />
+                      {adv.historyFraction > 0.6
+                        ? hint(
+                            `${Math.round(adv.historyFraction * 100)}% for history — little budget left for email context`,
+                            true
+                          )
+                        : adv.historyFraction < 0.15
+                          ? hint(
+                              `${Math.round(adv.historyFraction * 100)}% for history — AI may lose track of earlier turns`,
+                              true
+                            )
+                          : hint(
+                              `${Math.round(adv.historyFraction * 100)}% for past turns · ${Math.round((1 - adv.historyFraction) * 100)}% for thread + KB sources`
+                            )}
+                    </label>
+
+                    {/* Max agent steps */}
+                    <label>
+                      {localized('Max agent steps')}
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        defaultValue={adv.maxAgentSteps}
+                        onChange={(e) => _adv('maxAgentSteps', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.maxAgentSteps, Number(e.target.value))}
+                      />
+                      {adv.maxAgentSteps <= 2
+                        ? hint('Very low — only simple single-tool lookups', true)
+                        : adv.maxAgentSteps >= 15
+                          ? hint('High — may be slow for simple questions', true)
+                          : adv.maxAgentSteps <= 5
+                            ? hint('Good for quick lookups. Raise to 8+ for multi-step research.')
+                            : hint('Good for multi-hop research (search → read → summarise).')}
+                    </label>
+
+                    {/* Web search results */}
+                    <label>
+                      {localized('Web search results')}
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        defaultValue={adv.webSearchResults}
+                        onChange={(e) => _adv('webSearchResults', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.webSearchResults, Number(e.target.value))}
+                      />
+                      {adv.webSearchResults < 3
+                        ? hint('Too few — AI may miss important results', true)
+                        : adv.webSearchResults > 15
+                          ? hint('Many results add noise. 5–10 is usually optimal.', true)
+                          : hint('Number of snippets passed to the AI per web search call.')}
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                    <button onClick={this._resetAdvanced}>{localized('Reset to defaults')}</button>
+                    <span style={{ fontSize: 11, color: 'var(--text-color-subtle)' }}>
+                      {localized(
+                        'Chunk size or overlap changes require re-indexing the knowledge base.'
+                      )}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </details>
         </section>
 
