@@ -188,6 +188,14 @@ export default class AIChatPanel extends React.Component<
     scope: 'thread' | 'all';
     open: boolean;
     width: number;
+    showHistory: boolean;
+    historyItems: Array<{
+      threadId: string;
+      subject: string;
+      preview: string;
+      lastAt: number;
+      count: number;
+    }>;
   }
 > {
   static displayName = 'AIChatPanel';
@@ -215,6 +223,14 @@ export default class AIChatPanel extends React.Component<
     scope: 'thread' as 'thread' | 'all',
     open: AIConfig.isPanelOpen(),
     width: AIConfig.getPanelWidth(),
+    showHistory: false,
+    historyItems: [] as Array<{
+      threadId: string;
+      subject: string;
+      preview: string;
+      lastAt: number;
+      count: number;
+    }>,
   };
 
   private _chatStore(): ChatStore {
@@ -329,6 +345,32 @@ export default class AIChatPanel extends React.Component<
     if ((this as any)._onUp) document.removeEventListener('mouseup', (this as any)._onUp);
     this._resizing = false;
   }
+
+  // ─── History ───────────────────────────────────────────────────────────────
+
+  _openHistory = async () => {
+    const summaries = this._chatStore().conversationSummaries();
+    const items = await Promise.all(
+      summaries.map(async (s) => {
+        let subject = s.threadId;
+        try {
+          const t = await DatabaseStore.find<Thread>(Thread, s.threadId);
+          if (t) subject = t.subject || localized('(no subject)');
+        } catch {
+          // ignore
+        }
+        return { ...s, subject };
+      })
+    );
+    this.setState({ showHistory: true, historyItems: items });
+  };
+
+  _resumeConversation = (threadId: string) => {
+    DatabaseStore.find<Thread>(Thread, threadId).then((t) => {
+      if (t) Actions.setFocus({ collection: 'thread', item: t });
+    });
+    this.setState({ showHistory: false });
+  };
 
   // ─── Messaging ─────────────────────────────────────────────────────────────
 
@@ -544,8 +586,64 @@ export default class AIChatPanel extends React.Component<
     return this._renderPanel(width);
   }
 
+  _renderHistory() {
+    const { historyItems } = this.state;
+
+    const formatDate = (ts: number) => {
+      const d = new Date(ts);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffDays = Math.floor(diffMs / 86400000);
+      if (diffDays === 0)
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    };
+
+    return (
+      <div className="ai-history-panel">
+        <div className="ai-history-header">
+          <span>{localized('Conversation History')}</span>
+          <span className="ai-history-count">
+            {historyItems.length === 0
+              ? localized('No conversations yet')
+              : localized('%@ conversations', historyItems.length)}
+          </span>
+        </div>
+        {historyItems.length === 0 ? (
+          <div className="ai-history-empty">
+            {localized('Start a conversation on any thread to see it here.')}
+          </div>
+        ) : (
+          <div className="ai-history-list">
+            {historyItems.map((item) => (
+              <div key={item.threadId} className="ai-history-item">
+                <div className="ai-history-item-meta">
+                  <span className="ai-history-subject">{item.subject}</span>
+                  <span className="ai-history-date">{formatDate(item.lastAt)}</span>
+                </div>
+                <div className="ai-history-preview">{item.preview}</div>
+                <div className="ai-history-item-footer">
+                  <span className="ai-history-turns">
+                    {localized('%@ messages', item.count)}
+                  </span>
+                  <button
+                    className="ai-history-resume-btn"
+                    onClick={() => this._resumeConversation(item.threadId)}
+                  >
+                    {localized('Resume')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   _renderPanel(width: number) {
-    const { scope, turns, busy, input, citedSources, thread } = this.state;
+    const { scope, turns, busy, input, citedSources, thread, showHistory } = this.state;
     const hasReplySuggestion = turns.some((t) => t.role === 'assistant' && t.content);
     const modelName = AIConfig.getModel();
 
@@ -581,6 +679,15 @@ export default class AIChatPanel extends React.Component<
             </button>
           </div>
           <button
+            className={`ai-history-btn${showHistory ? ' active' : ''}`}
+            title={localized('Conversation history')}
+            onClick={() =>
+              showHistory ? this.setState({ showHistory: false }) : this._openHistory()
+            }
+          >
+            ☰
+          </button>
+          <button
             className="ai-clear-btn"
             title={localized('Clear conversation')}
             onClick={this._clearHistory}
@@ -596,175 +703,190 @@ export default class AIChatPanel extends React.Component<
           </button>
         </div>
 
-        {/* Messages */}
-        <div className="ai-chat-scroll" ref={this._scrollRef}>
-          {!thread && (
-            <div className="ai-empty-state">
-              <div className="ai-empty-icon">✦</div>
-              <div className="ai-empty-title">{localized('AI Assistant')}</div>
-              <div className="ai-empty-hint">{localized('Open a thread to start chatting.')}</div>
-            </div>
-          )}
-          {thread && turns.length === 0 && (
-            <div className="ai-suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} className="ai-suggestion-chip" onClick={() => this._send(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-          {turns.map((t, i) => {
-            const isLastTurn = i === turns.length - 1;
-            const isStreaming = busy && isLastTurn;
-            const canAct = t.content && !isStreaming;
-            return (
-              <div key={i} className={`ai-turn ${t.role}`}>
-                {t.role === 'assistant' && <span className="ai-avatar">✦</span>}
-                <div className="ai-bubble">
-                  {t.role === 'assistant' && t.content && !busy ? (
-                    renderMarkdown(t.content)
-                  ) : t.role === 'assistant' && busy && isLastTurn ? (
-                    <>
-                      {t.content ? renderMarkdown(t.content) : null}
-                      <span className="ai-cursor">▊</span>
-                    </>
-                  ) : (
-                    t.content || (busy && isLastTurn ? <span className="ai-cursor">▊</span> : '​')
-                  )}
+        {showHistory ? (
+          this._renderHistory()
+        ) : (
+          <>
+            {/* Messages */}
+            <div className="ai-chat-scroll" ref={this._scrollRef}>
+              {!thread && (
+                <div className="ai-empty-state">
+                  <div className="ai-empty-icon">✦</div>
+                  <div className="ai-empty-title">{localized('AI Assistant')}</div>
+                  <div className="ai-empty-hint">
+                    {localized('Open a thread to start chatting.')}
+                  </div>
                 </div>
-                {canAct && (
-                  <div className="ai-turn-actions">
-                    <button
-                      className="ai-turn-action-btn"
-                      title={localized('Copy')}
-                      onClick={() => require('electron').clipboard.writeText(t.content)}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <rect x="9" y="9" width="13" height="13" rx="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
+              )}
+              {thread && turns.length === 0 && (
+                <div className="ai-suggestions">
+                  {SUGGESTIONS.map((s) => (
+                    <button key={s} className="ai-suggestion-chip" onClick={() => this._send(s)}>
+                      {s}
                     </button>
-                    {t.role === 'user' && (
-                      <button
-                        className="ai-turn-action-btn"
-                        title={localized('Retry')}
-                        onClick={() => {
-                          const newTurns = turns.slice(0, i);
-                          this.setState({ turns: newTurns }, () => this._send(t.content));
-                        }}
-                      >
-                        <svg
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                  ))}
+                </div>
+              )}
+              {turns.map((t, i) => {
+                const isLastTurn = i === turns.length - 1;
+                const isStreaming = busy && isLastTurn;
+                const canAct = t.content && !isStreaming;
+                return (
+                  <div key={i} className={`ai-turn ${t.role}`}>
+                    {t.role === 'assistant' && <span className="ai-avatar">✦</span>}
+                    <div className="ai-bubble">
+                      {t.role === 'assistant' && t.content && !busy ? (
+                        renderMarkdown(t.content)
+                      ) : t.role === 'assistant' && busy && isLastTurn ? (
+                        <>
+                          {t.content ? renderMarkdown(t.content) : null}
+                          <span className="ai-cursor">▊</span>
+                        </>
+                      ) : (
+                        t.content ||
+                        (busy && isLastTurn ? <span className="ai-cursor">▊</span> : '​')
+                      )}
+                    </div>
+                    {canAct && (
+                      <div className="ai-turn-actions">
+                        <button
+                          className="ai-turn-action-btn"
+                          title={localized('Copy')}
+                          onClick={() => require('electron').clipboard.writeText(t.content)}
                         >
-                          <polyline points="1 4 1 10 7 10" />
-                          <path d="M3.51 15a9 9 0 1 0 .49-4.91" />
-                        </svg>
-                      </button>
-                    )}
-                    {t.role === 'assistant' && isLastTurn && (
-                      <button
-                        className="ai-turn-action-btn"
-                        title={localized('Retry')}
-                        onClick={() => {
-                          const lastUser = [...turns]
-                            .slice(0, i)
-                            .reverse()
-                            .find((x) => x.role === 'user');
-                          if (!lastUser) return;
-                          const newTurns = turns.slice(0, i - 1);
-                          this.setState({ turns: newTurns }, () => this._send(lastUser.content));
-                        }}
-                      >
-                        <svg
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="1 4 1 10 7 10" />
-                          <path d="M3.51 15a9 9 0 1 0 .49-4.91" />
-                        </svg>
-                      </button>
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x="9" y="9" width="13" height="13" rx="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        </button>
+                        {t.role === 'user' && (
+                          <button
+                            className="ai-turn-action-btn"
+                            title={localized('Retry')}
+                            onClick={() => {
+                              const newTurns = turns.slice(0, i);
+                              this.setState({ turns: newTurns }, () => this._send(t.content));
+                            }}
+                          >
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polyline points="1 4 1 10 7 10" />
+                              <path d="M3.51 15a9 9 0 1 0 .49-4.91" />
+                            </svg>
+                          </button>
+                        )}
+                        {t.role === 'assistant' && isLastTurn && (
+                          <button
+                            className="ai-turn-action-btn"
+                            title={localized('Retry')}
+                            onClick={() => {
+                              const lastUser = [...turns]
+                                .slice(0, i)
+                                .reverse()
+                                .find((x) => x.role === 'user');
+                              if (!lastUser) return;
+                              const newTurns = turns.slice(0, i - 1);
+                              this.setState({ turns: newTurns }, () =>
+                                this._send(lastUser.content)
+                              );
+                            }}
+                          >
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polyline points="1 4 1 10 7 10" />
+                              <path d="M3.51 15a9 9 0 1 0 .49-4.91" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
+                );
+              })}
+              {citedSources.length > 0 && (
+                <div className="ai-sources">
+                  <span className="ai-sources-label">{localized('Sources:')}</span>
+                  {citedSources.map((s) => (
+                    <button
+                      key={s.id}
+                      className="ai-source-chip"
+                      onClick={() => this._openSourceThread(s)}
+                    >
+                      {s.sender}: {s.subject}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Draft reply action */}
+            {hasReplySuggestion && (
+              <div className="ai-chat-actions">
+                <button className="ai-action-btn" onClick={this._draftReply} disabled={busy}>
+                  {localized('Use as draft reply')}
+                </button>
+              </div>
+            )}
+
+            {/* Input */}
+            <div className="ai-chat-input">
+              <textarea
+                ref={this._inputRef}
+                value={input}
+                placeholder={localized('Ask anything… (Enter to send, Shift+Enter for newline)')}
+                onChange={(e) => this.setState({ input: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this._send();
+                  }
+                }}
+                disabled={busy}
+                rows={2}
+              />
+              <div className="ai-input-row">
+                {busy ? (
+                  <button className="ai-send-btn cancel" onClick={this._cancel}>
+                    {localized('Stop')}
+                  </button>
+                ) : (
+                  <button
+                    className="ai-send-btn"
+                    onClick={() => this._send()}
+                    disabled={!input.trim()}
+                  >
+                    {localized('Send')}
+                  </button>
                 )}
               </div>
-            );
-          })}
-          {citedSources.length > 0 && (
-            <div className="ai-sources">
-              <span className="ai-sources-label">{localized('Sources:')}</span>
-              {citedSources.map((s) => (
-                <button
-                  key={s.id}
-                  className="ai-source-chip"
-                  onClick={() => this._openSourceThread(s)}
-                >
-                  {s.sender}: {s.subject}
-                </button>
-              ))}
             </div>
-          )}
-        </div>
-
-        {/* Draft reply action */}
-        {hasReplySuggestion && (
-          <div className="ai-chat-actions">
-            <button className="ai-action-btn" onClick={this._draftReply} disabled={busy}>
-              {localized('Use as draft reply')}
-            </button>
-          </div>
+          </>
         )}
-
-        {/* Input */}
-        <div className="ai-chat-input">
-          <textarea
-            ref={this._inputRef}
-            value={input}
-            placeholder={localized('Ask anything… (Enter to send, Shift+Enter for newline)')}
-            onChange={(e) => this.setState({ input: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this._send();
-              }
-            }}
-            disabled={busy}
-            rows={2}
-          />
-          <div className="ai-input-row">
-            {busy ? (
-              <button className="ai-send-btn cancel" onClick={this._cancel}>
-                {localized('Stop')}
-              </button>
-            ) : (
-              <button className="ai-send-btn" onClick={() => this._send()} disabled={!input.trim()}>
-                {localized('Send')}
-              </button>
-            )}
-          </div>
-        </div>
       </div>
     );
   }

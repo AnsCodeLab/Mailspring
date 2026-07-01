@@ -46,6 +46,36 @@ export class ChatStore {
     ).map((r) => r.threadId);
   }
 
+  conversationSummaries(): Array<{
+    threadId: string;
+    lastAt: number;
+    count: number;
+    preview: string;
+  }> {
+    return (
+      this.db
+        .prepare(
+          `
+      SELECT threadId,
+             MAX(createdAt) AS lastAt,
+             COUNT(*) AS count,
+             (SELECT content FROM chats c2
+              WHERE c2.threadId = c1.threadId
+              ORDER BY c2.id DESC LIMIT 1) AS preview
+      FROM chats c1
+      GROUP BY threadId
+      ORDER BY lastAt DESC
+    `
+        )
+        .all() as any[]
+    ).map((r) => ({
+      threadId: r.threadId,
+      lastAt: r.lastAt as number,
+      count: r.count as number,
+      preview: String(r.preview || '').slice(0, 120),
+    }));
+  }
+
   clearAll(): void {
     this.db.exec('DELETE FROM chats; DELETE FROM chat_refs;');
   }
