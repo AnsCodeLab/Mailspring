@@ -69,24 +69,21 @@ function registerFeatureUI() {
   const { createDraftSkill } = require('./skills/builtin/create-draft');
   const { fetchUrlSkill } = require('./skills/builtin/fetch-url');
   const { webSearchSkill } = require('./skills/builtin/web-search');
-  [
+  const { sendEmailSkill } = require('./skills/builtin/send-email');
+  const { trashThreadSkill, archiveThreadSkill } = require('./skills/builtin/manage-thread');
+  const allSkills = [
     kbSearchSkill,
     mailboxSearchSkill,
     openEmailSkill,
     createDraftSkill,
     fetchUrlSkill,
     webSearchSkill,
-  ].forEach((s: any) => Skills.register(s));
-  featureDisposables.push(() =>
-    [
-      kbSearchSkill,
-      mailboxSearchSkill,
-      openEmailSkill,
-      createDraftSkill,
-      fetchUrlSkill,
-      webSearchSkill,
-    ].forEach((s: any) => Skills.unregister(s.name))
-  );
+    sendEmailSkill,
+    trashThreadSkill,
+    archiveThreadSkill,
+  ];
+  allSkills.forEach((s: any) => Skills.register(s));
+  featureDisposables.push(() => allSkills.forEach((s: any) => Skills.unregister(s.name)));
 }
 
 export function activate() {

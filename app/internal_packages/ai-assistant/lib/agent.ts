@@ -1,4 +1,5 @@
 import { SkillRegistry } from './skills/registry';
+import { Skill, ConfirmResult } from './skills/types';
 
 export async function runAgent(opts: {
   messages: any[];
@@ -10,7 +11,7 @@ export async function runAgent(opts: {
     content?: string;
     tool_calls?: Array<{ id: string; name: string; arguments: any }>;
   }>;
-  confirm: (skillName: string, args: any) => Promise<boolean>;
+  confirm: (skill: Skill, args: any) => Promise<ConfirmResult>;
   maxSteps?: number;
   signal?: AbortSignal;
   onToolStep?: (step: { name: string; args: any; result: any }) => void;
@@ -29,8 +30,21 @@ export async function runAgent(opts: {
       let result: any;
       if (!skill) {
         result = { error: `unknown skill ${call.name}` };
-      } else if (skill.tier === 'confirm' && !(await opts.confirm(call.name, call.arguments))) {
-        result = { error: 'user declined', declined: true };
+      } else if (skill.tier === 'confirm') {
+        const decision = await opts.confirm(skill, call.arguments);
+        if (decision === 'deny') {
+          result = { error: 'user declined', declined: true };
+        } else if (decision === 'done') {
+          // Skill completed its action inside confirmDialog (e.g. opened composer).
+          result = { done: true };
+        } else {
+          // 'proceed' — run the skill now
+          try {
+            result = await skill.run(call.arguments, {});
+          } catch (e: any) {
+            result = { error: e.message || String(e) };
+          }
+        }
       } else {
         try {
           result = await skill.run(call.arguments, {});

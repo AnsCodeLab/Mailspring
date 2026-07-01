@@ -1067,6 +1067,76 @@ export default class AIPreferences extends React.Component<
             </>
           )}
         </section>
+
+        <section>
+          <h3>{localized('Agent skills')}</h3>
+          <p style={{ fontSize: 12, color: 'var(--text-color-subtle)', marginBottom: 10 }}>
+            {localized(
+              'All actions below require explicit confirmation before executing. They are off by default.'
+            )}
+          </p>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={AIConfig.isSkillSendEmailEnabled()}
+              onChange={(e) => this._set(K.skillSendEmail, e.target.checked)}
+            />{' '}
+            {localized('Send email')}
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text-color-subtle)',
+                marginTop: 2,
+                marginLeft: 20,
+              }}
+            >
+              {localized(
+                'Allow the AI to compose and send email on your behalf. A preview dialog with Cancel / Open in Composer / Send Now will always appear first.'
+              )}
+            </div>
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={AIConfig.isSkillTrashThreadEnabled()}
+              onChange={(e) => this._set(K.skillTrashThread, e.target.checked)}
+            />{' '}
+            {localized('Move threads to Trash')}
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text-color-subtle)',
+                marginTop: 2,
+                marginLeft: 20,
+              }}
+            >
+              {localized(
+                'Allow the AI to move threads to Trash. Threads remain recoverable from the Trash folder.'
+              )}
+            </div>
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={AIConfig.isSkillArchiveThreadEnabled()}
+              onChange={(e) => this._set(K.skillArchiveThread, e.target.checked)}
+            />{' '}
+            {localized('Archive threads')}
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text-color-subtle)',
+                marginTop: 2,
+                marginLeft: 20,
+              }}
+            >
+              {localized('Allow the AI to archive threads.')}
+            </div>
+          </label>
+        </section>
       </div>
     );
   }

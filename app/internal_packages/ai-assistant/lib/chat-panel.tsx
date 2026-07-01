@@ -412,14 +412,15 @@ export default class AIChatPanel extends React.Component<
               return r;
             });
           },
-          confirm: async (skillName: string, args: any) => {
+          confirm: async (skill: any, args: any) => {
+            if (skill.confirmDialog) return skill.confirmDialog(args);
             const { response } = await require('@electron/remote').dialog.showMessageBox({
               type: 'question',
               buttons: ['Allow', 'Deny'],
-              message: `AI wants to run: ${skillName}`,
+              message: `AI wants to run: ${skill.name}`,
               detail: JSON.stringify(args, null, 2).slice(0, 500),
             });
-            return response === 0;
+            return response === 0 ? 'proceed' : 'deny';
           },
           signal: this._abort?.signal,
           maxSteps: AIConfig.getMaxAgentSteps(),

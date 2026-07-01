@@ -24,6 +24,10 @@ const K = {
   maxAgentSteps: 'ai-assistant.agent.maxSteps',
   // RAG mode
   ragMode: 'ai-assistant.rag.mode',
+  // Skill toggles (default off — each must be explicitly enabled)
+  skillSendEmail: 'ai-assistant.skills.sendEmail',
+  skillTrashThread: 'ai-assistant.skills.trashThread',
+  skillArchiveThread: 'ai-assistant.skills.archiveThread',
 };
 
 export const RAG_DEFAULTS = {
@@ -81,4 +85,8 @@ export const AIConfig = {
   getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, RAG_DEFAULTS.maxAgentSteps)),
   // RAG mode
   getRagMode: () => get<'default' | 'auto-tune' | 'custom'>(K.ragMode, 'default'),
+  // Skill toggles
+  isSkillSendEmailEnabled: () => get(K.skillSendEmail, false) === true,
+  isSkillTrashThreadEnabled: () => get(K.skillTrashThread, false) === true,
+  isSkillArchiveThreadEnabled: () => get(K.skillArchiveThread, false) === true,
 };
