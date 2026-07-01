@@ -390,27 +390,41 @@ export default class AIChatPanel extends React.Component<
         const agentOut = await runAgent({
           messages: prompt,
           registry: Skills,
-          callModel: (msgs: any[], tools: any[]) => {
+          callModel: async (msgs: any[], tools: any[]) => {
             const priorContent = turns[turns.length - 1].content;
-            return AIService.chatWithToolsStream({
-              messages: msgs,
-              tools,
-              signal: this._abort?.signal,
-              onToken: (tok: string) => {
-                tok && (answer += tok);
-                turns[turns.length - 1].content += tok;
-                if (isActive()) this.setState({ turns: [...turns] });
-                else syncPending();
-              },
-            }).then((r) => {
-              if (r.tool_calls?.length) {
+            const doStream = (t: any[]) =>
+              AIService.chatWithToolsStream({
+                messages: msgs,
+                tools: t,
+                signal: this._abort?.signal,
+                onToken: (tok: string) => {
+                  tok && (answer += tok);
+                  turns[turns.length - 1].content += tok;
+                  if (isActive()) this.setState({ turns: [...turns] });
+                  else syncPending();
+                },
+              }).then((r) => {
+                if (r.tool_calls?.length) {
+                  answer = '';
+                  turns[turns.length - 1].content = priorContent;
+                  if (isActive()) this.setState({ turns: [...turns] });
+                  else syncPending();
+                }
+                return r;
+              });
+            try {
+              return await doStream(tools);
+            } catch (err: any) {
+              // Some local LLM servers can't parse tool schemas (Jinja2 template error).
+              // Fall back to plain chat so the user gets a response instead of a hard error.
+              if (tools.length && /parser|template|function.call|tool/i.test(err?.message || '')) {
                 answer = '';
                 turns[turns.length - 1].content = priorContent;
                 if (isActive()) this.setState({ turns: [...turns] });
-                else syncPending();
+                return doStream([]);
               }
-              return r;
-            });
+              throw err;
+            }
           },
           confirm: async (skill: any, args: any) => {
             if (skill.confirmDialog) return skill.confirmDialog(args);

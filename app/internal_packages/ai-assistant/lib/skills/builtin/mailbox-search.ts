@@ -10,7 +10,6 @@ export const mailboxSearchSkill: Skill = {
   parameters: {
     type: 'object',
     properties: { sender: { type: 'string' }, subject: { type: 'string' } },
-    required: [],
   },
   async run({ sender, subject }: { sender?: string; subject?: string }) {
     let q = DatabaseStore.findAll(Message);
