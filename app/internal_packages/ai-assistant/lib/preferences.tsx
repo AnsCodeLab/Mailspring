@@ -1,6 +1,7 @@
 import React from 'react';
 import { localized, KeyManager } from 'mailspring-exports';
 import { AIConfig, RAG_DEFAULTS, KEY_API, KEY_WEBSEARCH_API } from './config';
+import { computeAutoTune, autoTuneDescription, AutoTuneResult, CorpusStats } from './auto-tune';
 import { AIService } from './ai-service';
 
 const IN_APP_MODELS = [
@@ -147,6 +148,10 @@ export default class AIPreferences extends React.Component<
     endpointValue: string;
     selectedProvider: string;
     advancedResetKey: number;
+    ragMode: 'default' | 'auto-tune' | 'custom';
+    autoTuning: boolean;
+    autoTuneStats: CorpusStats | null;
+    autoTuneValues: AutoTuneResult | null;
     adv: {
       chunkSize: number;
       chunkOverlap: number;
@@ -173,6 +178,10 @@ export default class AIPreferences extends React.Component<
     endpointValue: AIConfig.getEndpoint(),
     selectedProvider: detectChatProvider(AIConfig.getEndpoint()),
     advancedResetKey: 0,
+    ragMode: AIConfig.getRagMode(),
+    autoTuning: false,
+    autoTuneStats: null as CorpusStats | null,
+    autoTuneValues: null as AutoTuneResult | null,
     adv: {
       chunkSize: AIConfig.getChunkSize(),
       chunkOverlap: AIConfig.getChunkOverlap(),
@@ -310,6 +319,46 @@ export default class AIPreferences extends React.Component<
         webSearchResults: RAG_DEFAULTS.webSearchResults,
       },
     });
+  };
+
+  _applyParamValues = (values: AutoTuneResult) => {
+    const K = AIConfig.keys;
+    AppEnv.config.set(K.chunkSize, values.chunkSize);
+    AppEnv.config.set(K.chunkOverlap, values.chunkOverlap);
+    AppEnv.config.set(K.retrieveK, values.retrieveK);
+    AppEnv.config.set(K.contextBudget, values.contextBudget);
+    AppEnv.config.set(K.historyFraction, values.historyFraction);
+    AppEnv.config.set(K.maxAgentSteps, values.maxAgentSteps);
+    AppEnv.config.set(K.webSearchResults, values.webSearchResults);
+  };
+
+  _runAutoTune = () => {
+    const { Indexer } = require('./indexer');
+    const stats: CorpusStats = Indexer.corpusStats();
+    const values = computeAutoTune(stats, AIConfig.getModel());
+    this._applyParamValues(values);
+    this.setState({
+      autoTuning: false,
+      autoTuneStats: stats,
+      autoTuneValues: values,
+      adv: { ...values },
+    });
+  };
+
+  _setRagMode = (mode: 'default' | 'auto-tune' | 'custom') => {
+    AppEnv.config.set(AIConfig.keys.ragMode, mode);
+    if (mode === 'default') {
+      this._applyParamValues(RAG_DEFAULTS as AutoTuneResult);
+      this.setState({
+        ragMode: 'default',
+        advancedResetKey: this.state.advancedResetKey + 1,
+        adv: { ...RAG_DEFAULTS },
+      });
+    } else if (mode === 'auto-tune') {
+      this.setState({ ragMode: 'auto-tune', autoTuning: true }, () => this._runAutoTune());
+    } else {
+      this.setState({ ragMode: 'custom' });
+    }
   };
 
   _test = async () => {
@@ -611,7 +660,9 @@ export default class AIPreferences extends React.Component<
               {localized('Advanced settings (click to expand)')}
             </summary>
             {(() => {
-              const { adv } = this.state;
+              const { adv, ragMode, autoTuning, autoTuneStats, autoTuneValues } = this.state;
+
+              // Shared helpers
               const overlapPct =
                 adv.chunkSize > 0 ? Math.round((adv.chunkOverlap / adv.chunkSize) * 100) : 0;
               const kbChars = adv.retrieveK * adv.chunkSize;
@@ -628,12 +679,79 @@ export default class AIPreferences extends React.Component<
                   {msg}
                 </div>
               );
+              const roVal = (v: number | string) => <div className="ai-param-readonly">{v}</div>;
+
+              // Read-only param grid (default + auto-tune modes)
+              const readOnlyGrid = (values: AutoTuneResult, sourceNote?: string) => (
+                <div style={{ marginTop: 10 }}>
+                  {sourceNote && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--text-color-subtle)',
+                        marginBottom: 10,
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      {sourceNote}
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
+                    <label>
+                      {localized('Chunk size (chars)')}
+                      {roVal(values.chunkSize)}
+                      {hint(`~${Math.round(values.chunkSize / 5)} words per segment`)}
+                    </label>
+                    <label>
+                      {localized('Chunk overlap (chars)')}
+                      {roVal(values.chunkOverlap)}
+                      {hint(
+                        `${values.chunkSize > 0 ? Math.round((values.chunkOverlap / values.chunkSize) * 100) : 0}% of chunk size`
+                      )}
+                    </label>
+                    <label>
+                      {localized('Top-K sources retrieved')}
+                      {roVal(values.retrieveK)}
+                      {hint(
+                        `~${(values.retrieveK * values.chunkSize).toLocaleString()} chars of KB per turn`
+                      )}
+                    </label>
+                    <label>
+                      {localized('Context budget (chars)')}
+                      {roVal(values.contextBudget.toLocaleString())}
+                      {hint(`≈ ${Math.round(values.contextBudget / 4).toLocaleString()} tokens`)}
+                    </label>
+                    <label>
+                      {localized('History fraction')}
+                      {roVal(values.historyFraction)}
+                      {hint(
+                        `${Math.round(values.historyFraction * 100)}% history / ${Math.round((1 - values.historyFraction) * 100)}% thread + KB`
+                      )}
+                    </label>
+                    <label>
+                      {localized('Max agent steps')}
+                      {roVal(values.maxAgentSteps)}
+                      {hint(
+                        values.maxAgentSteps <= 5
+                          ? 'Good for quick lookups'
+                          : 'Good for multi-step research'
+                      )}
+                    </label>
+                    <label>
+                      {localized('Web search results')}
+                      {roVal(values.webSearchResults)}
+                      {hint('Snippets passed to the AI per search call')}
+                    </label>
+                  </div>
+                </div>
+              );
+
+              // Custom editable grid
               const _adv = (field: keyof typeof adv, val: number) =>
                 this.setState({ adv: { ...this.state.adv, [field]: val } });
-              return (
+              const editableGrid = (
                 <div key={this.state.advancedResetKey} style={{ marginTop: 10 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
-                    {/* Chunk size */}
                     <label>
                       {localized('Chunk size (chars)')}
                       <input
@@ -653,8 +771,6 @@ export default class AIPreferences extends React.Component<
                               `~${Math.round(adv.chunkSize / 5)} words per segment. Smaller = more precise matches.`
                             )}
                     </label>
-
-                    {/* Chunk overlap */}
                     <label>
                       {localized('Chunk overlap (chars)')}
                       <input
@@ -677,8 +793,6 @@ export default class AIPreferences extends React.Component<
                               `${overlapPct}% of chunk — text shared between adjacent segments to preserve context.`
                             )}
                     </label>
-
-                    {/* Top-K */}
                     <label>
                       {localized('Top-K sources retrieved')}
                       <input
@@ -698,8 +812,6 @@ export default class AIPreferences extends React.Component<
                             `~${kbChars.toLocaleString()} chars of knowledge base injected per turn.`
                           )}
                     </label>
-
-                    {/* Context budget */}
                     <label>
                       {localized('Context budget (chars)')}
                       <input
@@ -720,8 +832,6 @@ export default class AIPreferences extends React.Component<
                             `≈ ${Math.round(adv.contextBudget / 4).toLocaleString()} tokens · History ${histChars.toLocaleString()} / Thread+KB ${ctxChars.toLocaleString()} chars`
                           )}
                     </label>
-
-                    {/* History fraction */}
                     <label>
                       {localized('History fraction')}
                       <input
@@ -747,8 +857,6 @@ export default class AIPreferences extends React.Component<
                               `${Math.round(adv.historyFraction * 100)}% for past turns · ${Math.round((1 - adv.historyFraction) * 100)}% for thread + KB sources`
                             )}
                     </label>
-
-                    {/* Max agent steps */}
                     <label>
                       {localized('Max agent steps')}
                       <input
@@ -767,8 +875,6 @@ export default class AIPreferences extends React.Component<
                             ? hint('Good for quick lookups. Raise to 8+ for multi-step research.')
                             : hint('Good for multi-hop research (search → read → summarise).')}
                     </label>
-
-                    {/* Web search results */}
                     <label>
                       {localized('Web search results')}
                       <input
@@ -794,6 +900,83 @@ export default class AIPreferences extends React.Component<
                       )}
                     </span>
                   </div>
+                </div>
+              );
+
+              return (
+                <div style={{ marginTop: 10 }}>
+                  {/* Mode selector */}
+                  <div className="ai-rag-mode-selector">
+                    {(
+                      [
+                        ['default', localized('Default')],
+                        ['auto-tune', localized('Auto-tune')],
+                        ['custom', localized('Custom')],
+                      ] as Array<['default' | 'auto-tune' | 'custom', string]>
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        className={ragMode === id ? 'active' : ''}
+                        onClick={() => this._setRagMode(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Mode descriptions */}
+                  <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginBottom: 8 }}>
+                    {ragMode === 'default' &&
+                      localized('Uses proven defaults that work well for most email setups.')}
+                    {ragMode === 'auto-tune' &&
+                      localized(
+                        'Parameters computed from your indexed emails and the selected model context window.'
+                      )}
+                    {ragMode === 'custom' && localized('Fine-tune every parameter manually.')}
+                  </div>
+
+                  {/* Mode content */}
+                  {ragMode === 'default' && readOnlyGrid(RAG_DEFAULTS as AutoTuneResult)}
+
+                  {ragMode === 'auto-tune' &&
+                    (autoTuning ? (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--text-color-subtle)',
+                          padding: '10px 0',
+                        }}
+                      >
+                        {localized('Computing from your indexed emails…')}
+                      </div>
+                    ) : autoTuneValues && autoTuneStats ? (
+                      <div>
+                        {readOnlyGrid(
+                          autoTuneValues,
+                          autoTuneDescription(autoTuneStats, AIConfig.getModel())
+                        )}
+                        <div style={{ marginTop: 8 }}>
+                          <button onClick={this._runAutoTune}>{localized('Recompute')}</button>
+                          {autoTuneStats.messageCount === 0 && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                marginLeft: 10,
+                                color: 'var(--color-warning, #c0832a)',
+                              }}
+                            >
+                              {localized('No emails indexed yet — index first for best results.')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 8 }}>
+                        <button onClick={this._runAutoTune}>{localized('Compute now')}</button>
+                      </div>
+                    ))}
+
+                  {ragMode === 'custom' && editableGrid}
                 </div>
               );
             })()}

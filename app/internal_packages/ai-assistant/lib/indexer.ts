@@ -65,6 +65,15 @@ class IndexerImpl {
     this.total = 0;
   }
 
+  corpusStats(): { messageCount: number; chunkCount: number; medianChunkLen: number } {
+    const store = this.store();
+    const messageCount = store.indexedMessageCount();
+    const lengths = store.chunkTextLengths().sort((a, b) => a - b);
+    const chunkCount = lengths.length;
+    const medianChunkLen = chunkCount ? lengths[Math.floor(chunkCount / 2)] : 0;
+    return { messageCount, chunkCount, medianChunkLen };
+  }
+
   async reindexAll() {
     this.clear();
     await this._bulkAndReconcile();

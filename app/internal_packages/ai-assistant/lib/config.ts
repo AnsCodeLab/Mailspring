@@ -22,6 +22,8 @@ const K = {
   historyFraction: 'ai-assistant.rag.historyFraction',
   // Agent
   maxAgentSteps: 'ai-assistant.agent.maxSteps',
+  // RAG mode
+  ragMode: 'ai-assistant.rag.mode',
 };
 
 export const RAG_DEFAULTS = {
@@ -77,4 +79,6 @@ export const AIConfig = {
     Math.min(0.9, Math.max(0.1, get<number>(K.historyFraction, RAG_DEFAULTS.historyFraction))),
   // Agent
   getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, RAG_DEFAULTS.maxAgentSteps)),
+  // RAG mode
+  getRagMode: () => get<'default' | 'auto-tune' | 'custom'>(K.ragMode, 'default'),
 };

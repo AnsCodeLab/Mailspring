@@ -83,6 +83,16 @@ export class VectorStore {
       vector: bufferToVector(r.embedding),
     }));
   }
+  indexedMessageCount(): number {
+    return (
+      (this.db.prepare('SELECT COUNT(*) as n FROM indexed_messages').get() as any) || { n: 0 }
+    ).n;
+  }
+  chunkTextLengths(): number[] {
+    return (this.db.prepare('SELECT length(chunkText) as len FROM chunks').all() as any[]).map(
+      (r) => r.len as number
+    );
+  }
   getMeta(key: string): string | undefined {
     const r = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as any;
     return r?.value;

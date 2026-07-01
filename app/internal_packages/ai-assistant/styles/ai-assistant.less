@@ -28,6 +28,51 @@
   }
 }
 
+// ─── RAG mode selector ────────────────────────────────────────────────────────
+
+.ai-rag-mode-selector {
+  display: flex;
+  margin-bottom: 10px;
+
+  button {
+    flex: 1;
+    padding: 5px 8px;
+    font-size: 12px;
+    border: 1px solid @border-color-dark;
+    background: transparent;
+    color: @text-color-subtle;
+    cursor: pointer;
+
+    &:first-child { border-radius: 4px 0 0 4px; }
+    &:last-child  { border-radius: 0 4px 4px 0; }
+    &:not(:first-child) { border-left: none; }
+
+    &.active {
+      background: var(--accent-primary, #6366f1);
+      color: white;
+      border-color: var(--accent-primary, #6366f1);
+    }
+
+    &:not(.active):hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+  }
+}
+
+.ai-param-readonly {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid @border-color;
+  border-radius: 4px;
+  font-size: 13px;
+  color: @text-color-subtle;
+  font-variant-numeric: tabular-nums;
+}
+
 // ─── AI Toggle toolbar button ──────────────────────────────────────────────────
 
 .ai-toggle-btn {
