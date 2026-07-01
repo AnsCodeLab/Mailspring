@@ -24,6 +24,16 @@ const K = {
   maxAgentSteps: 'ai-assistant.agent.maxSteps',
 };
 
+export const RAG_DEFAULTS = {
+  chunkSize: 2000,
+  chunkOverlap: 200,
+  retrieveK: 6,
+  contextBudget: 8000,
+  historyFraction: 0.4,
+  maxAgentSteps: 6,
+  webSearchResults: 5,
+} as const;
+
 export const KEY_API = 'ai-assistant.apiKey';
 export const KEY_EMBED_API = 'ai-assistant.embeddings.apiKey';
 export const KEY_WEBSEARCH_API = 'ai-assistant.webSearch.apiKey';
@@ -47,15 +57,17 @@ export const AIConfig = {
   isWebSearchEnabled: () => get(K.webSearchEnabled, false) === true,
   getWebSearchProvider: () => get(K.webSearchProvider, 'searxng'),
   getWebSearchUrl: () => String(get(K.webSearchUrl, '')).replace(/\/+$/, ''),
-  getWebSearchResults: () => Math.max(1, get<number>(K.webSearchResults, 5)),
+  getWebSearchResults: () =>
+    Math.max(1, get<number>(K.webSearchResults, RAG_DEFAULTS.webSearchResults)),
   isPanelOpen: () => get(K.panelOpen, true) === true,
   getPanelWidth: () => get<number>(K.panelWidth, 380),
   // RAG pipeline
-  getChunkSize: () => Math.max(200, get<number>(K.chunkSize, 2000)),
-  getChunkOverlap: () => Math.max(0, get<number>(K.chunkOverlap, 200)),
-  getRetrieveK: () => Math.max(1, get<number>(K.retrieveK, 6)),
-  getContextBudget: () => Math.max(1000, get<number>(K.contextBudget, 8000)),
-  getHistoryFraction: () => Math.min(0.9, Math.max(0.1, get<number>(K.historyFraction, 0.4))),
+  getChunkSize: () => Math.max(200, get<number>(K.chunkSize, RAG_DEFAULTS.chunkSize)),
+  getChunkOverlap: () => Math.max(0, get<number>(K.chunkOverlap, RAG_DEFAULTS.chunkOverlap)),
+  getRetrieveK: () => Math.max(1, get<number>(K.retrieveK, RAG_DEFAULTS.retrieveK)),
+  getContextBudget: () => Math.max(1000, get<number>(K.contextBudget, RAG_DEFAULTS.contextBudget)),
+  getHistoryFraction: () =>
+    Math.min(0.9, Math.max(0.1, get<number>(K.historyFraction, RAG_DEFAULTS.historyFraction))),
   // Agent
-  getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, 6)),
+  getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, RAG_DEFAULTS.maxAgentSteps)),
 };

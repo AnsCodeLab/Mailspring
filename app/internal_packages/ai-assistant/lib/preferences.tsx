@@ -1,6 +1,6 @@
 import React from 'react';
 import { localized, KeyManager } from 'mailspring-exports';
-import { AIConfig, KEY_API, KEY_WEBSEARCH_API } from './config';
+import { AIConfig, RAG_DEFAULTS, KEY_API, KEY_WEBSEARCH_API } from './config';
 import { AIService } from './ai-service';
 
 const IN_APP_MODELS = [
@@ -146,6 +146,7 @@ export default class AIPreferences extends React.Component<
     webSearchProvider: string;
     endpointValue: string;
     selectedProvider: string;
+    advancedResetKey: number;
   }
 > {
   state = {
@@ -162,6 +163,7 @@ export default class AIPreferences extends React.Component<
     webSearchProvider: detectWebSearchProvider(AIConfig.getWebSearchUrl()),
     endpointValue: AIConfig.getEndpoint(),
     selectedProvider: detectChatProvider(AIConfig.getEndpoint()),
+    advancedResetKey: 0,
   };
   private progressInterval: ReturnType<typeof setInterval> | null = null;
   private _endpointSub: { dispose: () => void } | null = null;
@@ -265,6 +267,20 @@ export default class AIPreferences extends React.Component<
   _saveKey = (name: string, value: string) => {
     if (value) KeyManager.replacePassword(name, value);
     else KeyManager.deletePassword(name);
+  };
+
+  _resetAdvanced = () => {
+    const K = AIConfig.keys;
+    Object.entries({
+      [K.chunkSize]: RAG_DEFAULTS.chunkSize,
+      [K.chunkOverlap]: RAG_DEFAULTS.chunkOverlap,
+      [K.retrieveK]: RAG_DEFAULTS.retrieveK,
+      [K.contextBudget]: RAG_DEFAULTS.contextBudget,
+      [K.historyFraction]: RAG_DEFAULTS.historyFraction,
+      [K.maxAgentSteps]: RAG_DEFAULTS.maxAgentSteps,
+      [K.webSearchResults]: RAG_DEFAULTS.webSearchResults,
+    }).forEach(([key, val]) => AppEnv.config.set(key, val));
+    this.setState({ advancedResetKey: this.state.advancedResetKey + 1 });
   };
 
   _test = async () => {
@@ -566,6 +582,7 @@ export default class AIPreferences extends React.Component<
               {localized('Advanced settings (click to expand)')}
             </summary>
             <div
+              key={this.state.advancedResetKey}
               style={{
                 marginTop: 10,
                 display: 'grid',
@@ -648,10 +665,11 @@ export default class AIPreferences extends React.Component<
                 />
               </label>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 8 }}>
-              {localized(
-                'Changes take effect immediately. Changing chunk size or overlap requires re-indexing.'
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+              <button onClick={this._resetAdvanced}>{localized('Reset to defaults')}</button>
+              <span style={{ fontSize: 11, color: 'var(--text-color-subtle)' }}>
+                {localized('Changing chunk size or overlap requires re-indexing.')}
+              </span>
             </div>
           </details>
         </section>
