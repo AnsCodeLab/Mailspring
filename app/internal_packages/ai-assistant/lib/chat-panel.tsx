@@ -633,45 +633,47 @@ export default class AIChatPanel extends React.Component<
               <span className="ai-model-name">{modelName}</span>
             </div>
           </div>
-          <div className="ai-scope-toggle">
+          <div className="ai-header-controls">
+            <div className="ai-scope-toggle">
+              <button
+                className={`ai-scope-btn ${scope === 'thread' ? 'active' : ''}`}
+                onClick={() => this.setState({ scope: 'thread' })}
+                title={localized('Chat about this thread only')}
+              >
+                {localized('Thread')}
+              </button>
+              <button
+                className={`ai-scope-btn ${scope === 'all' ? 'active' : ''}`}
+                onClick={() => this.setState({ scope: 'all' })}
+                title={localized('Search across all mail')}
+              >
+                {localized('All mail')}
+              </button>
+            </div>
             <button
-              className={`ai-scope-btn ${scope === 'thread' ? 'active' : ''}`}
-              onClick={() => this.setState({ scope: 'thread' })}
-              title={localized('Chat about this thread only')}
+              className={`ai-history-btn${showHistory ? ' active' : ''}`}
+              title={localized('Conversation history')}
+              onClick={() =>
+                showHistory ? this.setState({ showHistory: false }) : this._openHistory()
+              }
             >
-              {localized('Thread')}
+              ☰
             </button>
             <button
-              className={`ai-scope-btn ${scope === 'all' ? 'active' : ''}`}
-              onClick={() => this.setState({ scope: 'all' })}
-              title={localized('Search across all mail')}
+              className="ai-clear-btn"
+              title={localized('Clear conversation')}
+              onClick={this._clearHistory}
             >
-              {localized('All mail')}
+              ↺
+            </button>
+            <button
+              className="ai-close-btn"
+              title={localized('Close AI panel')}
+              onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, false)}
+            >
+              ✕
             </button>
           </div>
-          <button
-            className={`ai-history-btn${showHistory ? ' active' : ''}`}
-            title={localized('Conversation history')}
-            onClick={() =>
-              showHistory ? this.setState({ showHistory: false }) : this._openHistory()
-            }
-          >
-            ☰
-          </button>
-          <button
-            className="ai-clear-btn"
-            title={localized('Clear conversation')}
-            onClick={this._clearHistory}
-          >
-            ↺
-          </button>
-          <button
-            className="ai-close-btn"
-            title={localized('Close AI panel')}
-            onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, false)}
-          >
-            ✕
-          </button>
         </div>
 
         {showHistory ? (
