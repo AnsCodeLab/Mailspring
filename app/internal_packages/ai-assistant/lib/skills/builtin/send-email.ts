@@ -7,7 +7,13 @@ async function buildAndOpenDraft(args: {
   body?: string;
   cc?: string;
 }): Promise<string> {
-  const { DraftFactory, Actions, SanitizeTransformer } = require('mailspring-exports');
+  const {
+    DraftFactory,
+    Actions,
+    SanitizeTransformer,
+    SyncbackDraftTask,
+    TaskQueue,
+  } = require('mailspring-exports');
   const html = SanitizeTransformer.runSync(
     `<div>${String(args.body || '').replace(/\n/g, '<br/>')}</div>`
   );
@@ -17,6 +23,10 @@ async function buildAndOpenDraft(args: {
     cc: args.cc ? [{ email: args.cc, name: args.cc }] : [],
   });
   draft.body = html + (draft.body || '');
+  // Persist before opening composer so the session can find the draft.
+  const syncTask = new SyncbackDraftTask({ draft });
+  Actions.queueTask(syncTask);
+  await TaskQueue.waitForPerformLocal(syncTask);
   if (Actions.composePopoutDraft) Actions.composePopoutDraft(draft.headerMessageId);
   return draft.headerMessageId;
 }
@@ -61,7 +71,13 @@ export const sendEmailSkill: Skill = {
   },
 
   async run(args) {
-    const { DraftFactory, Actions, SanitizeTransformer } = require('mailspring-exports');
+    const {
+      DraftFactory,
+      Actions,
+      SanitizeTransformer,
+      SyncbackDraftTask,
+      TaskQueue,
+    } = require('mailspring-exports');
     const html = SanitizeTransformer.runSync(
       `<div>${String(args.body || '').replace(/\n/g, '<br/>')}</div>`
     );
@@ -71,6 +87,10 @@ export const sendEmailSkill: Skill = {
       cc: args.cc ? [{ email: args.cc, name: args.cc }] : [],
     });
     draft.body = html + (draft.body || '');
+    // Persist the draft first so DraftEditingSession can find it and populate `from`.
+    const syncTask = new SyncbackDraftTask({ draft });
+    Actions.queueTask(syncTask);
+    await TaskQueue.waitForPerformLocal(syncTask);
     Actions.sendDraft(draft.headerMessageId);
     return { sent: true, to: args.to, subject: args.subject };
   },
