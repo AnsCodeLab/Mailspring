@@ -14,4 +14,11 @@ describe('AIConfig defaults', () => {
   it('defaults embedding backend to in-app', () =>
     expect(AIConfig.getEmbeddingBackend()).toBe('in-app'));
   it('web search disabled by default', () => expect(AIConfig.isWebSearchEnabled()).toBe(false));
+  it('send email skill disabled by default', () =>
+    expect(AIConfig.isSkillSendEmailEnabled()).toBe(false));
+  it('trash thread skill disabled by default', () =>
+    expect(AIConfig.isSkillTrashThreadEnabled()).toBe(false));
+  it('archive thread skill disabled by default', () =>
+    expect(AIConfig.isSkillArchiveThreadEnabled()).toBe(false));
+  it('rag mode defaults to default', () => expect(AIConfig.getRagMode()).toBe('default'));
 });
