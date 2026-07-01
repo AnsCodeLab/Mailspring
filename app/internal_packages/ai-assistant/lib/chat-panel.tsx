@@ -22,6 +22,10 @@ import { ChatActivityStore } from './chat-activity-store';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 
+// All chat messages are stored under one global key — switching threads only
+// updates the context (which emails are loaded), not the conversation history.
+const GLOBAL_CHAT_KEY = '__global__';
+
 const SUGGESTIONS = [
   'Summarize this thread',
   'What action items are here?',
@@ -137,6 +141,37 @@ function renderMarkdown(text: string): React.ReactNode {
   return nodes;
 }
 
+// ─── AI Panel Toggle Button (in thread toolbar) ───────────────────────────────
+
+export class AIToggleButton extends React.Component<Record<string, never>, { open: boolean }> {
+  static displayName = 'AIToggleButton';
+  static containerStyles = { order: -1 };
+
+  private _sub: { dispose: () => void } | null = null;
+  state = { open: AIConfig.isPanelOpen() };
+
+  componentDidMount() {
+    this._sub = AppEnv.config.onDidChange(AIConfig.keys.panelOpen, () => {
+      this.setState({ open: AIConfig.isPanelOpen() });
+    });
+  }
+  componentWillUnmount() {
+    if (this._sub) this._sub.dispose();
+  }
+
+  render() {
+    return (
+      <button
+        title={localized('Toggle AI chat panel')}
+        className={`btn btn-toolbar ai-toggle-btn ${this.state.open ? 'active' : ''}`}
+        onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, !this.state.open)}
+      >
+        ✦ AI
+      </button>
+    );
+  }
+}
+
 // ─── Floating Chat Panel ──────────────────────────────────────────────────────
 
 export default class AIChatPanel extends React.Component<
@@ -168,9 +203,6 @@ export default class AIChatPanel extends React.Component<
   _configSub2: { dispose: () => void } | null = null;
   _abort: AbortController | null = null;
   _composing = false;
-  // Tracks in-progress streams for threads the user has navigated away from.
-  // Key: threadId, Value: { turns, busy } — restored when user switches back.
-  private _pendingByThread: Map<string, { turns: Turn[]; busy: boolean }> = new Map();
   private __chatStore: ChatStore | null = null;
   private _scrollRef = React.createRef<HTMLDivElement>();
   private _inputRef = React.createRef<HTMLTextAreaElement>();
@@ -205,10 +237,10 @@ export default class AIChatPanel extends React.Component<
     return this.__chatStore;
   }
 
-  private _loadHistory(threadId: string): Turn[] {
+  private _loadHistory(): Turn[] {
     try {
       return this._chatStore()
-        .history(threadId)
+        .history(GLOBAL_CHAT_KEY)
         .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
     } catch {
       return [];
@@ -221,44 +253,16 @@ export default class AIChatPanel extends React.Component<
   }
 
   componentDidMount() {
-    const { thread } = this.state;
-    if (thread) {
-      const turns = this._loadHistory(thread.id);
-      this.setState({ turns });
-      if (turns.length) ChatActivityStore.setHasHistory(thread.id, true);
-    }
-    // Seed the activity store with all threads that already have persisted chat history.
-    try {
-      this._chatStore()
-        .threadIdsWithHistory()
-        .forEach((id) => ChatActivityStore.setHasHistory(id, true));
-    } catch {
-      // DB not yet ready (first run) — ignore
-    }
+    // Load the single global conversation history.
+    const turns = this._loadHistory();
+    if (turns.length) this.setState({ turns });
+
     this._unsub = FocusedContentStore.listen(() => {
       const thread = FocusedContentStore.focused('thread');
       if (thread !== this.state.thread) {
-        // Stash current in-progress state so we can restore it if the user comes back.
-        const prevId = this.state.thread?.id;
-        if (prevId && this.state.busy) {
-          this._pendingByThread.set(prevId, { turns: this.state.turns, busy: true });
-        }
-        // Restore any pending stream for the incoming thread, or load persisted history.
-        const newId = thread?.id;
-        const pending = newId ? this._pendingByThread.get(newId) : undefined;
-        if (pending) {
-          this._pendingByThread.delete(newId!);
-          this.setState({
-            thread,
-            turns: pending.turns,
-            busy: pending.busy,
-            retrieved: [],
-            citedSources: [],
-          });
-        } else {
-          const turns = thread ? this._loadHistory(thread.id) : [];
-          this.setState({ thread, turns, busy: false, retrieved: [], citedSources: [] });
-        }
+        // Only update the thread reference used for context injection.
+        // The conversation history is global and never resets on thread switch.
+        this.setState({ thread, retrieved: [], citedSources: [] });
       }
     });
     this._configSub1 = AppEnv.config.onDidChange(AIConfig.keys.panelOpen, () => {
@@ -290,7 +294,7 @@ export default class AIChatPanel extends React.Component<
     this._resizing = true;
 
     const onMove = (ev: MouseEvent) => {
-      const newWidth = Math.max(300, Math.min(700, startWidth + (startX - ev.clientX)));
+      const newWidth = Math.max(280, Math.min(900, startWidth + (startX - ev.clientX)));
       this.setState({ width: newWidth });
     };
     const onUp = () => {
@@ -348,21 +352,10 @@ export default class AIChatPanel extends React.Component<
     ];
     this.setState({ turns, input: '', busy: true, retrieved: [], citedSources: [] });
 
-    // Capture the thread this request belongs to.
-    const targetThreadId = this.state.thread?.id;
-    const isActive = () => this.state.thread?.id === targetThreadId;
-    // Keep the stash in sync so switching back mid-stream shows live progress.
-    const syncPending = () => {
-      if (!isActive() && targetThreadId) {
-        this._pendingByThread.set(targetThreadId, { turns: [...turns], busy: true });
-      }
-    };
-
-    if (targetThreadId) {
-      this._chatStore().append(targetThreadId, 'user', q, []);
-      ChatActivityStore.setHasHistory(targetThreadId, true);
-      ChatActivityStore.setActive(targetThreadId, true);
-    }
+    // Global conversation — always append under the single global key.
+    this._chatStore().append(GLOBAL_CHAT_KEY, 'user', q, []);
+    const currentThreadId = this.state.thread?.id;
+    if (currentThreadId) ChatActivityStore.setActive(currentThreadId, true);
 
     this._abort = new AbortController();
     try {
@@ -408,15 +401,13 @@ export default class AIChatPanel extends React.Component<
                 onToken: (tok: string) => {
                   tok && (answer += tok);
                   turns[turns.length - 1].content += tok;
-                  if (isActive()) this.setState({ turns: [...turns] });
-                  else syncPending();
+                  this.setState({ turns: [...turns] });
                 },
               }).then((r) => {
                 if (r.tool_calls?.length) {
                   answer = '';
                   turns[turns.length - 1].content = priorContent;
-                  if (isActive()) this.setState({ turns: [...turns] });
-                  else syncPending();
+                  this.setState({ turns: [...turns] });
                 }
                 return r;
               });
@@ -452,13 +443,12 @@ export default class AIChatPanel extends React.Component<
           onToolStep: (step: any) => {
             answer = '';
             turns[turns.length - 1].content = `🔧 ${step.name}…`;
-            if (isActive()) this.setState({ turns: [...turns] });
-            else syncPending();
+            this.setState({ turns: [...turns] });
           },
         });
         answer = agentOut.answer;
         turns[turns.length - 1].content = answer;
-        if (isActive()) this.setState({ turns: [...turns] });
+        this.setState({ turns: [...turns] });
       } else {
         for await (const tok of AIService.chatStream({
           messages: prompt,
@@ -466,32 +456,24 @@ export default class AIChatPanel extends React.Component<
         })) {
           tok && (answer += tok);
           turns[turns.length - 1].content += tok;
-          if (isActive()) this.setState({ turns: [...turns] });
-          else syncPending();
+          this.setState({ turns: [...turns] });
         }
       }
       const { citedSources } = validateCitations(answer, retrieved);
-      if (isActive()) this.setState({ retrieved, citedSources });
-      if (targetThreadId) {
-        this._chatStore().append(
-          targetThreadId,
-          'assistant',
-          answer,
-          citedSources.map((s) => s.messageId)
-        );
-        this._pendingByThread.delete(targetThreadId);
-      }
+      this.setState({ retrieved, citedSources });
+      this._chatStore().append(
+        GLOBAL_CHAT_KEY,
+        'assistant',
+        answer,
+        citedSources.map((s) => s.messageId)
+      );
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       turns[turns.length - 1].content = `⚠️ ${err.message || err}`;
-      if (isActive()) this.setState({ turns: [...turns] });
-      else syncPending();
+      this.setState({ turns: [...turns] });
     } finally {
-      if (targetThreadId) {
-        this._pendingByThread.delete(targetThreadId);
-        ChatActivityStore.setActive(targetThreadId, false);
-      }
-      if (isActive()) this.setState({ busy: false });
+      if (currentThreadId) ChatActivityStore.setActive(currentThreadId, false);
+      this.setState({ busy: false });
     }
   };
 
@@ -502,14 +484,10 @@ export default class AIChatPanel extends React.Component<
   };
 
   _clearHistory = () => {
-    const threadId = this.state.thread?.id;
-    if (threadId) {
-      try {
-        this._chatStore().clearThread(threadId);
-      } catch {
-        /* ignore */
-      }
-      ChatActivityStore.setHasHistory(threadId, false);
+    try {
+      this._chatStore().clearThread(GLOBAL_CHAT_KEY);
+    } catch {
+      /* ignore */
     }
     this.setState({ turns: [], retrieved: [], citedSources: [] });
   };
@@ -545,18 +523,7 @@ export default class AIChatPanel extends React.Component<
 
   render() {
     const { open, width } = this.state;
-    if (!open) {
-      return (
-        <button
-          className="ai-panel-reopen-tab"
-          title={localized('Open AI Assistant')}
-          onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, true)}
-        >
-          <span className="ai-tab-icon">✦</span>
-          <span className="ai-tab-label">AI</span>
-        </button>
-      );
-    }
+    if (!open) return <div style={{ width: 0, flexShrink: 0 }} />;
     return this._renderPanel(width);
   }
 
@@ -620,6 +587,7 @@ export default class AIChatPanel extends React.Component<
 
     return (
       <div className="ai-float-panel" style={{ width }}>
+        <div className="ai-resize-handle" onMouseDown={this._startResize} />
         {/* Header */}
         <div className="ai-panel-header">
           <div className="ai-model-badge" title={localized('Model: %@', modelName)}>
