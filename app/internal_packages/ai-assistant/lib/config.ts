@@ -11,8 +11,17 @@ const K = {
   webSearchEnabled: 'ai-assistant.webSearch.enabled',
   webSearchProvider: 'ai-assistant.webSearch.provider',
   webSearchUrl: 'ai-assistant.webSearch.url',
+  webSearchResults: 'ai-assistant.webSearch.results',
   panelOpen: 'ai-assistant.panel.open',
   panelWidth: 'ai-assistant.panel.width',
+  // RAG pipeline
+  chunkSize: 'ai-assistant.rag.chunkSize',
+  chunkOverlap: 'ai-assistant.rag.chunkOverlap',
+  retrieveK: 'ai-assistant.rag.retrieveK',
+  contextBudget: 'ai-assistant.rag.contextBudget',
+  historyFraction: 'ai-assistant.rag.historyFraction',
+  // Agent
+  maxAgentSteps: 'ai-assistant.agent.maxSteps',
 };
 
 export const KEY_API = 'ai-assistant.apiKey';
@@ -38,6 +47,15 @@ export const AIConfig = {
   isWebSearchEnabled: () => get(K.webSearchEnabled, false) === true,
   getWebSearchProvider: () => get(K.webSearchProvider, 'searxng'),
   getWebSearchUrl: () => String(get(K.webSearchUrl, '')).replace(/\/+$/, ''),
+  getWebSearchResults: () => Math.max(1, get<number>(K.webSearchResults, 5)),
   isPanelOpen: () => get(K.panelOpen, true) === true,
   getPanelWidth: () => get<number>(K.panelWidth, 380),
+  // RAG pipeline
+  getChunkSize: () => Math.max(200, get<number>(K.chunkSize, 2000)),
+  getChunkOverlap: () => Math.max(0, get<number>(K.chunkOverlap, 200)),
+  getRetrieveK: () => Math.max(1, get<number>(K.retrieveK, 6)),
+  getContextBudget: () => Math.max(1000, get<number>(K.contextBudget, 8000)),
+  getHistoryFraction: () => Math.min(0.9, Math.max(0.1, get<number>(K.historyFraction, 0.4))),
+  // Agent
+  getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, 6)),
 };

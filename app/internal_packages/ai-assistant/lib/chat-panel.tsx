@@ -422,7 +422,7 @@ export default class AIChatPanel extends React.Component<
             return response === 0;
           },
           signal: this._abort?.signal,
-          maxSteps: 6,
+          maxSteps: AIConfig.getMaxAgentSteps(),
           onToolStep: (step: any) => {
             answer = '';
             turns[turns.length - 1].content = `🔧 ${step.name}…`;

@@ -1,4 +1,5 @@
 import { ChatMessage } from './ai-service';
+import { AIConfig } from './config';
 
 export type RetrievedSource = {
   id: string;
@@ -37,10 +38,12 @@ export function buildChatPrompt(args: {
   history: ChatMessage[];
   retrieved: RetrievedSource[];
   budgetChars?: number;
+  historyFraction?: number;
 }): ChatMessage[] {
-  const budget = args.budgetChars ?? 8000;
+  const budget = args.budgetChars ?? AIConfig.getContextBudget();
+  const histFraction = args.historyFraction ?? AIConfig.getHistoryFraction();
   // keep most-recent history within a fraction of the budget
-  const histBudget = Math.floor(budget * 0.4);
+  const histBudget = Math.floor(budget * histFraction);
   const kept: ChatMessage[] = [];
   let used = 0;
   for (let i = args.history.length - 1; i >= 0; i--) {

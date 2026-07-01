@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { AIConfig } from './config';
 
 export function htmlToText(html: string): string {
   return (html || '')
@@ -11,8 +12,8 @@ export function htmlToText(html: string): string {
 }
 
 export function chunkText(text: string, opts: { size?: number; overlap?: number } = {}): string[] {
-  const size = opts.size ?? 2000;
-  const overlap = opts.overlap ?? 200;
+  const size = opts.size ?? AIConfig.getChunkSize();
+  const overlap = opts.overlap ?? AIConfig.getChunkOverlap();
   if (text.length <= size) return text ? [text] : [];
   const step = Math.max(1, size - overlap);
   const chunks: string[] = [];

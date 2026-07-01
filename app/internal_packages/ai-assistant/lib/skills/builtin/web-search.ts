@@ -11,18 +11,23 @@ function detectProvider(url: string): 'brave' | 'tavily' | 'serper' | 'searxng' 
   return 'searxng';
 }
 
-async function runSearch(query: string, url: string, key: string | null): Promise<SearchResult[]> {
+async function runSearch(
+  query: string,
+  url: string,
+  key: string | null,
+  count: number
+): Promise<SearchResult[]> {
   const provider = detectProvider(url);
   const authHeaders: Record<string, string> = {};
 
   if (provider === 'brave') {
     if (key) authHeaders['X-Subscription-Token'] = key;
-    const res = await fetch(`${url}?q=${encodeURIComponent(query)}&count=5`, {
+    const res = await fetch(`${url}?q=${encodeURIComponent(query)}&count=${count}`, {
       headers: { Accept: 'application/json', ...authHeaders },
     });
     const json = await res.json();
     return (json.web?.results || [])
-      .slice(0, 5)
+      .slice(0, count)
       .map((r: any) => ({ title: r.title, url: r.url, snippet: r.description || '' }));
   }
 
@@ -33,11 +38,11 @@ async function runSearch(query: string, url: string, key: string | null): Promis
         'Content-Type': 'application/json',
         ...(key ? { Authorization: `Bearer ${key}` } : {}),
       },
-      body: JSON.stringify({ api_key: key || undefined, query, max_results: 5 }),
+      body: JSON.stringify({ api_key: key || undefined, query, max_results: count }),
     });
     const json = await res.json();
     return (json.results || [])
-      .slice(0, 5)
+      .slice(0, count)
       .map((r: any) => ({ title: r.title, url: r.url, snippet: r.content || '' }));
   }
 
@@ -46,11 +51,11 @@ async function runSearch(query: string, url: string, key: string | null): Promis
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ q: query, num: 5 }),
+      body: JSON.stringify({ q: query, num: count }),
     });
     const json = await res.json();
     return (json.organic || [])
-      .slice(0, 5)
+      .slice(0, count)
       .map((r: any) => ({ title: r.title, url: r.link, snippet: r.snippet || '' }));
   }
 
@@ -60,7 +65,7 @@ async function runSearch(query: string, url: string, key: string | null): Promis
   });
   const json = await res.json();
   return (json.results || [])
-    .slice(0, 5)
+    .slice(0, count)
     .map((r: any) => ({ title: r.title, url: r.url, snippet: r.content || '' }));
 }
 
@@ -73,6 +78,6 @@ export const webSearchSkill: Skill = {
   async run({ query }) {
     const url = AIConfig.getWebSearchUrl();
     const key = await KeyManager.getPassword(KEY_WEBSEARCH_API);
-    return runSearch(query, url, key);
+    return runSearch(query, url, key, AIConfig.getWebSearchResults());
   },
 };

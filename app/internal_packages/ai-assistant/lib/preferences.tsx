@@ -553,6 +553,110 @@ export default class AIPreferences extends React.Component<
         </section>
 
         <section>
+          <h3>{localized('RAG and agent parameters')}</h3>
+          <details>
+            <summary
+              style={{
+                cursor: 'pointer',
+                fontSize: 12,
+                color: 'var(--text-color-subtle)',
+                marginBottom: 8,
+              }}
+            >
+              {localized('Advanced settings (click to expand)')}
+            </summary>
+            <div
+              style={{
+                marginTop: 10,
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0 20px',
+              }}
+            >
+              <label>
+                {localized('Chunk size (chars)')}
+                <input
+                  type="number"
+                  min={200}
+                  max={8000}
+                  step={100}
+                  defaultValue={AIConfig.getChunkSize()}
+                  onBlur={(e) => this._set(K.chunkSize, Number(e.target.value))}
+                />
+              </label>
+              <label>
+                {localized('Chunk overlap (chars)')}
+                <input
+                  type="number"
+                  min={0}
+                  max={1000}
+                  step={50}
+                  defaultValue={AIConfig.getChunkOverlap()}
+                  onBlur={(e) => this._set(K.chunkOverlap, Number(e.target.value))}
+                />
+              </label>
+              <label>
+                {localized('Top-K sources retrieved')}
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={AIConfig.getRetrieveK()}
+                  onBlur={(e) => this._set(K.retrieveK, Number(e.target.value))}
+                />
+              </label>
+              <label>
+                {localized('Context budget (chars)')}
+                <input
+                  type="number"
+                  min={1000}
+                  max={64000}
+                  step={1000}
+                  defaultValue={AIConfig.getContextBudget()}
+                  onBlur={(e) => this._set(K.contextBudget, Number(e.target.value))}
+                />
+              </label>
+              <label>
+                {localized('History fraction (0.1 – 0.9)')}
+                <input
+                  type="number"
+                  min={0.1}
+                  max={0.9}
+                  step={0.05}
+                  defaultValue={AIConfig.getHistoryFraction()}
+                  onBlur={(e) => this._set(K.historyFraction, Number(e.target.value))}
+                />
+              </label>
+              <label>
+                {localized('Max agent steps')}
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={AIConfig.getMaxAgentSteps()}
+                  onBlur={(e) => this._set(K.maxAgentSteps, Number(e.target.value))}
+                />
+              </label>
+              <label>
+                {localized('Web search results')}
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={AIConfig.getWebSearchResults()}
+                  onBlur={(e) => this._set(K.webSearchResults, Number(e.target.value))}
+                />
+              </label>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 8 }}>
+              {localized(
+                'Changes take effect immediately. Changing chunk size or overlap requires re-indexing.'
+              )}
+            </div>
+          </details>
+        </section>
+
+        <section>
           <h3>{localized('Web search (agent skill)')}</h3>
           <label>
             <input
