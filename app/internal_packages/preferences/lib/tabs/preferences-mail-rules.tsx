@@ -444,7 +444,7 @@ class PreferencesMailRules extends React.Component<
               </div>
               <div>
                 <strong>{AccountStore.accountForId(accountId).emailAddress}</strong>
-                {` — ${Number(count).toLocaleString()} ${localized(`processed`)}`}
+                {` (${Number(count).toLocaleString()} ${localized(`processed`)})`}
               </div>
               <div style={{ flex: 1 }} />
               <button

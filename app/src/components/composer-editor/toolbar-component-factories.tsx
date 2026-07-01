@@ -446,7 +446,12 @@ export function BuildFontPicker(config) {
   };
 }
 
-export function BuildFontSizeInput(config: { type: string; default?: string; iconClass?: string }) {
+export function BuildFontSizeInput(config: {
+  type: string;
+  default?: string;
+  configKey?: string;
+  iconClass?: string;
+}) {
   const PRESET_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
 
   return class FontSizeInput extends React.Component<
@@ -460,7 +465,9 @@ export function BuildFontSizeInput(config: { type: string; default?: string; ico
       const distinct = collectMarkValues(this.props.value, config.type).map((v) =>
         ptFromMarkValue(v)
       );
-      return resolveDisplay(distinct, config.default || '');
+      const effectiveDefault =
+        (config.configKey && AppEnv.config?.get(config.configKey)) || config.default || '';
+      return resolveDisplay(distinct, effectiveDefault);
     }
 
     _apply = (raw: string) => {
@@ -566,6 +573,7 @@ export function BuildFontSizeInput(config: { type: string; default?: string; ico
 export function BuildFontFacePicker(config: {
   type: string;
   default?: string;
+  configKey?: string;
   options: Array<{ name: string; value: string }>;
 }) {
   return class FontFacePicker extends React.Component<
@@ -576,12 +584,16 @@ export function BuildFontFacePicker(config: {
 
     state = { open: false, custom: false, customValue: '' };
 
+    _effectiveDefault() {
+      return (config.configKey && AppEnv.config?.get(config.configKey)) || config.default || '';
+    }
+
     _activeValue() {
       const distinct = collectMarkValues(this.props.value, config.type).map((v) =>
         faceFromMarkValue(v, config.options)
       );
       // Show the option label for the resolved value, blank when mixed.
-      const { display, mixed } = resolveDisplay(distinct, config.default || '');
+      const { display, mixed } = resolveDisplay(distinct, this._effectiveDefault());
       if (mixed) return { label: '', value: '' };
       const opt = config.options.find((o) => o.value === display);
       return { label: opt ? opt.name : display, value: display };
@@ -620,7 +632,11 @@ export function BuildFontFacePicker(config: {
     }
 
     _apply = (faceValue: string | null) => {
-      applyValueForMarkSafe(this.props.editor, config.type, faceValue);
+      // Selecting the default (e.g. "Sans Serif" = 'sans-serif') clears any existing
+      // font mark rather than writing a CSS generic into the HTML. CSS generics like
+      // 'sans-serif' have no real font backing in LibreOffice/Word, causing errors on paste.
+      const markValue = faceValue === this._effectiveDefault() ? null : faceValue;
+      applyValueForMarkSafe(this.props.editor, config.type, markValue);
       this.setState({ open: false, custom: false });
     };
 

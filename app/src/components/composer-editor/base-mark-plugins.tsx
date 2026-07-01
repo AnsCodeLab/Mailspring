@@ -290,11 +290,13 @@ const BaseMarkPlugin: ComposerEditorPlugin = {
       BuildFontFacePicker({
         type: 'face',
         default: DEFAULT_FONT_FACE,
+        configKey: 'core.composing.defaultFontFace',
         options: DEFAULT_FONT_FACE_OPTIONS,
       }),
       BuildFontSizeInput({
         type: 'size',
-        default: '11',
+        default: '12',
+        configKey: 'core.composing.defaultFontSize',
         iconClass: 'fa fa-text-height',
       }),
     ]),

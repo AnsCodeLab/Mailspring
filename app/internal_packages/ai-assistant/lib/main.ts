@@ -1,4 +1,9 @@
-import { ComponentRegistry, PreferencesUIStore, localized } from 'mailspring-exports';
+import {
+  ComponentRegistry,
+  WorkspaceStore,
+  PreferencesUIStore,
+  localized,
+} from 'mailspring-exports';
 import { AIConfig } from './config';
 
 // Config subscriptions + prefs tab teardown — live for the whole package lifetime.
@@ -17,18 +22,45 @@ function registerPreferences() {
 }
 
 function registerFeatureUI() {
-  // Filled in by later tasks (chat panel, composer assist). Guarded by AIConfig.isEnabled().
-  const ChatPanel = require('./chat-panel').default;
-  ComponentRegistry.register(ChatPanel, { role: 'MessageListSidebar:ContactCard' });
-  featureDisposables.push(() => ComponentRegistry.unregister(ChatPanel));
+  const React = require('react');
+  const ReactDOM = require('react-dom');
+  const { default: ChatPanel, AIToggleButton } = require('./chat-panel');
+
+  // Render the chat panel as a real flex sibling to the email content column so it
+  // pushes the email left rather than floating on top of it.
+  const panelContainer = document.createElement('div');
+  panelContainer.id = 'ai-chat-panel-root';
+  panelContainer.style.cssText = 'display:flex;flex-shrink:0;height:100%;';
+
+  const attachPanel = () => {
+    // Insert right after the MessageList column (before MessageListSidebar / contact card)
+    const msgCol = document.querySelector('.column-MessageList');
+    const parent = msgCol?.parentElement;
+    if (parent && msgCol) {
+      parent.insertBefore(panelContainer, msgCol.nextSibling);
+    } else {
+      document.body.appendChild(panelContainer);
+    }
+  };
+  // Wait for the sheet columns to render, then attach
+  setTimeout(attachPanel, 600);
+
+  ReactDOM.render(React.createElement(ChatPanel), panelContainer);
+  featureDisposables.push(() => {
+    ReactDOM.unmountComponentAtNode(panelContainer);
+    panelContainer.remove();
+  });
+
+  ComponentRegistry.register(AIToggleButton, { role: 'ThreadActionsToolbarButton' });
+  featureDisposables.push(() => ComponentRegistry.unregister(AIToggleButton));
+
+  const ThreadChatBadge = require('./thread-chat-badge').default;
+  ComponentRegistry.register(ThreadChatBadge, { role: 'ThreadListIcon' });
+  featureDisposables.push(() => ComponentRegistry.unregister(ThreadChatBadge));
 
   const ComposerAssist = require('./composer-assist').default;
   ComponentRegistry.register(ComposerAssist, { role: 'Composer:ActionButton' });
   featureDisposables.push(() => ComponentRegistry.unregister(ComposerAssist));
-
-  const PinAction = require('./pin-action').default;
-  ComponentRegistry.register(PinAction, { role: 'ThreadActionsToolbarButton' });
-  featureDisposables.push(() => ComponentRegistry.unregister(PinAction));
 
   const { Skills } = require('./skills/registry');
   const { kbSearchSkill } = require('./skills/builtin/kb-search');
@@ -58,6 +90,19 @@ function registerFeatureUI() {
 }
 
 export function activate() {
+  const { windowType } = AppEnv.getLoadSettings();
+
+  if (windowType === 'composer') {
+    // In the composer window only register the AI assist toolbar button.
+    // Everything else (indexer, chat panel, skills) belongs to the default window only.
+    if (AIConfig.isEnabled()) {
+      const ComposerAssist = require('./composer-assist').default;
+      ComponentRegistry.register(ComposerAssist, { role: 'Composer:ActionButton' });
+      coreDisposables.push(() => ComponentRegistry.unregister(ComposerAssist));
+    }
+    return;
+  }
+
   // Preferences tab is always available so the user can enable the feature.
   registerPreferences();
 

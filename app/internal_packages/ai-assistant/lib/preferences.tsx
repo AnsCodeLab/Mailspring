@@ -3,33 +3,189 @@ import { localized, KeyManager } from 'mailspring-exports';
 import { AIConfig, KEY_API, KEY_WEBSEARCH_API } from './config';
 import { AIService } from './ai-service';
 
+const IN_APP_MODELS = [
+  {
+    id: 'Xenova/all-MiniLM-L6-v2',
+    label: 'all-MiniLM-L6-v2',
+    desc: 'Fast & small, recommended for most users',
+    size: '~23 MB',
+    dims: 384,
+  },
+  {
+    id: 'Xenova/all-MiniLM-L12-v2',
+    label: 'all-MiniLM-L12-v2',
+    desc: 'More accurate than L6, still compact',
+    size: '~33 MB',
+    dims: 384,
+  },
+  {
+    id: 'Xenova/all-mpnet-base-v2',
+    label: 'all-mpnet-base-v2',
+    desc: 'High accuracy, larger vectors',
+    size: '~90 MB',
+    dims: 768,
+  },
+  {
+    id: 'BAAI/bge-small-en-v1.5',
+    label: 'bge-small-en-v1.5',
+    desc: 'High quality English embeddings, very fast',
+    size: '~33 MB',
+    dims: 384,
+  },
+  {
+    id: 'BAAI/bge-base-en-v1.5',
+    label: 'bge-base-en-v1.5',
+    desc: 'Top-tier English quality',
+    size: '~109 MB',
+    dims: 768,
+  },
+  {
+    id: 'nomic-ai/nomic-embed-text-v1',
+    label: 'nomic-embed-text-v1',
+    desc: 'Strong general-purpose English embeddings',
+    size: '~137 MB',
+    dims: 768,
+  },
+  {
+    id: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+    label: 'multilingual-MiniLM-L12-v2',
+    desc: 'Multilingual support (50+ languages)',
+    size: '~75 MB',
+    dims: 384,
+  },
+] as const;
+
+const WEB_SEARCH_PROVIDERS = [
+  {
+    id: 'brave',
+    label: 'Brave Search',
+    sublabel: 'Free tier: 2,000 req/month',
+    url: 'https://api.search.brave.com/res/v1/web/search',
+    keyUrl: 'https://brave.com/search/api/',
+  },
+  {
+    id: 'tavily',
+    label: 'Tavily',
+    sublabel: 'Free tier: 1,000 req/month, AI-optimized',
+    url: 'https://api.tavily.com/search',
+    keyUrl: 'https://tavily.com/',
+  },
+  {
+    id: 'serper',
+    label: 'Serper',
+    sublabel: 'Free: 2,500 req, Google results',
+    url: 'https://google.serper.dev/search',
+    keyUrl: 'https://serper.dev/',
+  },
+  {
+    id: 'searxng',
+    label: 'SearXNG',
+    sublabel: 'Self-hosted, no API key needed',
+    url: 'http://localhost:8888',
+    keyUrl: null,
+  },
+  { id: 'custom', label: 'Custom', sublabel: '', url: '', keyUrl: null },
+] as const;
+
+const CHAT_PROVIDERS = [
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    sublabel: 'Cloud (requires API key)',
+    url: 'https://api.openai.com/v1',
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic',
+    sublabel: 'Cloud (requires API key)',
+    url: 'https://api.anthropic.com/v1',
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    sublabel: 'Cloud (requires API key)',
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  },
+  {
+    id: 'local',
+    label: 'Local (OpenAI-compatible)',
+    sublabel: 'Ollama, LM Studio, vLLM, Jan (no API key needed)',
+    url: 'http://localhost:11434/v1',
+  },
+] as const;
+
+function detectChatProvider(url: string): string {
+  if (url.includes('api.openai.com')) return 'openai';
+  if (url.includes('api.anthropic.com')) return 'anthropic';
+  if (url.includes('generativelanguage.googleapis.com')) return 'gemini';
+  return 'local';
+}
+
+function detectWebSearchProvider(url: string) {
+  if (url.includes('brave.com')) return 'brave';
+  if (url.includes('tavily.com')) return 'tavily';
+  if (url.includes('serper.dev')) return 'serper';
+  if (url.includes('localhost') || url.includes('searxng') || url.includes('searx'))
+    return 'searxng';
+  return url ? 'custom' : 'brave';
+}
+
 export default class AIPreferences extends React.Component<
   Record<string, never>,
   {
     apiKey: string;
     testing: boolean;
     testResult: string;
+    availableModels: string[];
+    loadingModels: boolean;
     indexProgress: { done: number; total: number; running: boolean };
     reindexing: boolean;
+    backendStatus: 'idle' | 'checking' | 'ready' | 'error';
+    backendError: string;
+    embedSelectValue: string;
+    webSearchProvider: string;
+    endpointValue: string;
+    selectedProvider: string;
   }
 > {
   state = {
     apiKey: '',
     testing: false,
     testResult: '',
+    availableModels: [] as string[],
+    loadingModels: false,
     indexProgress: { done: 0, total: 0, running: false },
     reindexing: false,
+    backendStatus: 'idle' as const,
+    backendError: '',
+    embedSelectValue: AIConfig.getEmbeddingInAppModel(),
+    webSearchProvider: detectWebSearchProvider(AIConfig.getWebSearchUrl()),
+    endpointValue: AIConfig.getEndpoint(),
+    selectedProvider: detectChatProvider(AIConfig.getEndpoint()),
   };
   private progressInterval: ReturnType<typeof setInterval> | null = null;
+  private _endpointSub: { dispose: () => void } | null = null;
 
   componentDidMount() {
     KeyManager.getPassword(KEY_API).then((k) => this.setState({ apiKey: k || '' }));
     this._startProgressPolling();
+    if (AIConfig.isKnowledgeBaseEnabled()) this._checkBackendReady();
+    this._fetchModels();
+    this._endpointSub = AppEnv.config.onDidChange(AIConfig.keys.endpoint, () => {
+      this._fetchModels();
+    });
   }
 
   componentWillUnmount() {
     this._stopProgressPolling();
+    if (this._endpointSub) this._endpointSub.dispose();
   }
+
+  _fetchModels = async () => {
+    this.setState({ loadingModels: true });
+    const models = await AIService.listModels();
+    this.setState({ availableModels: models, loadingModels: false });
+  };
 
   _startProgressPolling() {
     this._stopProgressPolling();
@@ -63,12 +219,45 @@ export default class AIPreferences extends React.Component<
     this.setState({ indexProgress: { done: 0, total: 0, running: false } });
   };
 
+  _checkBackendReady = async () => {
+    this.setState({ backendStatus: 'checking', backendError: '' });
+    try {
+      const { getEmbeddingProvider } = require('./embeddings/provider');
+      await getEmbeddingProvider().ready();
+      this.setState({ backendStatus: 'ready' });
+    } catch (e) {
+      this.setState({ backendStatus: 'error', backendError: (e as Error).message });
+    }
+  };
+
+  _restartIndexer = () => {
+    const { Indexer } = require('./indexer');
+    Indexer.stop();
+    if (AIConfig.isKnowledgeBaseEnabled()) Indexer.start();
+  };
+
   _set = (key: string, value: any) => {
     AppEnv.config.set(key, value);
-    this.setState({}, () => {
-      // Restart progress polling when KB enabled state changes.
+    this.setState({} as never, () => {
       if (key === AIConfig.keys.kbEnabled) {
         this._startProgressPolling();
+        if (AIConfig.isKnowledgeBaseEnabled()) {
+          this._checkBackendReady().then(() => {
+            if (this.state.backendStatus === 'ready') this._restartIndexer();
+          });
+        }
+      }
+      if (
+        key === AIConfig.keys.embedBackend ||
+        key === AIConfig.keys.embedInAppModel ||
+        key === AIConfig.keys.embedServerUrl ||
+        key === AIConfig.keys.embedModel
+      ) {
+        this._checkBackendReady().then(() => {
+          if (AIConfig.isKnowledgeBaseEnabled() && this.state.backendStatus === 'ready') {
+            this._restartIndexer();
+          }
+        });
       }
     });
   };
@@ -80,15 +269,30 @@ export default class AIPreferences extends React.Component<
 
   _test = async () => {
     this.setState({ testing: true, testResult: '' });
-    const r = await AIService.testConnection();
+    const [r] = await Promise.all([
+      AIService.testConnection(),
+      new Promise((res) => setTimeout(res, 600)),
+    ]);
     this.setState({
       testing: false,
-      testResult: r.ok ? localized('Connected ✓') : r.error || 'Failed',
+      testResult: (r as any).ok
+        ? `✓ ${(r as any).error || localized('Connected')}`
+        : (r as any).error || localized('Failed'),
     });
   };
 
   render() {
     const K = AIConfig.keys;
+    const { availableModels, loadingModels, embedSelectValue } = this.state;
+    const currentModel = AIConfig.getModel();
+    const modelInList = availableModels.includes(currentModel);
+
+    const currentEmbedId = AIConfig.getEmbeddingInAppModel();
+    const presetEmbed = IN_APP_MODELS.find((m) => m.id === currentEmbedId);
+    const isCustomEmbed =
+      embedSelectValue === '__custom__' ||
+      (!presetEmbed && !IN_APP_MODELS.find((m) => m.id === embedSelectValue));
+
     return (
       <div className="container-ai-assistant" style={{ maxWidth: 600 }}>
         <section>
@@ -106,20 +310,82 @@ export default class AIPreferences extends React.Component<
         <section>
           <h3>{localized('Chat model')}</h3>
           <label>
+            {localized('Provider')}
+            <select
+              value={this.state.selectedProvider}
+              onChange={(e) => {
+                const p = CHAT_PROVIDERS.find((x) => x.id === e.target.value);
+                const url = p?.url || this.state.endpointValue;
+                this.setState({ selectedProvider: e.target.value, endpointValue: url });
+                this._set(K.endpoint, url);
+                this._fetchModels();
+              }}
+            >
+              {CHAT_PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label} ({p.sublabel})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             {localized('Endpoint URL')}
             <input
               type="text"
-              defaultValue={AIConfig.getEndpoint()}
-              onBlur={(e) => this._set(K.endpoint, e.target.value)}
+              value={this.state.endpointValue}
+              onChange={(e) =>
+                this.setState({
+                  endpointValue: e.target.value,
+                  selectedProvider: detectChatProvider(e.target.value),
+                })
+              }
+              onBlur={(e) => {
+                this._set(K.endpoint, e.target.value);
+                this._fetchModels();
+              }}
             />
           </label>
           <label>
             {localized('Model')}
-            <input
-              type="text"
-              defaultValue={AIConfig.getModel()}
-              onBlur={(e) => this._set(K.model, e.target.value)}
-            />
+            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              {availableModels.length > 0 ? (
+                <select
+                  value={modelInList ? currentModel : '__manual__'}
+                  onChange={(e) => {
+                    if (e.target.value !== '__manual__') this._set(K.model, e.target.value);
+                  }}
+                  style={{ flex: 1 }}
+                >
+                  {availableModels.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {!modelInList && <option value="__manual__">{currentModel} (manual)</option>}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  defaultValue={currentModel}
+                  onBlur={(e) => this._set(K.model, e.target.value)}
+                  style={{ flex: 1 }}
+                  placeholder="e.g. gpt-4o-mini"
+                />
+              )}
+              <button
+                onClick={this._fetchModels}
+                disabled={loadingModels}
+                title={localized('Reload models from endpoint')}
+                style={{ flexShrink: 0 }}
+              >
+                {loadingModels ? '…' : '↺'}
+              </button>
+            </div>
+            {availableModels.length === 0 && !loadingModels && (
+              <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
+                {localized('Connect to endpoint to load available models')}
+              </div>
+            )}
           </label>
           <label>
             {localized('API key')}
@@ -130,10 +396,24 @@ export default class AIPreferences extends React.Component<
               onBlur={(e) => this._saveKey(KEY_API, e.target.value)}
             />
           </label>
-          <button onClick={this._test} disabled={this.state.testing}>
-            {localized('Test connection')}
-          </button>{' '}
-          <span>{this.state.testResult}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={this._test} disabled={this.state.testing}>
+              {this.state.testing ? localized('Testing…') : localized('Test connection')}
+            </button>
+            {this.state.testResult && (
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: this.state.testResult.includes('✓')
+                    ? 'var(--color-success, green)'
+                    : 'var(--color-danger, red)',
+                }}
+              >
+                {this.state.testResult}
+              </span>
+            )}
+          </div>
         </section>
 
         <section>
@@ -149,36 +429,110 @@ export default class AIPreferences extends React.Component<
           <label>
             {localized('Embeddings backend')}
             <select
-              defaultValue={AIConfig.getEmbeddingBackend()}
+              value={AIConfig.getEmbeddingBackend()}
               onChange={(e) => this._set(K.embedBackend, e.target.value)}
             >
               <option value="in-app">{localized('In-app (bundled, zero setup)')}</option>
               <option value="server">{localized('Local server (Ollama / LM Studio)')}</option>
             </select>
           </label>
-          <label>
-            {localized('Local server URL')}
-            <input
-              type="text"
-              defaultValue={AIConfig.getEmbeddingServerUrl()}
-              onBlur={(e) => this._set(K.embedServerUrl, e.target.value)}
-            />
-          </label>
-          <label>
-            {localized('Embedding model')}
-            <input
-              type="text"
-              defaultValue={AIConfig.getEmbeddingModel()}
-              onBlur={(e) => this._set(K.embedModel, e.target.value)}
-            />
-          </label>
+          {AIConfig.isKnowledgeBaseEnabled() && this.state.backendStatus !== 'idle' && (
+            <div style={{ marginBottom: 6, fontSize: 12 }}>
+              {this.state.backendStatus === 'checking' && (
+                <span style={{ color: 'var(--text-color-subtle)' }}>
+                  {localized('Checking backend…')}
+                </span>
+              )}
+              {this.state.backendStatus === 'ready' && (
+                <span style={{ color: 'var(--color-success, green)' }}>
+                  {localized('Backend ready ✓')}
+                </span>
+              )}
+              {this.state.backendStatus === 'error' && (
+                <span style={{ color: 'var(--color-danger, red)' }}>
+                  {localized('Backend unavailable: ')}
+                  {this.state.backendError}
+                </span>
+              )}
+            </div>
+          )}
+          {AIConfig.getEmbeddingBackend() === 'in-app' && (
+            <>
+              <label>
+                {localized('Embedding model')}
+                <select
+                  value={embedSelectValue}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    this.setState({ embedSelectValue: v });
+                    if (v !== '__custom__') this._set(K.embedInAppModel, v);
+                  }}
+                >
+                  {IN_APP_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                  <option value="__custom__">{localized('Custom (Hugging Face)…')}</option>
+                </select>
+              </label>
+              {isCustomEmbed && (
+                <label>
+                  {localized('Hugging Face model ID')}
+                  <input
+                    type="text"
+                    defaultValue={
+                      embedSelectValue === '__custom__' ? currentEmbedId : embedSelectValue
+                    }
+                    placeholder="org/model-name"
+                    onBlur={(e) => this._set(K.embedInAppModel, e.target.value)}
+                  />
+                </label>
+              )}
+              {!isCustomEmbed && (
+                <div style={{ fontSize: 12, color: 'var(--text-color-subtle)', marginBottom: 6 }}>
+                  {(() => {
+                    const preset = IN_APP_MODELS.find((m) => m.id === embedSelectValue);
+                    return preset ? (
+                      <>
+                        {preset.dims} dimensions · {preset.size} download · {preset.desc}
+                        {' · '}
+                        {localized('cached locally after first use')}
+                      </>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+            </>
+          )}
+          {AIConfig.getEmbeddingBackend() === 'server' && (
+            <>
+              <label>
+                {localized('Local server URL')}
+                <input
+                  type="text"
+                  defaultValue={AIConfig.getEmbeddingServerUrl()}
+                  onBlur={(e) => this._set(K.embedServerUrl, e.target.value)}
+                />
+              </label>
+              <label>
+                {localized('Embedding model')}
+                <input
+                  type="text"
+                  defaultValue={AIConfig.getEmbeddingModel()}
+                  onBlur={(e) => this._set(K.embedModel, e.target.value)}
+                />
+              </label>
+            </>
+          )}
           {AIConfig.isKnowledgeBaseEnabled() && (
             <div id="ai-index-progress" style={{ marginTop: 8 }}>
               <div style={{ marginBottom: 4 }}>
-                {localized('Indexed %1 / %2', [
+                {localized(
+                  'Indexed %@ / %@',
                   String(this.state.indexProgress.done),
-                  String(this.state.indexProgress.total),
-                ])}
+                  String(this.state.indexProgress.total)
+                )}
                 {this.state.indexProgress.running ? localized(' (running…)') : ''}
               </div>
               {this.state.indexProgress.total > 0 && (
@@ -206,25 +560,81 @@ export default class AIPreferences extends React.Component<
               checked={AIConfig.isWebSearchEnabled()}
               onChange={(e) => this._set(K.webSearchEnabled, e.target.checked)}
             />{' '}
-            {localized(
-              'Enable web search — queries leave your machine (use local SearXNG for privacy)'
-            )}
+            {localized('Enable web search')}
           </label>
-          <label>
-            {localized('Provider URL')}
-            <input
-              type="text"
-              defaultValue={AIConfig.getWebSearchUrl()}
-              onBlur={(e) => this._set(K.webSearchUrl, e.target.value)}
-            />
-          </label>
-          <label>
-            {localized('API key')}
-            <input
-              type="password"
-              onBlur={(e) => this._saveKey(KEY_WEBSEARCH_API, e.target.value)}
-            />
-          </label>
+          {AIConfig.isWebSearchEnabled() && (
+            <>
+              <label>
+                {localized('Provider')}
+                <select
+                  value={this.state.webSearchProvider}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const preset = WEB_SEARCH_PROVIDERS.find((p) => p.id === id);
+                    this.setState({ webSearchProvider: id });
+                    if (preset && preset.url) this._set(K.webSearchUrl, preset.url);
+                  }}
+                >
+                  {WEB_SEARCH_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                      {p.sublabel ? ` (${p.sublabel})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(() => {
+                const preset = WEB_SEARCH_PROVIDERS.find(
+                  (p) => p.id === this.state.webSearchProvider
+                );
+                return (
+                  <>
+                    {(this.state.webSearchProvider === 'custom' ||
+                      this.state.webSearchProvider === 'searxng') && (
+                      <label>
+                        {localized('Provider URL')}
+                        <input
+                          key={this.state.webSearchProvider}
+                          type="text"
+                          defaultValue={AIConfig.getWebSearchUrl()}
+                          onBlur={(e) => this._set(K.webSearchUrl, e.target.value)}
+                        />
+                      </label>
+                    )}
+                    {preset?.id !== 'searxng' && preset?.id !== 'custom' && (
+                      <label>
+                        {localized('API key')}
+                        {preset?.keyUrl && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--text-color-subtle)',
+                              marginLeft: 6,
+                            }}
+                          >
+                            {localized('Get one at')}{' '}
+                            <a
+                              href={preset.keyUrl}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                require('electron').shell.openExternal(preset.keyUrl!);
+                              }}
+                            >
+                              {preset.keyUrl.replace('https://', '')}
+                            </a>
+                          </span>
+                        )}
+                        <input
+                          type="password"
+                          onBlur={(e) => this._saveKey(KEY_WEBSEARCH_API, e.target.value)}
+                        />
+                      </label>
+                    )}
+                  </>
+                );
+              })()}
+            </>
+          )}
         </section>
       </div>
     );

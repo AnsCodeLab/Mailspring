@@ -40,6 +40,12 @@ export class ChatStore {
     });
     tx();
   }
+  threadIdsWithHistory(): string[] {
+    return (
+      this.db.prepare('SELECT DISTINCT threadId FROM chats').all() as Array<{ threadId: string }>
+    ).map((r) => r.threadId);
+  }
+
   clearAll(): void {
     this.db.exec('DELETE FROM chats; DELETE FROM chat_refs;');
   }

@@ -4,6 +4,8 @@ export interface EmbeddingProvider {
   embed(texts: string[], signal?: AbortSignal): Promise<number[][]>;
   dim(): Promise<number>;
   id(): string;
+  /** Resolves when the backend is ready to serve embeddings; throws if unavailable. */
+  ready(): Promise<void>;
 }
 
 export function getEmbeddingProvider(): EmbeddingProvider {
@@ -15,5 +17,5 @@ export function getEmbeddingProvider(): EmbeddingProvider {
     );
   }
   const { InAppEmbeddingProvider } = require('./in-app');
-  return new InAppEmbeddingProvider(AIConfig.getEmbeddingModel());
+  return new InAppEmbeddingProvider(AIConfig.getEmbeddingInAppModel());
 }

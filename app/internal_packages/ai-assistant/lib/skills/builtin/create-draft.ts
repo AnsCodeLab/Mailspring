@@ -5,7 +5,7 @@ export const createDraftSkill: Skill = {
   name: 'create_draft',
   tier: 'write-reversible',
   description:
-    'Create an email draft (a reply if threadId is given, else a new message). Never sends — opens it for the user to review.',
+    'Create an email draft (a reply if threadId is given, else a new message). Never sends; opens it for the user to review.',
   parameters: {
     type: 'object',
     properties: {

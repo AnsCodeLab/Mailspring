@@ -5,11 +5,14 @@ const K = {
   model: 'ai-assistant.model',
   kbEnabled: 'ai-assistant.knowledgeBase.enabled',
   embedBackend: 'ai-assistant.embeddings.backend',
+  embedInAppModel: 'ai-assistant.embeddings.inAppModel',
   embedServerUrl: 'ai-assistant.embeddings.serverUrl',
   embedModel: 'ai-assistant.embeddings.model',
   webSearchEnabled: 'ai-assistant.webSearch.enabled',
   webSearchProvider: 'ai-assistant.webSearch.provider',
   webSearchUrl: 'ai-assistant.webSearch.url',
+  panelOpen: 'ai-assistant.panel.open',
+  panelWidth: 'ai-assistant.panel.width',
 };
 
 export const KEY_API = 'ai-assistant.apiKey';
@@ -28,10 +31,13 @@ export const AIConfig = {
   getEndpoint: () => String(get(K.endpoint, 'https://api.openai.com/v1')).replace(/\/+$/, ''),
   getModel: () => get(K.model, 'gpt-4o-mini'),
   getEmbeddingBackend: () => get<'in-app' | 'server'>(K.embedBackend, 'in-app'),
+  getEmbeddingInAppModel: () => get(K.embedInAppModel, 'Xenova/all-MiniLM-L6-v2'),
   getEmbeddingServerUrl: () =>
     String(get(K.embedServerUrl, 'http://localhost:11434/v1')).replace(/\/+$/, ''),
   getEmbeddingModel: () => get(K.embedModel, 'all-MiniLM-L6-v2'),
   isWebSearchEnabled: () => get(K.webSearchEnabled, false) === true,
   getWebSearchProvider: () => get(K.webSearchProvider, 'searxng'),
   getWebSearchUrl: () => String(get(K.webSearchUrl, '')).replace(/\/+$/, ''),
+  isPanelOpen: () => get(K.panelOpen, true) === true,
+  getPanelWidth: () => get<number>(K.panelWidth, 380),
 };

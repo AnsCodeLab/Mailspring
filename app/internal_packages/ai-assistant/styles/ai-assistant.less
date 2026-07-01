@@ -1,8 +1,13 @@
 @import 'ui-variables';
 
+// ─── Preferences ───────────────────────────────────────────────────────────────
+
 .container-ai-assistant {
   section {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+
+    h2 { font-size: 15px; font-weight: 700; margin: 0 0 14px; }
+    h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; color: @text-color; opacity: 0.85; }
   }
 
   label {
@@ -19,82 +24,512 @@
       margin-top: 4px;
       box-sizing: border-box;
     }
+    input[type='checkbox'] { margin-right: 6px; }
+  }
+}
 
-    input[type='checkbox'] {
-      margin-right: 6px;
+// ─── AI Toggle toolbar button ──────────────────────────────────────────────────
+
+.ai-toggle-btn {
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s;
+
+  &:hover { opacity: 1; }
+  &.active {
+    opacity: 1;
+    color: var(--accent-primary, #6366f1);
+  }
+}
+
+// ─── Floating Panel ────────────────────────────────────────────────────────────
+
+.ai-float-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex-shrink: 0;
+  background: @background-primary;
+  border-left: 1px solid @border-color-divider;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+// ─── Panel header ──────────────────────────────────────────────────────────────
+
+.ai-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 8px 14px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent-primary, #6366f1) 8%, @background-secondary),
+    @background-secondary
+  );
+  border-bottom: 1px solid @border-color-divider;
+  flex-shrink: 0;
+  min-height: 40px;
+
+  .ai-model-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    overflow: hidden;
+    min-width: 0;
+
+    .ai-sparkle {
+      font-size: 13px;
+      color: var(--accent-primary, #6366f1);
+      flex-shrink: 0;
+    }
+
+    .ai-header-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+
+      .ai-thread-subject {
+        font-size: 12px;
+        font-weight: 600;
+        color: @text-color;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.3;
+      }
+      .ai-model-name {
+        font-size: 10px;
+        font-weight: 500;
+        color: @text-color-very-subtle;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.3;
+      }
+    }
+  }
+
+  .ai-scope-toggle {
+    display: flex;
+    background: @background-primary;
+    border: 1px solid @border-color-divider;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+
+    .ai-scope-btn {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 9px;
+      border: none;
+      background: none;
+      color: @text-color-subtle;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+
+      &.active {
+        background: var(--accent-primary, #6366f1);
+        color: #fff;
+        border-radius: 4px;
+      }
+      &:not(.active):hover {
+        background: @background-secondary;
+        color: @text-color;
+      }
+    }
+  }
+
+  .ai-clear-btn,
+  .ai-close-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: @text-color-very-subtle;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 13px;
+    transition: background 0.12s, color 0.12s;
+
+    &:hover {
+      background: @background-tertiary;
+      color: @text-color;
     }
   }
 }
 
-.ai-chat-panel {
+// ─── Scrollable messages ───────────────────────────────────────────────────────
+
+.ai-chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 12px 6px;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 8px;
-  box-sizing: border-box;
+  gap: 10px;
 
-  &.empty {
-    align-items: center;
-    justify-content: center;
-    color: @text-color-very-subtle;
-    font-size: 13px;
-    text-align: center;
-    padding: 20px;
-  }
-
-  .ai-chat-scroll {
-    flex: 1;
-    overflow-y: auto;
-    margin-bottom: 8px;
+  // Empty state
+  .ai-empty-state {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
     gap: 8px;
+    padding: 40px 20px;
+    color: @text-color-very-subtle;
+    text-align: center;
 
-    .ai-turn {
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-wrap: break-word;
+    .ai-empty-icon {
+      font-size: 32px;
+      opacity: 0.3;
+      color: var(--accent-primary, #6366f1);
+    }
+    .ai-empty-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: @text-color-subtle;
+    }
+    .ai-empty-hint { font-size: 12px; }
+  }
 
-      &.user {
-        background: @background-secondary;
-        align-self: flex-end;
-        max-width: 90%;
-      }
+  // Suggestion chips
+  .ai-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 0;
 
-      &.assistant {
-        background: @background-off-primary;
-        align-self: flex-start;
-        max-width: 95%;
+    .ai-suggestion-chip {
+      text-align: left;
+      padding: 9px 13px;
+      border-radius: 10px;
+      border: 1px solid @border-color-divider;
+      background: @background-primary;
+      color: @text-color;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, transform 0.1s;
+
+      &:hover {
+        background: color-mix(in srgb, var(--accent-primary, #6366f1) 6%, @background-primary);
+        border-color: color-mix(in srgb, var(--accent-primary, #6366f1) 40%, @border-color-divider);
+        transform: translateX(2px);
       }
     }
   }
 
-  .ai-chat-actions {
+  // Turn bubbles
+  .ai-turn {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    animation: ai-turn-in 0.18s ease;
+
+    &.user {
+      flex-direction: row-reverse;
+
+      .ai-bubble {
+        background: color-mix(in srgb, var(--accent-primary, #6366f1) 14%, @background-primary);
+        border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 28%, @border-color-divider);
+        border-radius: 14px 14px 4px 14px;
+        color: @text-color;
+      }
+    }
+
+    &.assistant {
+      .ai-avatar {
+        flex-shrink: 0;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--accent-primary, #6366f1) 20%, @background-secondary),
+          @background-secondary
+        );
+        border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 20%, @border-color-divider);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: var(--accent-primary, #6366f1);
+        margin-top: 2px;
+      }
+
+      .ai-bubble {
+        background: @background-secondary;
+        border-radius: 4px 14px 14px 14px;
+        border: 1px solid @border-color-divider;
+      }
+    }
+
+    .ai-bubble {
+      padding: 9px 13px;
+      font-size: 13px;
+      line-height: 1.6;
+      word-wrap: break-word;
+      max-width: calc(100% - 34px);
+
+      // Markdown styles
+      p { margin: 0 0 6px; &:last-child { margin-bottom: 0; } }
+      .ai-para-gap { height: 6px; }
+      strong { font-weight: 600; }
+      em { font-style: italic; }
+      .ai-inline-code {
+        font-family: monospace;
+        font-size: 12px;
+        background: color-mix(in srgb, @text-color 8%, @background-primary);
+        border: 1px solid @border-color-divider;
+        border-radius: 3px;
+        padding: 0 4px;
+      }
+      .ai-code-block {
+        position: relative;
+        background: color-mix(in srgb, @text-color 5%, @background-primary);
+        border: 1px solid @border-color-divider;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin: 6px 0;
+        overflow-x: auto;
+
+        code {
+          font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+          font-size: 12px;
+          line-height: 1.5;
+          white-space: pre;
+        }
+        .ai-code-lang {
+          font-size: 10px;
+          color: @text-color-very-subtle;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 6px;
+        }
+      }
+      .ai-md-heading {
+        font-weight: 700;
+        margin: 8px 0 4px;
+        &:first-child { margin-top: 0; }
+      }
+      h3.ai-md-heading { font-size: 13px; }
+      h4.ai-md-heading { font-size: 12px; }
+      ul {
+        margin: 4px 0;
+        padding-left: 18px;
+        li { margin-bottom: 2px; }
+      }
+      .ai-ol-item { margin-bottom: 3px; padding-left: 4px; }
+
+      .ai-cursor {
+        display: inline-block;
+        animation: ai-blink 0.9s step-end infinite;
+        color: var(--accent-primary, #6366f1);
+        margin-left: 1px;
+      }
+    }
+
+    // Copy / Retry action buttons — hidden until turn is hovered
+    .ai-turn-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    &:hover .ai-turn-actions { opacity: 1; }
+
+    .ai-turn-action-btn {
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid @border-color-divider;
+      background: @background-primary;
+      color: @text-color-subtle;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+
+      svg { display: block; }
+
+      &:hover {
+        background: color-mix(in srgb, var(--accent-primary, #6366f1) 10%, @background-primary);
+        color: var(--accent-primary, #6366f1);
+        border-color: color-mix(in srgb, var(--accent-primary, #6366f1) 35%, @border-color-divider);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+    }
+  }
+
+  // Sources
+  .ai-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    padding: 8px 0 2px;
+    border-top: 1px solid @border-color-divider;
+
+    .ai-sources-label {
+      font-size: 11px;
+      color: @text-color-very-subtle;
+      font-weight: 500;
+      width: 100%;
+      margin-bottom: 2px;
+    }
+    .ai-source-chip {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 10px;
+      border: 1px solid @border-color-divider;
+      background: @background-primary;
+      color: @text-color-subtle;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover {
+        background: color-mix(in srgb, var(--accent-primary, #6366f1) 10%, @background-primary);
+        color: @text-color;
+        border-color: color-mix(in srgb, var(--accent-primary, #6366f1) 30%, @border-color-divider);
+      }
+    }
+  }
+}
+
+// ─── Footer ────────────────────────────────────────────────────────────────────
+
+.ai-chat-actions {
+  padding: 6px 12px;
+  border-top: 1px solid @border-color-divider;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  background: @background-primary;
+
+  .ai-action-btn {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 40%, @border-color-divider);
+    background: color-mix(in srgb, var(--accent-primary, #6366f1) 8%, @background-primary);
+    color: var(--accent-primary, #6366f1);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent-primary, #6366f1) 14%, @background-primary);
+    }
+    &:disabled { opacity: 0.4; cursor: default; }
+  }
+}
+
+.ai-chat-input {
+  padding: 8px 10px 10px;
+  border-top: 1px solid @border-color-divider;
+  flex-shrink: 0;
+  background: @background-primary;
+
+  textarea {
+    width: 100%;
+    resize: none;
+    font-size: 13px;
+    padding: 8px 11px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: 1px solid @border-color-divider;
+    font-family: inherit;
+    line-height: 1.5;
+    background: @background-secondary;
+    color: @text-color;
+    transition: border-color 0.15s, box-shadow 0.15s;
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent-primary, #6366f1);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary, #6366f1) 18%, transparent);
+    }
+    &:disabled { opacity: 0.5; }
+  }
+
+  .ai-input-row {
     display: flex;
     justify-content: flex-end;
-    margin-bottom: 6px;
+    margin-top: 6px;
 
-    button {
+    .ai-send-btn {
       font-size: 12px;
-      padding: 4px 10px;
+      font-weight: 600;
+      padding: 6px 18px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent-primary, #6366f1);
+      color: #fff;
+      cursor: pointer;
+      transition: filter 0.12s, opacity 0.12s;
+      letter-spacing: 0.02em;
+
+      &:disabled { opacity: 0.35; cursor: default; }
+      &:hover:not(:disabled) { filter: brightness(1.1); }
+
+      &.cancel {
+        background: @background-secondary;
+        color: @text-color;
+        border: 1px solid @border-color-divider;
+        font-weight: 500;
+      }
     }
   }
+}
 
-  .ai-chat-input {
-    textarea {
-      width: 100%;
-      min-height: 56px;
-      resize: none;
-      font-size: 13px;
-      padding: 6px 8px;
-      box-sizing: border-box;
-      border-radius: 4px;
-      border: 1px solid @border-color-divider;
-      font-family: inherit;
-      line-height: 1.4;
-    }
+// ─── Animations ───────────────────────────────────────────────────────────────
+
+@keyframes ai-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes ai-turn-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ai-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+// ─── Thread list chat badge ────────────────────────────────────────────────────
+
+.ai-thread-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  color: var(--accent-primary, #6366f1);
+  opacity: 0.45;
+  line-height: 1;
+  margin-left: 2px;
+  transition: opacity 0.15s;
+
+  &.active {
+    opacity: 1;
+    animation: ai-badge-pulse 1.4s ease-in-out infinite;
   }
 }

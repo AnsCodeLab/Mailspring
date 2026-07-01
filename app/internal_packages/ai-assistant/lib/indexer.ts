@@ -31,7 +31,7 @@ class IndexerImpl {
     return { done: this.done, total: this.total, running: this.running };
   }
 
-  start() {
+  async start() {
     const store = this.store();
     const provider = getEmbeddingProvider();
     // Model guard: if the embedding model changed, the stored vectors are incompatible.
@@ -42,7 +42,14 @@ class IndexerImpl {
     // Incremental: react to mail DB deltas.
     const sub = DatabaseStore.listen((change: any) => this._onChange(change));
     this.unsub = () => (sub.dispose ? sub.dispose() : sub());
-    // Kick off bulk + reconciliation in the background (idle-throttled).
+    // Wait for backend to be ready (model loaded / server reachable) before bulk indexing.
+    try {
+      await provider.ready();
+    } catch (e) {
+      console.error('[AI] Embedding backend not ready, indexing paused:', (e as Error).message);
+      this.stop();
+      return;
+    }
     this._bulkAndReconcile();
   }
 

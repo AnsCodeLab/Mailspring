@@ -12,6 +12,10 @@ export class ServerEmbeddingProvider implements EmbeddingProvider {
     return `server:${this.model}`;
   }
 
+  async ready(): Promise<void> {
+    await this.embed(['ping']);
+  }
+
   async embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {
     const key = await KeyManager.getPassword(KEY_EMBED_API);
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

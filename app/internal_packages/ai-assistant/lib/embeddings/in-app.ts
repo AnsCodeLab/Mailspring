@@ -6,7 +6,8 @@ export class InAppEmbeddingProvider implements EmbeddingProvider {
   private pipe: any = null;
 
   constructor(private model: string = 'Xenova/all-MiniLM-L6-v2') {
-    if (!model.includes('/')) this.model = 'Xenova/all-MiniLM-L6-v2';
+    // Bare names without an org prefix default to the Xenova HF namespace.
+    if (!model.includes('/')) this.model = `Xenova/${model}`;
   }
 
   id() {
@@ -18,6 +19,10 @@ export class InAppEmbeddingProvider implements EmbeddingProvider {
     const { pipeline, env } = await import('@xenova/transformers');
     env.cacheDir = require('path').join(AppEnv.getConfigDirPath(), 'ai-models');
     this.pipe = await pipeline('feature-extraction', this.model);
+  }
+
+  async ready(): Promise<void> {
+    await this.ensure();
   }
 
   async embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {

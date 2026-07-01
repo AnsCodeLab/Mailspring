@@ -7,5 +7,9 @@
   "main": "./lib/main",
   "private": true,
   "engines": { "mailspring": "*" },
-  "license": "GPL-3.0"
+  "license": "GPL-3.0",
+  "windowTypes": {
+    "default": true,
+    "composer": true
+  }
 }
