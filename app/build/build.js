@@ -449,6 +449,10 @@ async function createRpmInstaller() {
     linuxShareDir: '/usr/local/share/mailspring',
     linuxAssetsDir,
     contentsDir,
+    // Absolute source dir for Mailspring.desktop / mailspring.appdata.xml, referenced from the
+    // spec's %prep section (see mailspring.spec.in) so newer rpmbuild versions that reset the
+    // build subdirectory before %install still find these files.
+    outputDir,
   };
 
   writeFromTemplate(path.join(linuxAssetsDir, 'redhat', 'mailspring.spec.in'), templateData);
