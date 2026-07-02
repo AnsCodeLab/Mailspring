@@ -153,6 +153,49 @@ export function deactivate() {
   }
 }
 
+export function activateConfig() {
+  // Register the font face/size schema here so config-schema.ts (upstream file)
+  // stays unmodified and future upstream merges don't conflict.
+  AppEnv.config.setSchema('core.composing.defaultFontFace', {
+    type: 'string',
+    default: 'sans-serif',
+    title: localized('Default font'),
+    enum: [
+      'sans-serif',
+      'serif',
+      'monospace',
+      'Roboto, sans-serif',
+      'Open Sans, sans-serif',
+      'Lato, sans-serif',
+      'Montserrat, sans-serif',
+      'Poppins, sans-serif',
+      'Merriweather, serif',
+      'Lora, serif',
+      'Source Code Pro, monospace',
+    ],
+    enumLabels: [
+      localized('Sans Serif'),
+      localized('Serif'),
+      localized('Fixed Width'),
+      'Roboto',
+      'Open Sans',
+      'Lato',
+      'Montserrat',
+      'Poppins',
+      'Merriweather',
+      'Lora',
+      'Source Code Pro',
+    ],
+  });
+  AppEnv.config.setSchema('core.composing.defaultFontSize', {
+    type: 'string',
+    default: '12',
+    title: localized('Default font size'),
+    enum: ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24'],
+    enumLabels: ['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt'],
+  });
+}
+
 export function serialize() {
   return this.state;
 }
