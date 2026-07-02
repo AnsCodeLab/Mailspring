@@ -101,7 +101,8 @@ export function buildChatPrompt(args: {
   return [...ctx, ...kept, { role: 'user', content: args.question }];
 }
 
-const NO_EMDASH = 'Never use em dashes (—) in the output; use a regular hyphen (-) or rewrite the sentence instead.';
+const NO_EMDASH =
+  'Never use em dashes (—) in the output; use a regular hyphen (-) or rewrite the sentence instead.';
 
 export function buildReplyPrompt(args: {
   threadMessages: ThreadMsg[];
@@ -113,8 +114,7 @@ export function buildReplyPrompt(args: {
   return [
     {
       role: 'system',
-      content:
-        `Write a reply email. Output only the email body text - no preamble, no subject. Match a natural, professional tone. ${NO_EMDASH}`,
+      content: `Write a reply email. Output only the email body text - no preamble, no subject. Match a natural, professional tone. ${NO_EMDASH}`,
     },
     {
       role: 'user',
@@ -151,8 +151,7 @@ export function buildNextLinePrompt(args: { draftSoFar: string }): ChatMessage[]
   return [
     {
       role: 'system',
-      content:
-        `Continue the email naturally. Output only the next sentence or two to follow the draft - no preamble, no repetition of what is already written. ${NO_EMDASH}`,
+      content: `Continue the email naturally. Output only the next sentence or two to follow the draft - no preamble, no repetition of what is already written. ${NO_EMDASH}`,
     },
     { role: 'user', content: `DRAFT SO FAR:\n${args.draftSoFar}\n\nContinue:` },
   ];
