@@ -150,7 +150,15 @@ export default class AIComposerAssist extends React.Component<any, State> {
           disabled={busy}
           onClick={this._toggle}
         >
-          {busy ? '✨…' : '✨ AI'}
+          {busy ? (
+            <span className="ai-assist-spinner" aria-label={localized('Working')}>
+              <span className="dot" />
+              <span className="dot" />
+              <span className="dot" />
+            </span>
+          ) : (
+            '✨ AI'
+          )}
         </button>
         {menu ? ReactDOM.createPortal(menu, document.body) : null}
       </div>
