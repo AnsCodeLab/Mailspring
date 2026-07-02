@@ -408,7 +408,7 @@ export class AIToggleButton extends React.Component<Record<string, never>, { ope
           className={`btn btn-toolbar ai-toggle-btn ${this.state.open ? 'active' : ''}`}
           onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, !this.state.open)}
         >
-          ✦ AI
+          ✨ AI
         </button>
       </div>
     );

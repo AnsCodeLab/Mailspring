@@ -101,6 +101,8 @@ export function buildChatPrompt(args: {
   return [...ctx, ...kept, { role: 'user', content: args.question }];
 }
 
+const NO_EMDASH = 'Never use em dashes (—) in the output; use a regular hyphen (-) or rewrite the sentence instead.';
+
 export function buildReplyPrompt(args: {
   threadMessages: ThreadMsg[];
   instruction: string;
@@ -112,7 +114,7 @@ export function buildReplyPrompt(args: {
     {
       role: 'system',
       content:
-        'Write a reply email. Output only the email body text — no preamble, no subject. Match a natural, professional tone.',
+        `Write a reply email. Output only the email body text - no preamble, no subject. Match a natural, professional tone. ${NO_EMDASH}`,
     },
     {
       role: 'user',
@@ -132,13 +134,13 @@ export function buildRewritePrompt(args: {
     formal: 'Rewrite this in a more formal tone.',
     casual: 'Rewrite this in a more casual, friendly tone.',
     grammar: args.isHtml
-      ? 'Fix spelling and grammar errors in this HTML email body. Preserve ALL HTML tags, attributes, and structure exactly as-is. Output only the corrected HTML — no markdown, no code fences.'
+      ? 'Fix spelling and grammar errors in this HTML email body. Preserve ALL HTML tags, attributes, and structure exactly as-is. Output only the corrected HTML - no markdown, no code fences.'
       : 'Fix spelling and grammar; keep wording and meaning otherwise unchanged.',
     rewrite: 'Rewrite this more clearly.',
   };
   const systemMsg = args.isHtml
-    ? 'You fix grammar in HTML email bodies. Return only the corrected HTML — preserve every tag and attribute, change only the text content where needed.'
-    : 'You rewrite email text. Output only the rewritten text — no preamble or quotes.';
+    ? `You fix grammar in HTML email bodies. Return only the corrected HTML - preserve every tag and attribute, change only the text content where needed. ${NO_EMDASH}`
+    : `You rewrite email text. Output only the rewritten text - no preamble or quotes. ${NO_EMDASH}`;
   return [
     { role: 'system', content: systemMsg },
     { role: 'user', content: `${verb[args.style]}\n\nTEXT:\n${args.text}` },
@@ -150,7 +152,7 @@ export function buildNextLinePrompt(args: { draftSoFar: string }): ChatMessage[]
     {
       role: 'system',
       content:
-        'Continue the email naturally. Output only the next sentence or two to follow the draft — no preamble, no repetition of what is already written.',
+        `Continue the email naturally. Output only the next sentence or two to follow the draft - no preamble, no repetition of what is already written. ${NO_EMDASH}`,
     },
     { role: 'user', content: `DRAFT SO FAR:\n${args.draftSoFar}\n\nContinue:` },
   ];
