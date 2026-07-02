@@ -601,6 +601,49 @@ export default class AIChatPanel extends React.Component<
     this.setState({ showHistory: false, sessionId, turns });
   };
 
+  _deleteConversation = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { response } = await require('@electron/remote').dialog.showMessageBox({
+      type: 'warning',
+      buttons: [localized('Delete'), localized('Cancel')],
+      defaultId: 1,
+      cancelId: 1,
+      message: localized('Delete this conversation?'),
+      detail: localized('This cannot be undone.'),
+    });
+    if (response !== 0) return;
+    this._chatStore().clearThread(sessionId);
+    const historyItems = this.state.historyItems.filter((i) => i.sessionId !== sessionId);
+    this.setState({ historyItems });
+    // If the deleted conversation is the one currently open, start a fresh session so
+    // the panel doesn't keep showing turns whose history record no longer exists.
+    if (sessionId === this.state.sessionId) {
+      const fresh = AIConfig.newSession();
+      this.setState({ sessionId: fresh, turns: [], retrieved: [], citedSources: [] });
+    }
+  };
+
+  _clearAllHistory = async () => {
+    const { response } = await require('@electron/remote').dialog.showMessageBox({
+      type: 'warning',
+      buttons: [localized('Clear All'), localized('Cancel')],
+      defaultId: 1,
+      cancelId: 1,
+      message: localized('Clear all conversation history?'),
+      detail: localized('This deletes every saved AI conversation and cannot be undone.'),
+    });
+    if (response !== 0) return;
+    this._chatStore().clearAll();
+    const fresh = AIConfig.newSession();
+    this.setState({
+      historyItems: [],
+      sessionId: fresh,
+      turns: [],
+      retrieved: [],
+      citedSources: [],
+    });
+  };
+
   // ─── Email countdown ────────────────────────────────────────────────────────
 
   _showEmailCountdown = (data: {
@@ -914,7 +957,10 @@ export default class AIChatPanel extends React.Component<
         .replace(/>/g, '&gt;')
         .replace(/\n/g, '<br/>');
       const rawHtml = `<div>${escaped}</div>`;
-      draft.body = SanitizeTransformer.runSync(rawHtml);
+      // createDraftForReply already populated draft.body with the quoted original message
+      // (attribution line + blockquote) - prepend the AI reply above it instead of
+      // overwriting, so the quoted thread the user is replying to isn't lost.
+      draft.body = SanitizeTransformer.runSync(rawHtml) + (draft.body || '');
       const task = new SyncbackDraftTask({ draft });
       Actions.queueTask(task);
       await TaskQueue.waitForPerformLocal(task);
@@ -958,6 +1004,11 @@ export default class AIChatPanel extends React.Component<
               ? localized('No conversations yet')
               : localized('%@ conversations', historyItems.length)}
           </span>
+          {historyItems.length > 0 && (
+            <button className="ai-history-clear-all-btn" onClick={this._clearAllHistory}>
+              {localized('Clear All')}
+            </button>
+          )}
         </div>
         {historyItems.length === 0 ? (
           <div className="ai-history-empty">
@@ -974,12 +1025,21 @@ export default class AIChatPanel extends React.Component<
                 <div className="ai-history-preview">{item.preview}</div>
                 <div className="ai-history-item-footer">
                   <span className="ai-history-turns">{localized('%@ messages', item.count)}</span>
-                  <button
-                    className="ai-history-resume-btn"
-                    onClick={() => this._resumeConversation(item.sessionId)}
-                  >
-                    {localized('Resume')}
-                  </button>
+                  <div className="ai-history-item-actions">
+                    <button
+                      className="ai-history-delete-btn"
+                      title={localized('Delete conversation')}
+                      onClick={(e) => this._deleteConversation(item.sessionId, e)}
+                    >
+                      {localized('Delete')}
+                    </button>
+                    <button
+                      className="ai-history-resume-btn"
+                      onClick={() => this._resumeConversation(item.sessionId)}
+                    >
+                      {localized('Resume')}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
