@@ -27,7 +27,13 @@ type Turn = { role: 'user' | 'assistant'; content: string };
 
 // Context-aware initial suggestions based on thread metadata.
 function getInitialSuggestions(thread: any): string[] {
-  if (!thread) return ['Find unread emails', 'Search recent emails', 'Find emails from today'];
+  if (!thread)
+    return [
+      "What's new today?",
+      'Summarize this week',
+      'Summarize this month',
+      'Find unread emails',
+    ];
   const sub = (thread.subject || '').toLowerCase();
   const snip = (thread.snippet || '').toLowerCase();
   const combined = sub + ' ' + snip;
@@ -752,7 +758,7 @@ export default class AIChatPanel extends React.Component<
       const { Skills } = require('./skills/registry');
       const { runAgent } = require('./agent');
 
-      if (Skills.list().length > 0) {
+      if (Skills.list().length > 0 && AIConfig.getProvider() !== 'claude-cli') {
         const agentOut = await runAgent({
           messages: prompt,
           registry: Skills,
@@ -974,7 +980,10 @@ export default class AIChatPanel extends React.Component<
       !busy && turns.length > 0 && turns[turns.length - 1].role === 'assistant'
         ? getFollowUpSuggestions(turns, !!thread)
         : [];
-    const modelName = AIConfig.getModel();
+    const modelName =
+      AIConfig.getProvider() === 'claude-cli'
+        ? AIConfig.getClaudeCliModel() || localized('Claude CLI (default)')
+        : AIConfig.getModel();
 
     return (
       <div className="ai-float-panel" style={{ width }}>
@@ -1030,8 +1039,21 @@ export default class AIChatPanel extends React.Component<
                   <div className="ai-empty-icon">✦</div>
                   <div className="ai-empty-title">{localized('AI Assistant')}</div>
                   <div className="ai-empty-hint">
-                    {localized('Open a thread to start chatting.')}
+                    {localized('Ask about your mailbox, or open a thread to chat about it.')}
                   </div>
+                  {turns.length === 0 && (
+                    <div className="ai-suggestions">
+                      {getInitialSuggestions(null).map((s) => (
+                        <button
+                          key={s}
+                          className="ai-suggestion-chip"
+                          onClick={() => this._send(s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {thread && turns.length === 0 && (
