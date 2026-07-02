@@ -1072,7 +1072,7 @@ export default class AIPreferences extends React.Component<
           <h3>{localized('Agent skills')}</h3>
           <p style={{ fontSize: 12, color: 'var(--text-color-subtle)', marginBottom: 10 }}>
             {localized(
-              'All actions below require explicit confirmation before executing. They are off by default.'
+              'Archive and Trash actions require explicit confirmation before executing. All are enabled by default and can be turned off here.'
             )}
           </p>
 
@@ -1092,7 +1092,7 @@ export default class AIPreferences extends React.Component<
               }}
             >
               {localized(
-                'Allow the AI to compose and send email on your behalf. A preview dialog with Cancel / Open in Composer / Send Now will always appear first.'
+                'Allow the AI to compose emails and open them in the Composer for review before sending.'
               )}
             </div>
           </label>

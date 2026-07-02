@@ -23,7 +23,9 @@ function fakeExports(overrides: Record<string, any> = {}) {
   const defaults = {
     DraftFactory: {
       createDraft: jasmine.createSpy('createDraft').andReturn(Promise.resolve(fakeDraft)),
-      createDraftForReply: jasmine.createSpy('createDraftForReply').andReturn(Promise.resolve(fakeDraft)),
+      createDraftForReply: jasmine
+        .createSpy('createDraftForReply')
+        .andReturn(Promise.resolve(fakeDraft)),
     },
     SanitizeTransformer: {
       runSync: jasmine.createSpy('runSync').andCallFake((h: string) => h),
@@ -41,18 +43,45 @@ function fakeExports(overrides: Record<string, any> = {}) {
     DatabaseStore: {
       // Supports both direct await and .include() chaining (open_email)
       find: jasmine.createSpy('find').andCallFake(() => {
-        const val = { id: 'm1', subject: 'Re: Test', threadId: 't1', from: [{ email: 'a@b.com', name: 'A' }], date: new Date(), body: '' };
+        const val = {
+          id: 'm1',
+          subject: 'Re: Test',
+          threadId: 't1',
+          from: [{ email: 'a@b.com', name: 'A' }],
+          date: new Date(),
+          body: '',
+        };
         const chain: any = {
-          include: function () { return this; },
-          then: function (res: any, rej?: any) { return Promise.resolve(val).then(res, rej); },
-          catch: function (rej: any) { return Promise.resolve(val).catch(rej); },
+          include: function () {
+            return this;
+          },
+          then: function (res: any, rej?: any) {
+            return Promise.resolve(val).then(res, rej);
+          },
+          catch: function (rej: any) {
+            return Promise.resolve(val).catch(rej);
+          },
         };
         return chain;
       }),
       findAll: jasmine.createSpy('findAll').andReturn({
-        where: function () { return this; },
-        limit: function () { return this; },
-        then: (resolve: any) => resolve([{ id: 'm1', subject: 'Test', threadId: 't1', from: [{ email: 'a@b.com', name: 'A' }], date: new Date(), snippet: 'hi' }]),
+        where: function () {
+          return this;
+        },
+        limit: function () {
+          return this;
+        },
+        then: (resolve: any) =>
+          resolve([
+            {
+              id: 'm1',
+              subject: 'Test',
+              threadId: 't1',
+              from: [{ email: 'a@b.com', name: 'A' }],
+              date: new Date(),
+              snippet: 'hi',
+            },
+          ]),
       }),
     },
     Thread: class Thread {},
@@ -66,7 +95,7 @@ function fakeExports(overrides: Record<string, any> = {}) {
       Object.entries(methods).forEach(([method, impl]) => {
         if (ms[group] && typeof ms[group][method] !== 'undefined') {
           spyOn(ms[group], method).andCallFake(
-            typeof impl === 'function' ? impl : () => (impl as any)
+            typeof impl === 'function' ? impl : () => impl as any
           );
         }
       });
@@ -186,14 +215,24 @@ describe('openEmailSkill', () => {
     const { ms } = fakeExports();
     (ms.DatabaseStore.find as jasmine.Spy).andCallFake(() => {
       const chain: any = {
-        include: function () { return this; },
-        then: function (res: any, rej?: any) { return Promise.resolve(null).then(res, rej); },
-        catch: function (rej: any) { return Promise.resolve(null).catch(rej); },
+        include: function () {
+          return this;
+        },
+        then: function (res: any, rej?: any) {
+          return Promise.resolve(null).then(res, rej);
+        },
+        catch: function (rej: any) {
+          return Promise.resolve(null).catch(rej);
+        },
       };
       return chain;
     });
     let threw = false;
-    try { await openEmailSkill.run({ messageId: 'missing' }, {}); } catch { threw = true; }
+    try {
+      await openEmailSkill.run({ messageId: 'missing' }, {});
+    } catch {
+      threw = true;
+    }
     expect(threw).toBe(true);
   });
 });
@@ -392,7 +431,10 @@ describe('archiveThreadSkill', () => {
   it('confirmDialog: Cancel returns deny without queuing', async () => {
     fakeDialog(0);
     const { ms } = fakeExports();
-    const result = await archiveThreadSkill.confirmDialog!({ threadId: 't1', subject: 'Newsletter' });
+    const result = await archiveThreadSkill.confirmDialog!({
+      threadId: 't1',
+      subject: 'Newsletter',
+    });
     expect(result).toBe('deny');
     expect(ms.Actions.queueTasks).not.toHaveBeenCalled();
   });
@@ -400,7 +442,10 @@ describe('archiveThreadSkill', () => {
   it('confirmDialog: Archive queues task and returns done', async () => {
     fakeDialog(1);
     const { ms } = fakeExports();
-    const result = await archiveThreadSkill.confirmDialog!({ threadId: 't1', subject: 'Newsletter' });
+    const result = await archiveThreadSkill.confirmDialog!({
+      threadId: 't1',
+      subject: 'Newsletter',
+    });
     expect(result).toBe('done');
     expect(ms.TaskFactory.tasksForArchiving).toHaveBeenCalled();
     expect(ms.Actions.queueTasks).toHaveBeenCalled();

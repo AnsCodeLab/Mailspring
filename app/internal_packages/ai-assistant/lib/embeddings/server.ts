@@ -18,6 +18,15 @@ export class ServerEmbeddingProvider implements EmbeddingProvider {
 
   async embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {
     const key = await KeyManager.getPassword(KEY_EMBED_API);
+    const isLocal =
+      this.url.startsWith('http://localhost') ||
+      this.url.startsWith('http://127.') ||
+      this.url.startsWith('http://[::1]');
+    if (key && !this.url.startsWith('https://') && !isLocal) {
+      throw new Error(
+        'Embedding API key will not be sent to a non-HTTPS endpoint. Update the embedding server URL to https://.'
+      );
+    }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (key) headers['Authorization'] = `Bearer ${key}`;
     const res = await fetch(`${this.url}/embeddings`, {

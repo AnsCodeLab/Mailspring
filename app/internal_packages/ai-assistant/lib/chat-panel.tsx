@@ -2,12 +2,12 @@ import React from 'react';
 import {
   FocusedContentStore,
   DraftFactory,
+  DatabaseStore,
+  Thread,
   Actions,
   TaskQueue,
   SyncbackDraftTask,
   SanitizeTransformer,
-  DatabaseStore,
-  Thread,
   localized,
 } from 'mailspring-exports';
 import { AIService, ChatMessage } from './ai-service';
@@ -22,35 +22,153 @@ import { ChatActivityStore } from './chat-activity-store';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 
-// All chat messages are stored under one global key — switching threads only
-// updates the context (which emails are loaded), not the conversation history.
-const GLOBAL_CHAT_KEY = '__global__';
+// Chat is global — one shared conversation. Sessions are named by the first user
+// message and keyed by timestamp so history stays readable across restarts.
 
-const SUGGESTIONS = [
-  'Summarize this thread',
-  'What action items are here?',
-  'Draft a polite reply',
-  "What's the main question being asked?",
-];
+// Context-aware initial suggestions based on thread metadata.
+function getInitialSuggestions(thread: any): string[] {
+  if (!thread) return ['Find unread emails', 'Search recent emails', 'Find emails from today'];
+  const sub = (thread.subject || '').toLowerCase();
+  const snip = (thread.snippet || '').toLowerCase();
+  const combined = sub + ' ' + snip;
+  const participantCount: number = (thread.participants || []).length;
 
-// ─── Simple markdown renderer ──────────────────────────────────────────────────
+  if (/meeting|call|schedule|calendar|invite|agenda/.test(combined))
+    return [
+      'Summarize this thread',
+      'What time is proposed?',
+      'Draft an acceptance reply',
+      "Who's invited?",
+    ];
+  if (/invoice|payment|receipt|billing|quote|order/.test(combined))
+    return [
+      'What is the amount due?',
+      'Summarize this thread',
+      'Draft a reply',
+      'Find related emails',
+    ];
+  if (/urgent|asap|deadline|immediately|critical/.test(combined))
+    return [
+      'What action is needed?',
+      'Summarize this thread',
+      'What is the deadline?',
+      'Draft a reply',
+    ];
+  if (/\?/.test(thread.subject || '') || /\?/.test(snip.slice(0, 120)))
+    return [
+      'What is being asked?',
+      'Draft a reply',
+      'Summarize this thread',
+      'Find related emails',
+    ];
+  if (participantCount > 4)
+    return [
+      'Summarize this thread',
+      'Who are the key participants?',
+      'What are the main points?',
+      'Draft a reply',
+    ];
+  if (thread.starred)
+    return [
+      'What is important here?',
+      'What action is needed?',
+      'Summarize this thread',
+      'Draft a reply',
+    ];
+  if (thread.unread)
+    return [
+      'Summarize this thread',
+      'Draft a reply',
+      'What action items are here?',
+      'Who sent this?',
+    ];
+  return [
+    'Summarize this thread',
+    'Draft a reply',
+    'What action items are here?',
+    "What's the main question?",
+  ];
+}
+
+// Context-aware follow-up suggestions based on what the AI just said.
+function getFollowUpSuggestions(turns: Turn[], hasThread: boolean): string[] {
+  const last = [...turns].reverse().find((t) => t.role === 'assistant');
+  if (!last?.content) return [];
+  const c = last.content.toLowerCase();
+
+  // After a draft or email was composed
+  if (/subject:|draft|compos|repl|wrote|composer/.test(c))
+    return ['Make it shorter', 'More formal tone', 'Send this email', 'Translate to Vietnamese'];
+
+  // After action items / tasks listed
+  if (/action item|next step|todo|task|follow.?up/.test(c))
+    return [
+      'Draft a reply addressing these',
+      'Find related emails',
+      'Summarize for me',
+      'Archive this thread',
+    ];
+
+  // After a summary
+  if (/summar|overview|main point|key point|highlight/.test(c))
+    return [
+      'Draft a reply',
+      'What are the next steps?',
+      'Find related emails',
+      'Archive this thread',
+    ];
+
+  // After search results were returned
+  if (/found|search|result|email from|here are/.test(c))
+    return [
+      'Summarize these results',
+      'Draft a response',
+      'Find more like this',
+      'Open this thread',
+    ];
+
+  // After archive / trash / move action completed
+  if (/archiv|trash|delet|mov/.test(c))
+    return ['Find more from this sender', 'Search my inbox', 'Find unread emails'];
+
+  // After answering who/when/what questions
+  if (/sent by|from:|participants|cc'd|date:|on \w+ \d/.test(c))
+    return ['Draft a reply', 'Summarize this thread', 'Find related emails'];
+
+  // Default when a thread is open
+  if (hasThread)
+    return ['Draft a reply', 'Summarize this thread', 'Find related emails', "Who's CC'd?"];
+  return ['Search recent emails', 'Find emails from today', 'Show unread messages'];
+}
+
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+function parseTableRow(line: string): string[] {
+  // Split on | and drop the leading/trailing empty segments from border pipes.
+  const parts = line.split('|');
+  return (parts[0].trim() === '' ? parts.slice(1) : parts)
+    .slice(0, parts[parts.length - 1].trim() === '' ? -1 : undefined)
+    .map((c) => c.trim());
+}
 
 function renderInline(text: string, key?: string | number): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+  const re = /(\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|\*([^*\n]+?)\*|_([^_\n]+?)_|`([^`]+)`)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let idx = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[0].startsWith('**')) {
-      parts.push(<strong key={`${key}-b${idx++}`}>{m[2]}</strong>);
-    } else if (m[0].startsWith('*')) {
-      parts.push(<em key={`${key}-i${idx++}`}>{m[3]}</em>);
+    if (m[2] !== undefined || m[3] !== undefined) {
+      parts.push(<strong key={`${key}-b${idx++}`}>{m[2] ?? m[3]}</strong>);
+    } else if (m[4] !== undefined) {
+      parts.push(<s key={`${key}-s${idx++}`}>{m[4]}</s>);
+    } else if (m[5] !== undefined || m[6] !== undefined) {
+      parts.push(<em key={`${key}-i${idx++}`}>{m[5] ?? m[6]}</em>);
     } else {
       parts.push(
         <code key={`${key}-c${idx++}`} className="ai-inline-code">
-          {m[4]}
+          {m[7]}
         </code>
       );
     }
@@ -64,20 +182,72 @@ function renderMarkdown(text: string): React.ReactNode {
   const nodes: React.ReactNode[] = [];
   const lines = text.split('\n');
   let i = 0;
-  let listItems: React.ReactNode[] = [];
+  let ulItems: React.ReactNode[] = [];
+  let olItems: React.ReactNode[] = [];
+  let tableRows: Array<{ cells: string[]; isHeader: boolean }> = [];
+  let tableAligns: Array<'left' | 'center' | 'right' | undefined> = [];
 
-  const flushList = () => {
-    if (listItems.length) {
-      nodes.push(<ul key={`ul-${i}`}>{listItems}</ul>);
-      listItems = [];
-    }
+  const flushUl = () => {
+    if (!ulItems.length) return;
+    nodes.push(<ul key={`ul-${i}`}>{ulItems}</ul>);
+    ulItems = [];
+  };
+  const flushOl = () => {
+    if (!olItems.length) return;
+    nodes.push(<ol key={`ol-${i}`}>{olItems}</ol>);
+    olItems = [];
+  };
+  const flushTable = () => {
+    if (!tableRows.length) return;
+    const headers = tableRows.filter((r) => r.isHeader);
+    const body = tableRows.filter((r) => !r.isHeader);
+    nodes.push(
+      <div key={`tbl-${i}`} className="ai-md-table-wrap">
+        <table className="ai-md-table">
+          {headers.length > 0 && (
+            <thead>
+              {headers.map((row, ri) => (
+                <tr key={ri}>
+                  {row.cells.map((cell, ci) => (
+                    <th key={ci} style={{ textAlign: tableAligns[ci] }}>
+                      {renderInline(cell, `${i}-th-${ri}-${ci}`)}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+          )}
+          {body.length > 0 && (
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri}>
+                  {row.cells.map((cell, ci) => (
+                    <td key={ci} style={{ textAlign: tableAligns[ci] }}>
+                      {renderInline(cell, `${i}-td-${ri}-${ci}`)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          )}
+        </table>
+      </div>
+    );
+    tableRows = [];
+    tableAligns = [];
+  };
+  const flushAll = () => {
+    flushUl();
+    flushOl();
+    flushTable();
   };
 
   while (i < lines.length) {
     const line = lines[i];
 
+    // Fenced code block
     if (line.startsWith('```')) {
-      flushList();
+      flushAll();
       const lang = line.slice(3).trim();
       const codeLines: string[] = [];
       i++;
@@ -95,49 +265,120 @@ function renderMarkdown(text: string): React.ReactNode {
       continue;
     }
 
+    // ATX headings
     if (/^#{1,3} /.test(line)) {
-      flushList();
+      flushAll();
       const level = (line.match(/^#+/) || [''])[0].length;
-      const content = line.slice(level + 1);
       const Tag = `h${Math.min(level + 2, 6)}` as 'h3' | 'h4' | 'h5' | 'h6';
       nodes.push(
         <Tag key={`h-${i}`} className="ai-md-heading">
-          {renderInline(content, i)}
+          {renderInline(line.slice(level + 1), i)}
         </Tag>
       );
       i++;
       continue;
     }
 
-    if (/^[-*] /.test(line)) {
-      listItems.push(<li key={`li-${i}`}>{renderInline(line.slice(2), i)}</li>);
+    // Horizontal rule (standalone ---, ***, ___)
+    if (/^([-*_])\1{2,}$/.test(line.trim()) && tableRows.length === 0) {
+      flushAll();
+      nodes.push(<hr key={`hr-${i}`} className="ai-md-hr" />);
       i++;
       continue;
     }
 
+    // GFM table — header row followed by separator
+    if (line.includes('|') && tableRows.length === 0) {
+      const next = lines[i + 1] || '';
+      if (/^\s*\|?[\s\-:|]+\|/.test(next)) {
+        flushUl();
+        flushOl();
+        tableRows.push({ cells: parseTableRow(line), isHeader: true });
+        i++;
+        tableAligns = parseTableRow(next).map((c) => {
+          if (c.startsWith(':') && c.endsWith(':')) return 'center';
+          if (c.endsWith(':')) return 'right';
+          if (c.startsWith(':')) return 'left';
+          return undefined;
+        });
+        i++;
+        continue;
+      }
+    }
+    // Table body rows
+    if (tableRows.length > 0 && line.includes('|')) {
+      tableRows.push({ cells: parseTableRow(line), isHeader: false });
+      i++;
+      continue;
+    }
+    // End of table
+    if (tableRows.length > 0) flushTable();
+
+    // Unordered list
+    if (/^[-*+] /.test(line)) {
+      flushOl();
+      ulItems.push(<li key={`li-${i}`}>{renderInline(line.slice(2), i)}</li>);
+      i++;
+      continue;
+    }
+
+    // Ordered list
     if (/^\d+\. /.test(line)) {
-      flushList();
+      flushUl();
+      olItems.push(<li key={`oli-${i}`}>{renderInline(line.replace(/^\d+\. /, ''), i)}</li>);
+      i++;
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      flushAll();
       nodes.push(
-        <li key={`oli-${i}`} className="ai-ol-item">
-          {renderInline(line.replace(/^\d+\. /, ''), i)}
-        </li>
+        <blockquote key={`bq-${i}`} className="ai-md-blockquote">
+          {renderInline(line.slice(2), i)}
+        </blockquote>
       );
       i++;
       continue;
     }
 
+    // Blank line
     if (line.trim() === '') {
-      flushList();
-      nodes.push(<div key={`br-${i}`} className="ai-para-gap" />);
+      flushAll();
+      nodes.push(<div key={`gap-${i}`} className="ai-para-gap" />);
       i++;
       continue;
     }
 
-    flushList();
-    nodes.push(<p key={`p-${i}`}>{renderInline(line, i)}</p>);
-    i++;
+    // Paragraph (collect consecutive plain lines)
+    flushAll();
+    const paraLines: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !/^#{1,3} /.test(lines[i]) &&
+      !lines[i].startsWith('```') &&
+      !/^[-*+] /.test(lines[i]) &&
+      !/^\d+\. /.test(lines[i]) &&
+      !lines[i].startsWith('> ') &&
+      !(lines[i].includes('|') && /^\s*\|?[\s\-:|]+\|/.test(lines[i + 1] || ''))
+    ) {
+      paraLines.push(lines[i]);
+      i++;
+    }
+    if (paraLines.length) {
+      nodes.push(
+        <p key={`p-${i}`}>
+          {paraLines.flatMap((l, pi) =>
+            pi < paraLines.length - 1
+              ? [renderInline(l, `${i}-${pi}`), <br key={`br-${i}-${pi}`} />]
+              : [renderInline(l, `${i}-${pi}`)]
+          )}
+        </p>
+      );
+    }
   }
-  flushList();
+  flushAll();
   return nodes;
 }
 
@@ -161,13 +402,15 @@ export class AIToggleButton extends React.Component<Record<string, never>, { ope
 
   render() {
     return (
-      <button
-        title={localized('Toggle AI chat panel')}
-        className={`btn btn-toolbar ai-toggle-btn ${this.state.open ? 'active' : ''}`}
-        onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, !this.state.open)}
-      >
-        ✦ AI
-      </button>
+      <div style={{ order: 999 }}>
+        <button
+          title={localized('Toggle AI chat panel')}
+          className={`btn btn-toolbar ai-toggle-btn ${this.state.open ? 'active' : ''}`}
+          onClick={() => AppEnv.config.set(AIConfig.keys.panelOpen, !this.state.open)}
+        >
+          ✦ AI
+        </button>
+      </div>
     );
   }
 }
@@ -183,12 +426,12 @@ export default class AIChatPanel extends React.Component<
     busy: boolean;
     retrieved: RetrievedSource[];
     citedSources: RetrievedSource[];
-    scope: 'thread' | 'all';
+    sessionId: string;
     open: boolean;
     width: number;
     showHistory: boolean;
     historyItems: Array<{
-      threadId: string;
+      sessionId: string;
       subject: string;
       preview: string;
       lastAt: number;
@@ -215,12 +458,12 @@ export default class AIChatPanel extends React.Component<
     busy: false,
     retrieved: [] as RetrievedSource[],
     citedSources: [] as RetrievedSource[],
-    scope: 'thread' as 'thread' | 'all',
+    sessionId: AIConfig.getCurrentSession(),
     open: AIConfig.isPanelOpen(),
     width: AIConfig.getPanelWidth(),
     showHistory: false,
     historyItems: [] as Array<{
-      threadId: string;
+      sessionId: string;
       subject: string;
       preview: string;
       lastAt: number;
@@ -240,7 +483,7 @@ export default class AIChatPanel extends React.Component<
   private _loadHistory(): Turn[] {
     try {
       return this._chatStore()
-        .history(GLOBAL_CHAT_KEY)
+        .history(this.state.sessionId)
         .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
     } catch {
       return [];
@@ -315,28 +558,29 @@ export default class AIChatPanel extends React.Component<
 
   // ─── History ───────────────────────────────────────────────────────────────
 
-  _openHistory = async () => {
+  _openHistory = () => {
     const summaries = this._chatStore().conversationSummaries();
-    const items = await Promise.all(
-      summaries.map(async (s) => {
-        let subject = s.threadId;
-        try {
-          const t = await DatabaseStore.find<Thread>(Thread, s.threadId);
-          if (t) subject = t.subject || localized('(no subject)');
-        } catch {
-          // ignore
-        }
-        return { ...s, subject };
-      })
-    );
+    const items = summaries.map((s) => ({
+      sessionId: s.sessionId,
+      subject: s.title || localized('Conversation'),
+      preview: s.preview,
+      lastAt: s.lastAt,
+      count: s.count,
+    }));
     this.setState({ showHistory: true, historyItems: items });
   };
 
-  _resumeConversation = (threadId: string) => {
-    DatabaseStore.find<Thread>(Thread, threadId).then((t) => {
-      if (t) Actions.setFocus({ collection: 'thread', item: t });
-    });
-    this.setState({ showHistory: false });
+  _resumeConversation = (sessionId: string) => {
+    let turns: Turn[] = [];
+    try {
+      turns = this._chatStore()
+        .history(sessionId)
+        .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
+    } catch {
+      /* ignore */
+    }
+    AppEnv.config.set(AIConfig.keys.currentSession, sessionId);
+    this.setState({ showHistory: false, sessionId, turns });
   };
 
   // ─── Messaging ─────────────────────────────────────────────────────────────
@@ -352,15 +596,14 @@ export default class AIChatPanel extends React.Component<
     ];
     this.setState({ turns, input: '', busy: true, retrieved: [], citedSources: [] });
 
-    // Global conversation — always append under the single global key.
-    this._chatStore().append(GLOBAL_CHAT_KEY, 'user', q, []);
+    this._chatStore().append(this.state.sessionId, 'user', q, []);
     const currentThreadId = this.state.thread?.id;
     if (currentThreadId) ChatActivityStore.setActive(currentThreadId, true);
 
     this._abort = new AbortController();
     try {
-      const threadMessages =
-        this.state.scope === 'thread' ? await loadThreadMessages(this.state.thread) : [];
+      // Always include thread messages when a thread is focused.
+      const threadMessages = await loadThreadMessages(this.state.thread);
       const history: ChatMessage[] = this.state.turns.map((t) => ({
         role: t.role,
         content: t.content,
@@ -428,8 +671,8 @@ export default class AIChatPanel extends React.Component<
               throw err;
             }
           },
-          confirm: async (skill: any, args: any) => {
-            if (skill.confirmDialog) return skill.confirmDialog(args);
+          confirm: async (skill: any, args: any, ctx: any) => {
+            if (skill.confirmDialog) return skill.confirmDialog(args, ctx);
             const { response } = await require('@electron/remote').dialog.showMessageBox({
               type: 'question',
               buttons: ['Allow', 'Deny'],
@@ -438,6 +681,14 @@ export default class AIChatPanel extends React.Component<
             });
             return response === 0 ? 'proceed' : 'deny';
           },
+          confirmMany: async (skill: any, argsArray: any[], ctx: any) => {
+            if (skill.confirmManyDialog) return skill.confirmManyDialog(argsArray, ctx);
+            // Fallback: use the single-item dialog for the first item (and the batch proceeds
+            // together). This is only hit for skills that don't implement confirmManyDialog.
+            if (skill.confirmDialog) return skill.confirmDialog(argsArray[0], ctx);
+            return 'deny';
+          },
+          ctx: { thread },
           signal: this._abort?.signal,
           maxSteps: AIConfig.getMaxAgentSteps(),
           onToolStep: (step: any) => {
@@ -462,7 +713,7 @@ export default class AIChatPanel extends React.Component<
       const { citedSources } = validateCitations(answer, retrieved);
       this.setState({ retrieved, citedSources });
       this._chatStore().append(
-        GLOBAL_CHAT_KEY,
+        this.state.sessionId,
         'assistant',
         answer,
         citedSources.map((s) => s.messageId)
@@ -484,12 +735,9 @@ export default class AIChatPanel extends React.Component<
   };
 
   _clearHistory = () => {
-    try {
-      this._chatStore().clearThread(GLOBAL_CHAT_KEY);
-    } catch {
-      /* ignore */
-    }
-    this.setState({ turns: [], retrieved: [], citedSources: [] });
+    // Start a new session — old conversation stays in history.
+    const sessionId = AIConfig.newSession();
+    this.setState({ turns: [], retrieved: [], citedSources: [], sessionId });
   };
 
   _draftReply = async () => {
@@ -504,7 +752,12 @@ export default class AIChatPanel extends React.Component<
         message: messages[messages.length - 1],
         type: 'reply',
       });
-      const rawHtml = `<div>${last.content.replace(/\n/g, '<br/>')}</div>`;
+      const escaped = last.content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br/>');
+      const rawHtml = `<div>${escaped}</div>`;
       draft.body = SanitizeTransformer.runSync(rawHtml);
       const task = new SyncbackDraftTask({ draft });
       Actions.queueTask(task);
@@ -557,7 +810,7 @@ export default class AIChatPanel extends React.Component<
         ) : (
           <div className="ai-history-list">
             {historyItems.map((item) => (
-              <div key={item.threadId} className="ai-history-item">
+              <div key={item.sessionId} className="ai-history-item">
                 <div className="ai-history-item-meta">
                   <span className="ai-history-subject">{item.subject}</span>
                   <span className="ai-history-date">{formatDate(item.lastAt)}</span>
@@ -567,7 +820,7 @@ export default class AIChatPanel extends React.Component<
                   <span className="ai-history-turns">{localized('%@ messages', item.count)}</span>
                   <button
                     className="ai-history-resume-btn"
-                    onClick={() => this._resumeConversation(item.threadId)}
+                    onClick={() => this._resumeConversation(item.sessionId)}
                   >
                     {localized('Resume')}
                   </button>
@@ -581,8 +834,12 @@ export default class AIChatPanel extends React.Component<
   }
 
   _renderPanel(width: number) {
-    const { scope, turns, busy, input, citedSources, thread, showHistory } = this.state;
+    const { turns, busy, input, citedSources, thread, showHistory } = this.state;
     const hasReplySuggestion = turns.some((t) => t.role === 'assistant' && t.content);
+    const followUps =
+      !busy && turns.length > 0 && turns[turns.length - 1].role === 'assistant'
+        ? getFollowUpSuggestions(turns, !!thread)
+        : [];
     const modelName = AIConfig.getModel();
 
     return (
@@ -602,22 +859,6 @@ export default class AIChatPanel extends React.Component<
             </div>
           </div>
           <div className="ai-header-controls">
-            <div className="ai-scope-toggle">
-              <button
-                className={`ai-scope-btn ${scope === 'thread' ? 'active' : ''}`}
-                onClick={() => this.setState({ scope: 'thread' })}
-                title={localized('Chat about this thread only')}
-              >
-                {localized('Thread')}
-              </button>
-              <button
-                className={`ai-scope-btn ${scope === 'all' ? 'active' : ''}`}
-                onClick={() => this.setState({ scope: 'all' })}
-                title={localized('Search across all mail')}
-              >
-                {localized('All mail')}
-              </button>
-            </div>
             <button
               className={`ai-history-btn${showHistory ? ' active' : ''}`}
               title={localized('Conversation history')}
@@ -661,7 +902,7 @@ export default class AIChatPanel extends React.Component<
               )}
               {thread && turns.length === 0 && (
                 <div className="ai-suggestions">
-                  {SUGGESTIONS.map((s) => (
+                  {getInitialSuggestions(thread).map((s) => (
                     <button key={s} className="ai-suggestion-chip" onClick={() => this._send(s)}>
                       {s}
                     </button>
@@ -676,16 +917,13 @@ export default class AIChatPanel extends React.Component<
                   <div key={i} className={`ai-turn ${t.role}`}>
                     {t.role === 'assistant' && <span className="ai-avatar">✦</span>}
                     <div className="ai-bubble">
-                      {t.role === 'assistant' && t.content && !busy ? (
-                        renderMarkdown(t.content)
-                      ) : t.role === 'assistant' && busy && isLastTurn ? (
+                      {t.role === 'assistant' ? (
                         <>
                           {t.content ? renderMarkdown(t.content) : null}
-                          <span className="ai-cursor">▊</span>
+                          {isStreaming && <span className="ai-cursor">▊</span>}
                         </>
                       ) : (
-                        t.content ||
-                        (busy && isLastTurn ? <span className="ai-cursor">▊</span> : '​')
+                        t.content || '​'
                       )}
                     </div>
                     {canAct && (
@@ -791,6 +1029,17 @@ export default class AIChatPanel extends React.Component<
                 <button className="ai-action-btn" onClick={this._draftReply} disabled={busy}>
                   {localized('Use as draft reply')}
                 </button>
+              </div>
+            )}
+
+            {/* Follow-up suggestion pills */}
+            {followUps.length > 0 && (
+              <div className="ai-followup-chips">
+                {followUps.map((s) => (
+                  <button key={s} className="ai-followup-chip" onClick={() => this._send(s)}>
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
 

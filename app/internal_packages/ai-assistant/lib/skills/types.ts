@@ -13,6 +13,10 @@ export interface Skill {
   tier: SkillTier;
   enabled?: () => boolean;
   // If provided, called instead of the generic dialog for confirm-tier skills.
-  confirmDialog?: (args: any) => Promise<ConfirmResult>;
+  // ctx carries the live objects from the chat panel (e.g. ctx.thread).
+  confirmDialog?: (args: any, ctx?: any) => Promise<ConfirmResult>;
+  // Called when the agent issues multiple calls to this same skill in one step — lets the
+  // skill show ONE combined dialog instead of N individual prompts.
+  confirmManyDialog?: (argsArray: any[], ctx?: any) => Promise<ConfirmResult>;
   run(args: any, ctx: any): Promise<any>;
 }

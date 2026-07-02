@@ -14,6 +14,7 @@ const K = {
   webSearchResults: 'ai-assistant.webSearch.results',
   panelOpen: 'ai-assistant.panel.open',
   panelWidth: 'ai-assistant.panel.width',
+  currentSession: 'ai-assistant.currentSession',
   // RAG pipeline
   chunkSize: 'ai-assistant.rag.chunkSize',
   chunkOverlap: 'ai-assistant.rag.chunkOverlap',
@@ -74,6 +75,19 @@ export const AIConfig = {
     Math.max(1, get<number>(K.webSearchResults, RAG_DEFAULTS.webSearchResults)),
   isPanelOpen: () => get(K.panelOpen, true) === true,
   getPanelWidth: () => get<number>(K.panelWidth, 380),
+  getCurrentSession(): string {
+    let v = get<string>(K.currentSession, '');
+    if (!v) {
+      v = `session_${Date.now()}`;
+      AppEnv.config.set(K.currentSession, v);
+    }
+    return v;
+  },
+  newSession(): string {
+    const id = `session_${Date.now()}`;
+    AppEnv.config.set(K.currentSession, id);
+    return id;
+  },
   // RAG pipeline
   getChunkSize: () => Math.max(200, get<number>(K.chunkSize, RAG_DEFAULTS.chunkSize)),
   getChunkOverlap: () => Math.max(0, get<number>(K.chunkOverlap, RAG_DEFAULTS.chunkOverlap)),
@@ -86,7 +100,7 @@ export const AIConfig = {
   // RAG mode
   getRagMode: () => get<'default' | 'auto-tune' | 'custom'>(K.ragMode, 'default'),
   // Skill toggles
-  isSkillSendEmailEnabled: () => get(K.skillSendEmail, false) === true,
-  isSkillTrashThreadEnabled: () => get(K.skillTrashThread, false) === true,
-  isSkillArchiveThreadEnabled: () => get(K.skillArchiveThread, false) === true,
+  isSkillSendEmailEnabled: () => get(K.skillSendEmail, true) !== false,
+  isSkillTrashThreadEnabled: () => get(K.skillTrashThread, true) !== false,
+  isSkillArchiveThreadEnabled: () => get(K.skillArchiveThread, true) !== false,
 };

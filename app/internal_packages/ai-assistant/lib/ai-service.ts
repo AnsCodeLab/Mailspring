@@ -17,6 +17,15 @@ export class AIError extends Error {
   }
 }
 
+function isLocalEndpoint(url: string): boolean {
+  return (
+    url.startsWith('http://localhost') ||
+    url.startsWith('http://127.') ||
+    url.startsWith('http://[::1]') ||
+    url.startsWith('http://0.0.0.0')
+  );
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
   const key = await KeyManager.getPassword(KEY_API);
   const endpoint = AIConfig.getEndpoint();
@@ -27,6 +36,13 @@ async function authHeaders(): Promise<Record<string, string>> {
   // Local/custom endpoints (e.g. Ollama) need no key; only require one for cloud providers.
   if (!key && isCloud) {
     throw new AIError('missing-config', 'No API key configured. Go to Preferences > AI Assistant.');
+  }
+  // Refuse to send an API key over an unencrypted non-local connection.
+  if (key && !endpoint.startsWith('https://') && !isLocalEndpoint(endpoint)) {
+    throw new AIError(
+      'missing-config',
+      'API key will not be sent to a non-HTTPS endpoint. Update the endpoint URL to https:// in Preferences > AI Assistant.'
+    );
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (key) headers['Authorization'] = `Bearer ${key}`;

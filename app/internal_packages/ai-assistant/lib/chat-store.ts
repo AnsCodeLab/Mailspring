@@ -47,31 +47,34 @@ export class ChatStore {
   }
 
   conversationSummaries(): Array<{
-    threadId: string;
+    sessionId: string;
     lastAt: number;
     count: number;
+    title: string;
     preview: string;
   }> {
     return (
       this.db
         .prepare(
-          `
-      SELECT threadId,
-             MAX(createdAt) AS lastAt,
-             COUNT(*) AS count,
-             (SELECT content FROM chats c2
-              WHERE c2.threadId = c1.threadId
-              ORDER BY c2.id DESC LIMIT 1) AS preview
-      FROM chats c1
-      GROUP BY threadId
-      ORDER BY lastAt DESC
-    `
+          `SELECT threadId,
+                  MAX(createdAt) AS lastAt,
+                  COUNT(*) AS count,
+                  (SELECT content FROM chats c2
+                   WHERE c2.threadId = c1.threadId AND c2.role = 'user'
+                   ORDER BY c2.id ASC LIMIT 1) AS title,
+                  (SELECT content FROM chats c2
+                   WHERE c2.threadId = c1.threadId AND c2.role = 'assistant'
+                   ORDER BY c2.id DESC LIMIT 1) AS preview
+           FROM chats c1
+           GROUP BY threadId
+           ORDER BY lastAt DESC`
         )
         .all() as any[]
     ).map((r) => ({
-      threadId: r.threadId,
+      sessionId: r.threadId as string,
       lastAt: r.lastAt as number,
       count: r.count as number,
+      title: String(r.title || 'Conversation').slice(0, 80),
       preview: String(r.preview || '').slice(0, 120),
     }));
   }

@@ -397,6 +397,15 @@ body.platform-win32.window-type-default {
 // LINUX
 
 body.platform-linux {
+  // When the email content area is hidden (e.g. loading state, no thread selected),
+  // the last visible column toolbar may not reach the window's right edge.
+  // Extend it so Global.Toolbar.Right items (window controls, AI button) always
+  // appear right-aligned regardless of which column is last.
+  .sheet-toolbar-container [data-column]:last-child {
+    right: 0;
+    width: auto !important;
+  }
+
   .item-compose {
     order: -101;
   }

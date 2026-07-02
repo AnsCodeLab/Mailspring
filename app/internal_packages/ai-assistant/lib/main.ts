@@ -51,7 +51,9 @@ function registerFeatureUI() {
     panelContainer.remove();
   });
 
-  ComponentRegistry.register(AIToggleButton, { role: 'ThreadActionsToolbarButton' });
+  ComponentRegistry.register(AIToggleButton, {
+    location: WorkspaceStore.Sheet.Global.Toolbar.Right,
+  });
   featureDisposables.push(() => ComponentRegistry.unregister(AIToggleButton));
 
   const ThreadChatBadge = require('./thread-chat-badge').default;

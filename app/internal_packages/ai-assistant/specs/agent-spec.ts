@@ -151,9 +151,7 @@ describe('runAgent', () => {
     ]);
     let n = 0;
     const callModel = async () =>
-      n++ === 0
-        ? { tool_calls: [{ id: '1', name: 'custom', arguments: {} }] }
-        : { content: 'ok' };
+      n++ === 0 ? { tool_calls: [{ id: '1', name: 'custom', arguments: {} }] } : { content: 'ok' };
     // The generic confirm callback delegates to skill.confirmDialog if present
     await runAgent({
       messages: [{ role: 'user', content: 'q' }],
