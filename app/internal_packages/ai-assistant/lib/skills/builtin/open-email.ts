@@ -12,7 +12,9 @@ export const openEmailSkill: Skill = {
     required: ['messageId'],
   },
   async run({ messageId }: { messageId: string }) {
-    const msg = await DatabaseStore.find(Message, messageId).include(Message.attributes.body);
+    const msg = await DatabaseStore.find<Message>(Message, messageId).include(
+      Message.attributes.body
+    );
     if (!msg) throw new Error(`Message ${messageId} not found`);
     return {
       messageId: msg.id,

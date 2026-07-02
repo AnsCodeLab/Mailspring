@@ -171,7 +171,7 @@ export default class AIPreferences extends React.Component<
     loadingModels: false,
     indexProgress: { done: 0, total: 0, running: false },
     reindexing: false,
-    backendStatus: 'idle' as const,
+    backendStatus: 'idle' as 'idle' | 'checking' | 'ready' | 'error',
     backendError: '',
     embedSelectValue: AIConfig.getEmbeddingInAppModel(),
     webSearchProvider: detectWebSearchProvider(AIConfig.getWebSearchUrl()),

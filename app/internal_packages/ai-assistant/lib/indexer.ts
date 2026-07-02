@@ -1,5 +1,5 @@
 import path from 'path';
-import { DatabaseStore } from 'mailspring-exports';
+import { DatabaseStore, Message } from 'mailspring-exports';
 import { VectorStore } from './vector-store';
 import { getEmbeddingProvider } from './embeddings/provider';
 import { htmlToText, chunkText, contentHash } from './chunking';
@@ -39,9 +39,9 @@ class IndexerImpl {
       store.clear();
       store.setMeta('model', provider.id());
     }
-    // Incremental: react to mail DB deltas.
-    const sub = DatabaseStore.listen((change: any) => this._onChange(change));
-    this.unsub = () => (sub.dispose ? sub.dispose() : sub());
+    // Incremental: react to mail DB deltas. DatabaseStore.listen() always returns a plain
+    // unsubscribe function (see MailspringStore.listen), never a { dispose() } object.
+    this.unsub = DatabaseStore.listen((change: any) => this._onChange(change));
     // Wait for backend to be ready (model loaded / server reachable) before bulk indexing.
     try {
       await provider.ready();
@@ -122,8 +122,7 @@ class IndexerImpl {
     this.paused = false;
     this.running = true;
     try {
-      const { Message } = require('mailspring-exports');
-      const all = await DatabaseStore.findAll(Message).include(Message.attributes.body);
+      const all = await DatabaseStore.findAll<Message>(Message).include(Message.attributes.body);
       this.total = all.length;
       this.done = 0;
       const dbIds = new Set<string>(all.map((m: any) => m.id));

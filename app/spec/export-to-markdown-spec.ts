@@ -58,11 +58,11 @@ describe('buildThreadMarkdown', () => {
   beforeEach(() => {
     // Mock QuotedHTMLTransformer to pass through body unchanged
     const { QuotedHTMLTransformer } = require('mailspring-exports');
-    spyOn(QuotedHTMLTransformer, 'removeQuotedHTML').and.callFake((html: string) => html);
+    spyOn(QuotedHTMLTransformer, 'removeQuotedHTML').andCallFake((html: string) => html);
 
     // Mock AttachmentStore so no file reads occur
     const { AttachmentStore } = require('mailspring-exports');
-    spyOn(AttachmentStore, 'pathForFile').and.returnValue(null);
+    spyOn(AttachmentStore, 'pathForFile').andReturn(null);
   });
 
   it('returns empty string when messages array is empty', () => {
@@ -113,16 +113,16 @@ describe('buildThreadMarkdown', () => {
     const result = buildThreadMarkdown(makeThread(), msgs);
     // Header --- plus separator between messages
     const separatorCount = (result.match(/\n---\n/g) || []).length;
-    expect(separatorCount).toBeGreaterThanOrEqual(2);
+    expect(separatorCount).toBeGreaterThan(1);
   });
 });
 
 describe('buildSingleMessageMarkdown', () => {
   beforeEach(() => {
     const { QuotedHTMLTransformer } = require('mailspring-exports');
-    spyOn(QuotedHTMLTransformer, 'removeQuotedHTML').and.callFake((html: string) => html);
+    spyOn(QuotedHTMLTransformer, 'removeQuotedHTML').andCallFake((html: string) => html);
     const { AttachmentStore } = require('mailspring-exports');
-    spyOn(AttachmentStore, 'pathForFile').and.returnValue(null);
+    spyOn(AttachmentStore, 'pathForFile').andReturn(null);
   });
 
   it('starts with # Subject heading', () => {

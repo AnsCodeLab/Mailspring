@@ -62,8 +62,8 @@ const get = <T>(key: string, def: T): T => {
 
 export const AIConfig = {
   keys: K,
-  isEnabled: () => get(K.enabled, false) === true,
-  isKnowledgeBaseEnabled: () => get(K.kbEnabled, false) === true,
+  isEnabled: () => get<boolean>(K.enabled, false) === true,
+  isKnowledgeBaseEnabled: () => get<boolean>(K.kbEnabled, false) === true,
   getProvider: () => get<'api' | 'claude-cli'>(K.provider, 'api'),
   getEndpoint: () => String(get(K.endpoint, 'https://api.openai.com/v1')).replace(/\/+$/, ''),
   getModel: () => get(K.model, 'gpt-4o-mini'),
@@ -74,7 +74,7 @@ export const AIConfig = {
   getEmbeddingServerUrl: () =>
     String(get(K.embedServerUrl, 'http://localhost:11434/v1')).replace(/\/+$/, ''),
   getEmbeddingModel: () => get(K.embedModel, 'all-MiniLM-L6-v2'),
-  isWebSearchEnabled: () => get(K.webSearchEnabled, false) === true,
+  isWebSearchEnabled: () => get<boolean>(K.webSearchEnabled, false) === true,
   getWebSearchProvider: () => get(K.webSearchProvider, 'searxng'),
   getWebSearchUrl: () => String(get(K.webSearchUrl, '')).replace(/\/+$/, ''),
   getWebSearchResults: () =>
@@ -106,7 +106,7 @@ export const AIConfig = {
   // RAG mode
   getRagMode: () => get<'default' | 'auto-tune' | 'custom'>(K.ragMode, 'default'),
   // Skill toggles
-  isSkillSendEmailEnabled: () => get(K.skillSendEmail, true) !== false,
-  isSkillTrashThreadEnabled: () => get(K.skillTrashThread, true) !== false,
-  isSkillArchiveThreadEnabled: () => get(K.skillArchiveThread, true) !== false,
+  isSkillSendEmailEnabled: () => get<boolean>(K.skillSendEmail, true) !== false,
+  isSkillTrashThreadEnabled: () => get<boolean>(K.skillTrashThread, true) !== false,
+  isSkillArchiveThreadEnabled: () => get<boolean>(K.skillArchiveThread, true) !== false,
 };

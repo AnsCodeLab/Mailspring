@@ -23,6 +23,7 @@ describe('runAgent', () => {
       registry: r,
       callModel,
       confirm: async () => 'proceed',
+      confirmMany: async () => 'deny',
       maxSteps: 5,
     });
     expect(out.answer).toBe('final answer');
@@ -40,6 +41,7 @@ describe('runAgent', () => {
       registry: r,
       callModel,
       confirm: async () => 'proceed',
+      confirmMany: async () => 'deny',
       maxSteps: 3,
     });
     expect(out.steps.length).toBe(3);
@@ -69,6 +71,7 @@ describe('runAgent', () => {
       registry: r,
       callModel,
       confirm: async () => 'deny',
+      confirmMany: async () => 'deny',
       maxSteps: 5,
     });
     expect(ran).toBe(false);
@@ -98,6 +101,7 @@ describe('runAgent', () => {
       registry: r,
       callModel,
       confirm: async () => 'done',
+      confirmMany: async () => 'deny',
       maxSteps: 5,
     });
     expect(ran).toBe(false);
@@ -128,6 +132,7 @@ describe('runAgent', () => {
       registry: r,
       callModel,
       confirm: async () => 'proceed',
+      confirmMany: async () => 'deny',
       maxSteps: 5,
     });
     expect(ran).toBe(true);
@@ -162,6 +167,7 @@ describe('runAgent', () => {
         confirmCalled = true;
         return 'deny';
       },
+      confirmMany: async () => 'deny',
       maxSteps: 5,
     });
     expect(dialogCalled).toBe(true);
@@ -180,6 +186,7 @@ describe('runAgent', () => {
       registry: r,
       callModel,
       confirm: async () => 'proceed',
+      confirmMany: async () => 'deny',
       maxSteps: 5,
     });
     expect(out.steps[0].result.error).toContain('unknown skill');

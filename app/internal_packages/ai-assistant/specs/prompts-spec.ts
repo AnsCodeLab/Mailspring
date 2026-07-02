@@ -21,7 +21,6 @@ describe('buildChatPrompt', () => {
       question: 'hi',
       threadMessages: [],
       history: [],
-      pinned: [],
       retrieved: [],
     });
     expect(msgs[0].role).toBe('system');
@@ -32,7 +31,6 @@ describe('buildChatPrompt', () => {
       question: 'q',
       threadMessages: [],
       history: [],
-      pinned: [],
       retrieved: [src('1', 'hello world')],
     });
     const joined = msgs.map((m) => m.content).join('\n');
@@ -44,7 +42,6 @@ describe('buildChatPrompt', () => {
       question: 'the question',
       threadMessages: [],
       history: [],
-      pinned: [],
       retrieved: [],
     });
     expect(msgs[msgs.length - 1]).toEqual({ role: 'user', content: 'the question' });
@@ -55,7 +52,6 @@ describe('buildChatPrompt', () => {
       question: 'q',
       threadMessages: [],
       history: [],
-      pinned: [],
       retrieved: [big],
       budgetChars: 500,
     });
@@ -70,7 +66,6 @@ describe('buildChatPrompt', () => {
       question: 'q',
       threadMessages: [],
       history,
-      pinned: [],
       retrieved: [],
       budgetChars: 2000,
     });

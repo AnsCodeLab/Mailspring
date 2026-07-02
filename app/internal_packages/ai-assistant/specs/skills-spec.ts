@@ -69,6 +69,9 @@ function fakeExports(overrides: Record<string, any> = {}) {
         where: function () {
           return this;
         },
+        order: function () {
+          return this;
+        },
         limit: function () {
           return this;
         },
@@ -105,7 +108,7 @@ function fakeExports(overrides: Record<string, any> = {}) {
       Object.entries(methods).forEach(([method, impl]) => {
         if (ms[group] && typeof ms[group][method] !== 'undefined') {
           spyOn(ms[group], method).andCallFake(
-            typeof impl === 'function' ? impl : () => impl as any
+            typeof impl === 'function' ? (impl as (...args: any[]) => any) : () => impl as any
           );
         }
       });
@@ -199,6 +202,46 @@ describe('mailboxSearchSkill', () => {
     fakeExports();
     const result = await mailboxSearchSkill.run({ query: 'test' }, {});
     expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('filters by sender substring client-side (name or email)', async () => {
+    const messages = [
+      {
+        id: 'm1',
+        subject: 'Hi',
+        threadId: 't1',
+        from: [{ email: 'alice@example.com', name: 'Alice' }],
+        date: new Date(),
+        body: 'hi',
+      },
+      {
+        id: 'm2',
+        subject: 'Yo',
+        threadId: 't2',
+        from: [{ email: 'bob@example.com', name: 'Bob' }],
+        date: new Date(),
+        body: 'yo',
+      },
+    ];
+    fakeExports({
+      DatabaseStore: {
+        findAll: jasmine.createSpy('findAll').andReturn({
+          order: function () {
+            return this;
+          },
+          where: function () {
+            return this;
+          },
+          limit: function () {
+            return this;
+          },
+          then: (resolve: any) => resolve(messages),
+        }),
+      },
+    });
+    const result = await mailboxSearchSkill.run({ sender: 'alice' }, {});
+    expect(result.length).toBe(1);
+    expect(result[0].sender).toContain('Alice');
   });
 });
 

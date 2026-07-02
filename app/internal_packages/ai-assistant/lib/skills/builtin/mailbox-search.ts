@@ -12,11 +12,21 @@ export const mailboxSearchSkill: Skill = {
     properties: { sender: { type: 'string' }, subject: { type: 'string' } },
   },
   async run({ sender, subject }: { sender?: string; subject?: string }) {
-    let q = DatabaseStore.findAll(Message);
-    if (sender) q = (q as any).where(Message.attributes.from.containsString(sender));
-    if (subject) q = (q as any).where(Message.attributes.subject.containsString(subject));
-    const msgs = await (q as any).limit(20);
-    return msgs.map((m: any) => ({
+    let q = DatabaseStore.findAll<Message>(Message).order(Message.attributes.date.descending());
+    // AttributeString supports substring search directly.
+    if (subject) q = q.where(Message.attributes.subject.like(subject));
+    // AttributeCollection.contains() only matches an exact joined Contact id, not a
+    // substring - it can't filter "from" by a partial name/email. Fetch a bounded window
+    // ordered newest-first and filter by sender client-side instead.
+    const msgs = await q.limit(sender ? 500 : 20);
+    const filtered = sender
+      ? msgs.filter((m) => {
+          const from = m.from?.[0];
+          const haystack = `${from?.name || ''} ${from?.email || ''}`.toLowerCase();
+          return haystack.includes(sender.toLowerCase());
+        })
+      : msgs;
+    return filtered.slice(0, 20).map((m) => ({
       messageId: m.id,
       threadId: m.threadId,
       sender: m.from?.[0]?.name || m.from?.[0]?.email || '',
