@@ -6,8 +6,18 @@
   section {
     margin-bottom: 24px;
 
-    h2 { font-size: 15px; font-weight: 700; margin: 0 0 14px; }
-    h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; color: @text-color; opacity: 0.85; }
+    h2 {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 14px;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0 0 10px;
+      color: @text-color;
+      opacity: 0.85;
+    }
   }
 
   label {
@@ -24,7 +34,9 @@
       margin-top: 4px;
       box-sizing: border-box;
     }
-    input[type='checkbox'] { margin-right: 6px; }
+    input[type='checkbox'] {
+      margin-right: 6px;
+    }
   }
 }
 
@@ -43,9 +55,15 @@
     color: @text-color-subtle;
     cursor: pointer;
 
-    &:first-child { border-radius: 4px 0 0 4px; }
-    &:last-child  { border-radius: 0 4px 4px 0; }
-    &:not(:first-child) { border-left: none; }
+    &:first-child {
+      border-radius: 4px 0 0 4px;
+    }
+    &:last-child {
+      border-radius: 0 4px 4px 0;
+    }
+    &:not(:first-child) {
+      border-left: none;
+    }
 
     &.active {
       background: var(--accent-primary, #6366f1);
@@ -78,12 +96,43 @@
 .ai-toggle-btn {
   font-size: 14px;
   opacity: 0.6;
-  transition: opacity 0.15s, color 0.15s;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
 
-  &:hover { opacity: 1; }
+  &:hover {
+    opacity: 1;
+  }
   &.active {
     opacity: 1;
     color: var(--accent-primary, #6366f1);
+  }
+}
+
+// ─── Composer AI assist dropdown ──────────────────────────────────────────────
+// Rendered via ReactDOM.createPortal into <body>, so selector must be top-level.
+
+.ai-assist-menu {
+  min-width: 160px;
+  background: @background-primary;
+  border: 1px solid @border-color-divider;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+  padding: 4px 0;
+
+  .item {
+    padding: 7px 14px;
+    font-size: 13px;
+    color: @text-color;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s;
+
+    &:hover {
+      background: color-mix(in srgb, var(--accent-primary, #6366f1) 10%, @background-primary);
+      color: var(--accent-primary, #6366f1);
+    }
   }
 }
 
@@ -105,7 +154,10 @@
   color: var(--text-color-subtle);
   padding: 0;
 
-  .ai-tab-icon { font-size: 13px; color: var(--accent-primary, #6366f1); }
+  .ai-tab-icon {
+    font-size: 13px;
+    color: var(--accent-primary, #6366f1);
+  }
   .ai-tab-label {
     font-size: 10px;
     font-weight: 600;
@@ -131,7 +183,9 @@
   width: 5px;
   cursor: ew-resize;
   z-index: 10;
-  &:hover { background: color-mix(in srgb, var(--accent-primary, #6366f1) 25%, transparent); }
+  &:hover {
+    background: color-mix(in srgb, var(--accent-primary, #6366f1) 25%, transparent);
+  }
 }
 
 .ai-float-panel {
@@ -229,7 +283,9 @@
       background: none;
       color: @text-color-subtle;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      transition:
+        background 0.12s,
+        color 0.12s;
 
       &.active {
         background: var(--accent-primary, #6366f1);
@@ -257,7 +313,9 @@
     cursor: pointer;
     border-radius: 5px;
     font-size: 13px;
-    transition: background 0.12s, color 0.12s;
+    transition:
+      background 0.12s,
+      color 0.12s;
 
     &:hover {
       background: @background-tertiary;
@@ -298,7 +356,9 @@
       font-weight: 600;
       color: @text-color-subtle;
     }
-    .ai-empty-hint { font-size: 12px; }
+    .ai-empty-hint {
+      font-size: 12px;
+    }
   }
 
   // Suggestion chips
@@ -317,7 +377,10 @@
       color: @text-color;
       font-size: 12px;
       cursor: pointer;
-      transition: background 0.12s, border-color 0.12s, transform 0.1s;
+      transition:
+        background 0.12s,
+        border-color 0.12s,
+        transform 0.1s;
 
       &:hover {
         background: color-mix(in srgb, var(--accent-primary, #6366f1) 6%, @background-primary);
@@ -339,7 +402,8 @@
 
       .ai-bubble {
         background: color-mix(in srgb, var(--accent-primary, #6366f1) 14%, @background-primary);
-        border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 28%, @border-color-divider);
+        border: 1px solid
+          color-mix(in srgb, var(--accent-primary, #6366f1) 28%, @border-color-divider);
         border-radius: 14px 14px 4px 14px;
         color: @text-color;
       }
@@ -356,7 +420,8 @@
           color-mix(in srgb, var(--accent-primary, #6366f1) 20%, @background-secondary),
           @background-secondary
         );
-        border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 20%, @border-color-divider);
+        border: 1px solid
+          color-mix(in srgb, var(--accent-primary, #6366f1) 20%, @border-color-divider);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -372,20 +437,63 @@
       }
     }
 
+    // Column wrapper: holds the bubble + the per-turn "Use as draft reply" button
+    .ai-turn-body {
+      min-width: 0;
+      max-width: calc(100% - 34px);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ai-bubble-draft-btn {
+      align-self: flex-start;
+      font-size: 11px;
+      padding: 0 8px;
+      line-height: 20px;
+      border: 1px solid @border-color-divider;
+      border-radius: 4px;
+      background: transparent;
+      color: @text-color-subtle;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+      &:hover {
+        color: var(--accent-primary, #6366f1);
+        border-color: var(--accent-primary, #6366f1);
+        background: color-mix(in srgb, var(--accent-primary, #6366f1) 8%, @background-secondary);
+      }
+    }
+    &:hover .ai-bubble-draft-btn {
+      opacity: 1;
+    }
+
     .ai-bubble {
       padding: 9px 13px;
       font-size: 13px;
       line-height: 1.6;
       word-wrap: break-word;
-      max-width: calc(100% - 34px);
+      max-width: 100%;
       user-select: text;
       cursor: text;
 
       // Markdown styles
-      p { margin: 0 0 6px; &:last-child { margin-bottom: 0; } }
-      .ai-para-gap { height: 6px; }
-      strong { font-weight: 600; }
-      em { font-style: italic; }
+      p {
+        margin: 0 0 6px;
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+      .ai-para-gap {
+        height: 6px;
+      }
+      strong {
+        font-weight: 600;
+      }
+      em {
+        font-style: italic;
+      }
       .ai-inline-code {
         font-family: monospace;
         font-size: 12px;
@@ -420,14 +528,23 @@
       .ai-md-heading {
         font-weight: 700;
         margin: 8px 0 4px;
-        &:first-child { margin-top: 0; }
+        &:first-child {
+          margin-top: 0;
+        }
       }
-      h3.ai-md-heading { font-size: 13px; }
-      h4.ai-md-heading { font-size: 12px; }
-      ul, ol {
+      h3.ai-md-heading {
+        font-size: 13px;
+      }
+      h4.ai-md-heading {
+        font-size: 12px;
+      }
+      ul,
+      ol {
         margin: 4px 0;
         padding-left: 20px;
-        li { margin-bottom: 2px; }
+        li {
+          margin-bottom: 2px;
+        }
       }
       .ai-md-hr {
         border: none;
@@ -449,7 +566,8 @@
         border-collapse: collapse;
         font-size: 12px;
         min-width: 100%;
-        th, td {
+        th,
+        td {
           border: 1px solid @border-color-divider;
           padding: 4px 10px;
           white-space: nowrap;
@@ -481,7 +599,9 @@
       flex-shrink: 0;
       align-self: center;
     }
-    &:hover .ai-turn-actions { opacity: 1; }
+    &:hover .ai-turn-actions {
+      opacity: 1;
+    }
 
     .ai-turn-action-btn {
       width: 26px;
@@ -495,9 +615,15 @@
       border-radius: 6px;
       cursor: pointer;
       padding: 0;
-      transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+      transition:
+        background 0.12s,
+        color 0.12s,
+        border-color 0.12s,
+        box-shadow 0.12s;
 
-      svg { display: block; }
+      svg {
+        display: block;
+      }
 
       &:hover {
         background: color-mix(in srgb, var(--accent-primary, #6366f1) 10%, @background-primary);
@@ -532,7 +658,9 @@
       background: @background-primary;
       color: @text-color-subtle;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      transition:
+        background 0.12s,
+        color 0.12s;
       max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -565,7 +693,10 @@
     font-size: 11.5px;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.12s, border-color 0.12s, transform 0.08s;
+    transition:
+      background 0.12s,
+      border-color 0.12s,
+      transform 0.08s;
     animation: ai-turn-in 0.15s ease;
 
     &:hover {
@@ -599,12 +730,17 @@
     background: color-mix(in srgb, var(--accent-primary, #6366f1) 8%, @background-primary);
     color: var(--accent-primary, #6366f1);
     cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
+    transition:
+      background 0.12s,
+      border-color 0.12s;
 
     &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--accent-primary, #6366f1) 14%, @background-primary);
     }
-    &:disabled { opacity: 0.4; cursor: default; }
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
   }
 }
 
@@ -626,14 +762,18 @@
     line-height: 1.5;
     background: @background-secondary;
     color: @text-color;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
 
     &:focus {
       outline: none;
       border-color: var(--accent-primary, #6366f1);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary, #6366f1) 18%, transparent);
     }
-    &:disabled { opacity: 0.5; }
+    &:disabled {
+      opacity: 0.5;
+    }
   }
 
   .ai-input-row {
@@ -650,11 +790,18 @@
       background: var(--accent-primary, #6366f1);
       color: #fff;
       cursor: pointer;
-      transition: filter 0.12s, opacity 0.12s;
+      transition:
+        filter 0.12s,
+        opacity 0.12s;
       letter-spacing: 0.02em;
 
-      &:disabled { opacity: 0.35; cursor: default; }
-      &:hover:not(:disabled) { filter: brightness(1.1); }
+      &:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      &:hover:not(:disabled) {
+        filter: brightness(1.1);
+      }
 
       &.cancel {
         background: @background-secondary;
@@ -666,21 +813,164 @@
   }
 }
 
+// ─── Email countdown card ─────────────────────────────────────────────────────
+
+.ai-pending-email {
+  margin: 4px 10px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 45%, @border-color-divider);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-primary, #6366f1) 7%, @background-primary);
+  padding: 10px 12px;
+  flex-shrink: 0;
+  animation: ai-turn-in 0.18s ease;
+
+  .ai-pending-email-header {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .ai-pending-email-countdown {
+    flex-shrink: 0;
+
+    svg {
+      display: block;
+
+      .ai-countdown-bg {
+        fill: none;
+        stroke: color-mix(in srgb, @text-color 12%, transparent);
+        stroke-width: 3;
+      }
+      .ai-countdown-ring {
+        fill: none;
+        stroke: var(--accent-primary, #6366f1);
+        stroke-width: 3;
+        stroke-linecap: round;
+        transition: stroke-dasharray 0.8s linear;
+      }
+      .ai-countdown-num {
+        fill: @text-color;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: inherit;
+      }
+    }
+  }
+
+  .ai-pending-email-info {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: @text-color;
+
+    .ai-pending-email-to,
+    .ai-pending-email-subject {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 2px;
+
+      strong {
+        color: @text-color;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .ai-pending-email-preview {
+    font-size: 11.5px;
+    color: @text-color-subtle;
+    background: color-mix(in srgb, @text-color 5%, @background-primary);
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+
+  .ai-pending-email-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+
+    button {
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      transition:
+        filter 0.12s,
+        opacity 0.12s;
+
+      &:hover {
+        filter: brightness(1.08);
+      }
+      &:active {
+        filter: brightness(0.96);
+      }
+    }
+
+    .ai-pending-send-now {
+      background: var(--accent-primary, #6366f1);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .ai-pending-edit {
+      background: color-mix(in srgb, @text-color 12%, @background-primary);
+      color: @text-color;
+      border: 1px solid @border-color-divider !important;
+    }
+
+    .ai-pending-cancel {
+      background: transparent;
+      color: @text-color-subtle;
+      border: 1px solid transparent !important;
+
+      &:hover {
+        color: @text-color;
+      }
+    }
+  }
+}
+
 // ─── Animations ───────────────────────────────────────────────────────────────
 
 @keyframes ai-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 @keyframes ai-turn-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes ai-badge-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 // ─── Thread list chat badge ────────────────────────────────────────────────────
@@ -716,9 +1006,16 @@
   cursor: pointer;
   border-radius: 5px;
   font-size: 14px;
-  transition: background 0.12s, color 0.12s;
-  &:hover { color: @text-color; background: @background-secondary; }
-  &.active { color: @text-color; }
+  transition:
+    background 0.12s,
+    color 0.12s;
+  &:hover {
+    color: @text-color;
+    background: @background-secondary;
+  }
+  &.active {
+    color: @text-color;
+  }
 }
 
 .ai-history-panel {
@@ -761,8 +1058,12 @@
   padding: 10px 14px;
   border-bottom: 1px solid @border-color-divider;
   cursor: pointer;
-  &:last-child { border-bottom: none; }
-  &:hover { background: var(--component-active-bg); }
+  &:last-child {
+    border-bottom: none;
+  }
+  &:hover {
+    background: var(--component-active-bg);
+  }
 }
 
 .ai-history-item-meta {
@@ -818,5 +1119,7 @@
   background: none;
   color: var(--text-color);
   cursor: pointer;
-  &:hover { background: var(--component-active-bg); }
+  &:hover {
+    background: var(--component-active-bg);
+  }
 }

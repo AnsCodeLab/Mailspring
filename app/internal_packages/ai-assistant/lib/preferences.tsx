@@ -1048,7 +1048,7 @@ export default class AIPreferences extends React.Component<
                               href={preset.keyUrl}
                               onClick={(e) => {
                                 e.preventDefault();
-                                require('electron').shell.openExternal(preset.keyUrl!);
+                                require('electron').shell.openExternal(preset.keyUrl as string);
                               }}
                             >
                               {preset.keyUrl.replace('https://', '')}

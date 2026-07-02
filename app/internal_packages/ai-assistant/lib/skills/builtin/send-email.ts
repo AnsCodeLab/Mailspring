@@ -31,7 +31,9 @@ function markdownToHtml(md: string): string {
   const flushList = () => {
     if (!listItems.length) return;
     const tag = listOrdered ? 'ol' : 'ul';
-    out.push(`<${tag}>${listItems.map((li) => `<li>${li}</li>`).join('')}</${tag}>`);
+    out.push(
+      `<${tag} style="margin:0 0 1em 0;padding-left:1.5em">${listItems.map((li) => `<li>${li}</li>`).join('')}</${tag}>`
+    );
     listItems = [];
   };
 
@@ -90,7 +92,7 @@ function markdownToHtml(md: string): string {
       para.push(inlineMarkdown(lines[i]));
       i++;
     }
-    out.push(`<p>${para.join('<br>')}</p>`);
+    out.push(`<p style="margin:0 0 1em 0">${para.join('<br>')}</p>`);
   }
   flushList();
   return out.join('\n');
@@ -116,7 +118,35 @@ export const sendEmailSkill: Skill = {
   },
   enabled: () => AIConfig.isSkillSendEmailEnabled(),
 
-  async confirmDialog(args): Promise<import('../types').ConfirmResult> {
+  async confirmDialog(args, ctx): Promise<import('../types').ConfirmResult> {
+    // Use the inline countdown card when running inside the chat panel.
+    if (ctx?.showEmailCountdown) {
+      const choice = await ctx.showEmailCountdown({
+        to: String(args.to || ''),
+        subject: String(args.subject || ''),
+        body: String(args.body || ''),
+      });
+      if (choice === 'cancel') return 'deny';
+      if (choice === 'compose') {
+        const {
+          DraftFactory,
+          DraftStore,
+          SanitizeTransformer,
+          Contact,
+        } = require('mailspring-exports');
+        const html = SanitizeTransformer.runSync(markdownToHtml(String(args.body || '')));
+        const draft = await DraftFactory.createDraft({
+          subject: args.subject || '',
+          to: args.to ? [new Contact({ email: args.to, name: args.to })] : [],
+          cc: args.cc ? [new Contact({ email: args.cc, name: args.cc })] : [],
+        });
+        draft.body = html + (draft.body || '');
+        await DraftStore._finalizeAndPersistNewMessage(draft, { popout: true });
+        return 'done';
+      }
+      return 'proceed'; // 'send' → run() sends
+    }
+    // Fallback: native OS dialog.
     const to = String(args.to || '').trim();
     const subject = String(args.subject || '').trim();
     const preview = String(args.body || '').slice(0, 300);
@@ -160,12 +190,14 @@ export const sendEmailSkill: Skill = {
     const html = SanitizeTransformer.runSync(markdownToHtml(String(args.body || '')));
     const draft = await DraftFactory.createDraft({
       subject: args.subject || '',
-      to: args.to ? [{ email: args.to, name: args.to }] : [],
-      cc: args.cc ? [{ email: args.cc, name: args.cc }] : [],
+      to: args.to ? [new Contact({ email: args.to, name: args.to })] : [],
+      cc: args.cc ? [new Contact({ email: args.cc, name: args.cc })] : [],
     });
     draft.body = html + (draft.body || '');
-    await DraftStore._finalizeAndPersistNewMessage(draft);
-    Actions.sendDraft(draft.headerMessageId);
-    return { sent: true, to: args.to, subject: args.subject, body: args.body };
+    // _finalizeAndPersistNewMessage registers the draft session (required by _onSendDraft)
+    // and persists the draft to the DB before the sync engine sends it.
+    const { headerMessageId } = await DraftStore._finalizeAndPersistNewMessage(draft);
+    Actions.sendDraft(headerMessageId);
+    return { sent: true, to: args.to, subject: args.subject };
   },
 };

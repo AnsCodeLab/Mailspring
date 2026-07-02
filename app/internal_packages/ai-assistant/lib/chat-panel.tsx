@@ -437,6 +437,13 @@ export default class AIChatPanel extends React.Component<
       lastAt: number;
       count: number;
     }>;
+    pendingEmail: {
+      to: string;
+      subject: string;
+      body: string;
+      secondsLeft: number;
+      resolve: (result: 'send' | 'cancel' | 'compose') => void;
+    } | null;
   }
 > {
   static displayName = 'AIChatPanel';
@@ -450,6 +457,7 @@ export default class AIChatPanel extends React.Component<
   private _scrollRef = React.createRef<HTMLDivElement>();
   private _inputRef = React.createRef<HTMLTextAreaElement>();
   private _resizing = false;
+  private _countdownInterval: any = null;
 
   state = {
     thread: FocusedContentStore.focused('thread'),
@@ -469,6 +477,7 @@ export default class AIChatPanel extends React.Component<
       lastAt: number;
       count: number;
     }>,
+    pendingEmail: null,
   };
 
   private _chatStore(): ChatStore {
@@ -525,6 +534,7 @@ export default class AIChatPanel extends React.Component<
     if (this._abort) this._abort.abort();
     if (this._configSub1) this._configSub1.dispose();
     if (this._configSub2) this._configSub2.dispose();
+    if (this._countdownInterval) clearInterval(this._countdownInterval);
     this._stopResize();
   }
 
@@ -582,6 +592,118 @@ export default class AIChatPanel extends React.Component<
     AppEnv.config.set(AIConfig.keys.currentSession, sessionId);
     this.setState({ showHistory: false, sessionId, turns });
   };
+
+  // ─── Email countdown ────────────────────────────────────────────────────────
+
+  _showEmailCountdown = (data: {
+    to: string;
+    subject: string;
+    body: string;
+  }): Promise<'send' | 'cancel' | 'compose'> => {
+    return new Promise((resolve) => {
+      if (this._countdownInterval) {
+        clearInterval(this._countdownInterval);
+        this._countdownInterval = null;
+      }
+      this.setState({ pendingEmail: { ...data, secondsLeft: 30, resolve } });
+      this._countdownInterval = setInterval(() => {
+        // Read committed state directly — setInterval runs outside React's batch so
+        // this.state always reflects the latest committed state here.
+        const pe = this.state.pendingEmail;
+        if (!pe) {
+          clearInterval(this._countdownInterval);
+          this._countdownInterval = null;
+          return;
+        }
+        if (pe.secondsLeft <= 1) {
+          clearInterval(this._countdownInterval);
+          this._countdownInterval = null;
+          this._resolveEmailCountdown('send');
+          return;
+        }
+        this.setState((prev: any) => {
+          if (!prev.pendingEmail) return null;
+          return {
+            pendingEmail: { ...prev.pendingEmail, secondsLeft: prev.pendingEmail.secondsLeft - 1 },
+          };
+        });
+      }, 1000);
+    });
+  };
+
+  _resolveEmailCountdown = (result: 'send' | 'cancel' | 'compose') => {
+    if (this._countdownInterval) {
+      clearInterval(this._countdownInterval);
+      this._countdownInterval = null;
+    }
+    const { pendingEmail } = this.state;
+    if (pendingEmail) {
+      this.setState({ pendingEmail: null });
+      pendingEmail.resolve(result);
+    }
+  };
+
+  _renderEmailCountdown() {
+    const { pendingEmail } = this.state;
+    if (!pendingEmail) return null;
+    const progress = pendingEmail.secondsLeft / 30;
+    const r = 16;
+    const circ = 2 * Math.PI * r;
+    return (
+      <div className="ai-pending-email">
+        <div className="ai-pending-email-header">
+          <div className="ai-pending-email-countdown">
+            <svg width="40" height="40" viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r={r} className="ai-countdown-bg" />
+              <circle
+                cx="20"
+                cy="20"
+                r={r}
+                className="ai-countdown-ring"
+                strokeDasharray={`${progress * circ} ${circ}`}
+                transform="rotate(-90 20 20)"
+              />
+              <text x="20" y="25" textAnchor="middle" className="ai-countdown-num">
+                {pendingEmail.secondsLeft}
+              </text>
+            </svg>
+          </div>
+          <div className="ai-pending-email-info">
+            <div className="ai-pending-email-to">
+              <strong>To:</strong> {pendingEmail.to}
+            </div>
+            <div className="ai-pending-email-subject">
+              <strong>Subject:</strong> {pendingEmail.subject}
+            </div>
+          </div>
+        </div>
+        <div className="ai-pending-email-preview">
+          {pendingEmail.body.slice(0, 800)}
+          {pendingEmail.body.length > 800 ? '...' : ''}
+        </div>
+        <div className="ai-pending-email-actions">
+          <button
+            className="ai-pending-send-now"
+            onClick={() => this._resolveEmailCountdown('send')}
+          >
+            {localized('Send Now')}
+          </button>
+          <button
+            className="ai-pending-edit"
+            onClick={() => this._resolveEmailCountdown('compose')}
+          >
+            {localized('Edit in Composer')}
+          </button>
+          <button
+            className="ai-pending-cancel"
+            onClick={() => this._resolveEmailCountdown('cancel')}
+          >
+            {localized('Cancel')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Messaging ─────────────────────────────────────────────────────────────
 
@@ -688,7 +810,7 @@ export default class AIChatPanel extends React.Component<
             if (skill.confirmDialog) return skill.confirmDialog(argsArray[0], ctx);
             return 'deny';
           },
-          ctx: { thread },
+          ctx: { thread, showEmailCountdown: this._showEmailCountdown },
           signal: this._abort?.signal,
           maxSteps: AIConfig.getMaxAgentSteps(),
           onToolStep: (step: any) => {
@@ -740,9 +862,10 @@ export default class AIChatPanel extends React.Component<
     this.setState({ turns: [], retrieved: [], citedSources: [], sessionId });
   };
 
-  _draftReply = async () => {
-    const last = [...this.state.turns].reverse().find((t) => t.role === 'assistant');
-    if (!last || !this.state.thread || this._composing) return;
+  _draftReply = async (content?: string) => {
+    const text =
+      content ?? [...this.state.turns].reverse().find((t) => t.role === 'assistant')?.content ?? '';
+    if (!text || !this.state.thread || this._composing) return;
     this._composing = true;
     try {
       const messages: any[] = await this.state.thread.messages({ includeHidden: false });
@@ -752,7 +875,19 @@ export default class AIChatPanel extends React.Component<
         message: messages[messages.length - 1],
         type: 'reply',
       });
-      const escaped = last.content
+
+      // Strip AI framing added after send_email / create_draft tool calls:
+      //   **Subject:** <subject>          ← header line
+      //   <body>
+      //   ---                             ← separator
+      //   *Email sent.* / *Draft opened…* ← footer
+      let body = text;
+      body = body.replace(/^\*\*Subject:\*\*[^\n]*\n?/, '').trimStart();
+      const hrIdx = body.search(/\n---\n/);
+      if (hrIdx !== -1) body = body.slice(0, hrIdx);
+      body = body.trim();
+
+      const escaped = body
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -835,7 +970,6 @@ export default class AIChatPanel extends React.Component<
 
   _renderPanel(width: number) {
     const { turns, busy, input, citedSources, thread, showHistory } = this.state;
-    const hasReplySuggestion = turns.some((t) => t.role === 'assistant' && t.content);
     const followUps =
       !busy && turns.length > 0 && turns[turns.length - 1].role === 'assistant'
         ? getFollowUpSuggestions(turns, !!thread)
@@ -916,14 +1050,24 @@ export default class AIChatPanel extends React.Component<
                 return (
                   <div key={i} className={`ai-turn ${t.role}`}>
                     {t.role === 'assistant' && <span className="ai-avatar">✦</span>}
-                    <div className="ai-bubble">
-                      {t.role === 'assistant' ? (
-                        <>
-                          {t.content ? renderMarkdown(t.content) : null}
-                          {isStreaming && <span className="ai-cursor">▊</span>}
-                        </>
-                      ) : (
-                        t.content || '​'
+                    <div className="ai-turn-body">
+                      <div className="ai-bubble">
+                        {t.role === 'assistant' ? (
+                          <>
+                            {t.content ? renderMarkdown(t.content) : null}
+                            {isStreaming && <span className="ai-cursor">▊</span>}
+                          </>
+                        ) : (
+                          t.content || '​'
+                        )}
+                      </div>
+                      {canAct && t.role === 'assistant' && thread && (
+                        <button
+                          className="ai-bubble-draft-btn"
+                          onClick={() => this._draftReply(t.content)}
+                        >
+                          {localized('Use as draft reply')}
+                        </button>
                       )}
                     </div>
                     {canAct && (
@@ -1023,15 +1167,6 @@ export default class AIChatPanel extends React.Component<
               )}
             </div>
 
-            {/* Draft reply action */}
-            {hasReplySuggestion && (
-              <div className="ai-chat-actions">
-                <button className="ai-action-btn" onClick={this._draftReply} disabled={busy}>
-                  {localized('Use as draft reply')}
-                </button>
-              </div>
-            )}
-
             {/* Follow-up suggestion pills */}
             {followUps.length > 0 && (
               <div className="ai-followup-chips">
@@ -1042,6 +1177,9 @@ export default class AIChatPanel extends React.Component<
                 ))}
               </div>
             )}
+
+            {/* Email countdown card */}
+            {this._renderEmailCountdown()}
 
             {/* Input */}
             <div className="ai-chat-input">

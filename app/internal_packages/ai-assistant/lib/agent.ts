@@ -42,7 +42,8 @@ export async function runAgent(opts: {
     }
     for (const [skillName, group] of confirmGroups) {
       if (group.length <= 1) continue; // will be handled individually below
-      const skill = opts.registry.get(skillName)!;
+      const skill = opts.registry.get(skillName);
+      if (!skill) continue;
       let decision: ConfirmResult = 'deny';
       try {
         decision = await opts.confirmMany(
@@ -66,7 +67,7 @@ export async function runAgent(opts: {
         let decision: ConfirmResult;
         if (batchDecisions.has(call.id)) {
           // Already resolved by the batch dialog above.
-          decision = batchDecisions.get(call.id)!;
+          decision = batchDecisions.get(call.id) as ConfirmResult;
         } else {
           try {
             decision = await opts.confirm(skill, call.arguments, ctx);

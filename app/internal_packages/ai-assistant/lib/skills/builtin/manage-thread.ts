@@ -86,7 +86,11 @@ export const trashThreadSkill: Skill = {
   },
 
   async confirmManyDialog(argsArray, ctx): Promise<ConfirmResult> {
-    if (argsArray.length === 1) return trashThreadSkill.confirmDialog!(argsArray[0], ctx);
+    if (argsArray.length === 1)
+      return (trashThreadSkill.confirmDialog as NonNullable<typeof trashThreadSkill.confirmDialog>)(
+        argsArray[0],
+        ctx
+      );
     const threads = (
       await Promise.all(argsArray.map((a) => resolveThreadById(a, ctx).catch(() => null)))
     ).filter(Boolean);
@@ -148,7 +152,10 @@ export const archiveThreadSkill: Skill = {
   },
 
   async confirmManyDialog(argsArray, ctx): Promise<ConfirmResult> {
-    if (argsArray.length === 1) return archiveThreadSkill.confirmDialog!(argsArray[0], ctx);
+    if (argsArray.length === 1)
+      return (
+        archiveThreadSkill.confirmDialog as NonNullable<typeof archiveThreadSkill.confirmDialog>
+      )(argsArray[0], ctx);
     const threads = (
       await Promise.all(argsArray.map((a) => resolveThreadById(a, ctx).catch(() => null)))
     ).filter(Boolean);

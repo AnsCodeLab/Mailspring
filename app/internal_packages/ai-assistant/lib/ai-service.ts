@@ -197,7 +197,7 @@ export const AIService = {
     // tool_call builders indexed by tool_call delta index
     const tcBuilders: Record<number, { id: string; name: string; args: string }> = {};
     try {
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
