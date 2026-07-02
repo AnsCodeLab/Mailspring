@@ -8,12 +8,12 @@ describe('computeAutoTune', () => {
   });
 
   it('derives chunk size from median length with 10% headroom', () => {
-    // median 700 * 1.1 = 770, rounded to nearest 50 = 800
+    // median 700 * 1.1 = 770, rounded to nearest 50 = 750
     const result = computeAutoTune(
       { messageCount: 100, chunkCount: 300, medianChunkLen: 700 },
       'gpt-4o'
     );
-    expect(result.chunkSize).toBe(800);
+    expect(result.chunkSize).toBe(750);
   });
 
   it('clamps chunk size to 400 minimum', () => {
@@ -33,12 +33,12 @@ describe('computeAutoTune', () => {
   });
 
   it('sets overlap to 18% of chunk size rounded to 25', () => {
-    // chunk 800 → 800 * 0.18 = 144, rounded to 25 = 150
+    // chunk 750 → 750 * 0.18 = 135, rounded to 25 = 125
     const result = computeAutoTune(
       { messageCount: 100, chunkCount: 300, medianChunkLen: 700 },
       'gpt-4o'
     );
-    expect(result.chunkOverlap).toBe(150);
+    expect(result.chunkOverlap).toBe(125);
   });
 
   it('recognises gpt-4o context window (128k tokens = 524288 chars)', () => {
@@ -74,8 +74,8 @@ describe('computeAutoTune', () => {
       'unknown-model-xyz'
     );
     // default 131072 * 0.25 = 32768, rounded to 33000 (nearest 1000 above)
-    expect(result.contextBudget).toBeGreaterThanOrEqualTo(12000);
-    expect(result.contextBudget).toBeLessThanOrEqualTo(128000);
+    expect(result.contextBudget >= 12000).toBe(true);
+    expect(result.contextBudget <= 128000).toBe(true);
   });
 
   it('keeps K within [3, 20]', () => {
@@ -83,8 +83,8 @@ describe('computeAutoTune', () => {
       { messageCount: 5, chunkCount: 10, medianChunkLen: 100 },
       'gpt-4o'
     );
-    expect(result.retrieveK).toBeGreaterThanOrEqualTo(3);
-    expect(result.retrieveK).toBeLessThanOrEqualTo(20);
+    expect(result.retrieveK >= 3).toBe(true);
+    expect(result.retrieveK <= 20).toBe(true);
   });
 
   it('keeps history fraction, max steps, and web results at their proven defaults', () => {

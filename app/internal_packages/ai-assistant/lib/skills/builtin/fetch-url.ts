@@ -19,13 +19,13 @@ export const fetchUrlSkill: Skill = {
     'If a page returns little content (JS-rendered SPA), try a different URL or add the site to a web_search query.',
   parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
   async run({ url }: { url: string }) {
-    if (!isPublicHttpUrl(url)) throw new Error('Refusing to fetch a non-public/local URL.');
+    if (!isPublicHttpUrl(url)) return { error: 'Refusing to fetch a non-public or local URL.' };
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 20000);
     let currentUrl = url;
     try {
       for (let hop = 0; hop <= 5; hop++) {
-        if (hop === 5) throw new Error('Too many redirects');
+        if (hop === 5) return { error: 'Too many redirects.' };
         const res = await fetch(currentUrl, {
           signal: ctrl.signal,
           redirect: 'manual',
@@ -33,27 +33,30 @@ export const fetchUrlSkill: Skill = {
         });
         if (res.status >= 300 && res.status < 400) {
           const location = res.headers.get('location');
-          if (!location) throw new Error('Redirect with no Location header');
+          if (!location) return { error: 'Redirect with no Location header.' };
           const next = new URL(location, currentUrl).href;
           if (!isPublicHttpUrl(next))
-            throw new Error('Refusing to follow redirect to a non-public URL.');
+            return { error: 'Refusing to follow redirect to a non-public URL.' };
           currentUrl = next;
           continue;
         }
         if (!res.ok) {
-          throw new Error(
-            `HTTP ${res.status} from ${currentUrl}. Try a different URL or search for the information instead.`
-          );
+          return {
+            error: `HTTP ${res.status} from ${currentUrl}. Try a different URL or search for the information instead.`,
+          };
         }
         const html = (await res.text()).slice(0, 400000);
         const content = htmlToText(html).slice(0, 15000);
         if (!content.trim()) {
-          throw new Error(
-            'Page returned no readable content (likely a JS-rendered SPA). Try fetching a different URL, or use web_search to find the information.'
-          );
+          return {
+            error:
+              'Page returned no readable content (likely a JS-rendered SPA). Try fetching a different URL, or use web_search to find the information.',
+          };
         }
-        return content;
+        return { content };
       }
+    } catch (e) {
+      return { error: (e as Error).message };
     } finally {
       clearTimeout(t);
     }

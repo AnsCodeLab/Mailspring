@@ -3,18 +3,14 @@ import { AIConfig } from '../../config';
 
 async function resolveThread(args: { threadId?: string; subject?: string }, ctx: any) {
   const { DatabaseStore, Thread, FocusedContentStore } = require('mailspring-exports');
-  // Prefer the live thread object from ctx (passed from chat-panel state) so we never
-  // need a DB round-trip and avoid race conditions where the focused thread changed.
   if (ctx?.thread) return ctx.thread as typeof Thread;
   if (args.threadId) {
-    const t = await DatabaseStore.find(Thread, args.threadId);
-    if (t) return t;
+    // When a specific threadId is provided, look it up strictly — do NOT fall back to
+    // whichever thread happens to be focused, as that would operate on the wrong thread.
+    return await DatabaseStore.find(Thread, args.threadId);
   }
-  const focused = FocusedContentStore.focused('thread');
-  if (focused) return focused;
-  throw new Error(
-    `Could not find thread "${args.subject || args.threadId || '(unknown)'}". Please select the thread first.`
-  );
+  // No threadId given: fall back to the focused thread.
+  return FocusedContentStore.focused('thread') ?? null;
 }
 
 // Resolve a thread strictly by threadId — used in batch operations where ctx.thread is only
@@ -69,13 +65,14 @@ export const trashThreadSkill: Skill = {
   enabled: () => AIConfig.isSkillTrashThreadEnabled(),
 
   async confirmDialog(args, ctx): Promise<ConfirmResult> {
-    const thread = await resolveThread(args, ctx);
-    const label = thread.subject ? `"${thread.subject}"` : 'this thread';
+    const label = args.subject ? `"${args.subject}"` : 'this thread';
     return confirmAndExecute(
       'Move to Trash?',
       `${label} will be moved to Trash.`,
       'Move to Trash',
       async () => {
+        const thread = await resolveThread(args, ctx);
+        if (!thread) return; // thread not found — skip gracefully
         const { Actions, TaskFactory } = require('mailspring-exports');
         const tasks = TaskFactory.tasksForMovingToTrash({
           threads: [thread],
@@ -133,13 +130,14 @@ export const archiveThreadSkill: Skill = {
   enabled: () => AIConfig.isSkillArchiveThreadEnabled(),
 
   async confirmDialog(args, ctx): Promise<ConfirmResult> {
-    const thread = await resolveThread(args, ctx);
-    const label = thread.subject ? `"${thread.subject}"` : 'this thread';
+    const label = args.subject ? `"${args.subject}"` : 'this thread';
     return confirmAndExecute(
       'Archive Thread?',
       `${label} will be archived.`,
       'Archive',
       async () => {
+        const thread = await resolveThread(args, ctx);
+        if (!thread) return; // thread not found — skip gracefully
         const { Actions, TaskFactory } = require('mailspring-exports');
         const tasks = TaskFactory.tasksForArchiving({ threads: [thread], source: 'AI Assistant' });
         if (!tasks || tasks.length === 0)

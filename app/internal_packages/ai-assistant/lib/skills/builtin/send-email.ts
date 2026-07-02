@@ -120,19 +120,18 @@ export const sendEmailSkill: Skill = {
     const to = String(args.to || '').trim();
     const subject = String(args.subject || '').trim();
     const preview = String(args.body || '').slice(0, 300);
-    const detail = `To: ${to}\nSubject: ${subject}\n\n${preview}${preview.length === 300 ? '…' : ''}`;
+    const detail = `To: ${to}\nSubject: ${subject}\n\n${preview}${preview.length === 300 ? '...' : ''}`;
     const { response } = await require('@electron/remote').dialog.showMessageBox({
       type: 'question',
-      buttons: ['Cancel', 'Open in Composer'],
+      buttons: ['Cancel', 'Open in Composer', 'Send Now'],
       defaultId: 1,
       cancelId: 0,
-      title: 'Open email in Composer?',
+      title: 'Send email?',
       message: detail,
     });
-    return response === 0 ? 'deny' : 'proceed';
-  },
-
-  async run(args) {
+    if (response === 0) return 'deny';
+    if (response === 2) return 'proceed'; // run() will send
+    // Button 1: Open in Composer
     const {
       DraftFactory,
       DraftStore,
@@ -142,11 +141,31 @@ export const sendEmailSkill: Skill = {
     const html = SanitizeTransformer.runSync(markdownToHtml(String(args.body || '')));
     const draft = await DraftFactory.createDraft({
       subject: args.subject || '',
-      to: [new Contact({ email: args.to, name: args.to })],
+      to: args.to ? [new Contact({ email: args.to, name: args.to })] : [],
       cc: args.cc ? [new Contact({ email: args.cc, name: args.cc })] : [],
     });
     draft.body = html + (draft.body || '');
     await DraftStore._finalizeAndPersistNewMessage(draft, { popout: true });
-    return { opened: true, to: args.to, subject: args.subject, body: args.body };
+    return 'done';
+  },
+
+  async run(args) {
+    const {
+      DraftFactory,
+      DraftStore,
+      Actions,
+      SanitizeTransformer,
+      Contact,
+    } = require('mailspring-exports');
+    const html = SanitizeTransformer.runSync(markdownToHtml(String(args.body || '')));
+    const draft = await DraftFactory.createDraft({
+      subject: args.subject || '',
+      to: args.to ? [{ email: args.to, name: args.to }] : [],
+      cc: args.cc ? [{ email: args.cc, name: args.cc }] : [],
+    });
+    draft.body = html + (draft.body || '');
+    await DraftStore._finalizeAndPersistNewMessage(draft);
+    Actions.sendDraft(draft.headerMessageId);
+    return { sent: true, to: args.to, subject: args.subject, body: args.body };
   },
 };

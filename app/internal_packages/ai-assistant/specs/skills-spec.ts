@@ -88,6 +88,15 @@ function fakeExports(overrides: Record<string, any> = {}) {
     FocusedContentStore: {
       focused: jasmine.createSpy('focused').andReturn({ id: 't1' }),
     },
+    DraftStore: {
+      _finalizeAndPersistNewMessage: async (draft: any, opts: any = {}) => {
+        const msMod = require('mailspring-exports');
+        if (opts && opts.popout) {
+          msMod.Actions.composePopoutDraft(draft.headerMessageId);
+        }
+        return { headerMessageId: draft.headerMessageId, draft };
+      },
+    },
   };
   // Spy on each top-level property method
   Object.entries({ ...defaults, ...overrides }).forEach(([group, methods]: [string, any]) => {
@@ -149,14 +158,9 @@ describe('webSearchSkill', () => {
     expect(webSearchSkill.tier).toBe('read');
   });
 
-  it('is disabled when web search is off in config', () => {
-    fakeConfig({ 'ai-assistant.webSearch.enabled': false });
-    expect(webSearchSkill.enabled!()).toBe(false);
-  });
-
-  it('is disabled when no URL is configured', () => {
-    fakeConfig({ 'ai-assistant.webSearch.enabled': true, 'ai-assistant.webSearch.url': '' });
-    expect(webSearchSkill.enabled!()).toBe(false);
+  it('is always enabled (DuckDuckGo built-in fallback requires no config)', () => {
+    fakeConfig({});
+    expect(webSearchSkill.enabled!()).toBe(true);
   });
 
   it('calls SearXNG and returns results', async () => {
@@ -281,9 +285,9 @@ describe('sendEmailSkill', () => {
     expect(sendEmailSkill.tier).toBe('confirm');
   });
 
-  it('is disabled by default', () => {
+  it('is enabled by default', () => {
     fakeConfig({});
-    expect(sendEmailSkill.enabled!()).toBe(false);
+    expect(sendEmailSkill.enabled!()).toBe(true);
   });
 
   it('is enabled when config key is true', () => {
@@ -339,9 +343,9 @@ describe('sendEmailSkill', () => {
       { to: 'alice@example.com', subject: 'Test', body: 'Hello' },
       {}
     );
-    expect(ms.DraftFactory.createDraft).toHaveBeenCalledWith(
-      jasmine.objectContaining({ subject: 'Test' })
-    );
+    expect(ms.DraftFactory.createDraft).toHaveBeenCalled();
+    const callArgs = ms.DraftFactory.createDraft.mostRecentCall.args[0];
+    expect(callArgs.subject).toBe('Test');
     expect(ms.Actions.sendDraft).toHaveBeenCalledWith('hdr-1');
     expect(result.sent).toBe(true);
     expect(result.to).toBe('alice@example.com');
@@ -365,14 +369,14 @@ describe('trashThreadSkill', () => {
     expect(trashThreadSkill.tier).toBe('confirm');
   });
 
-  it('is disabled by default', () => {
+  it('is enabled by default', () => {
     fakeConfig({});
-    expect(trashThreadSkill.enabled!()).toBe(false);
+    expect(trashThreadSkill.enabled!()).toBe(true);
   });
 
-  it('is enabled when config key is true', () => {
-    fakeConfig({ 'ai-assistant.skills.trashThread': true });
-    expect(trashThreadSkill.enabled!()).toBe(true);
+  it('can be disabled via config', () => {
+    fakeConfig({ 'ai-assistant.skills.trashThread': false });
+    expect(trashThreadSkill.enabled!()).toBe(false);
   });
 
   it('confirmDialog: Cancel returns deny and does not queue any task', async () => {
@@ -418,14 +422,14 @@ describe('archiveThreadSkill', () => {
     expect(archiveThreadSkill.tier).toBe('confirm');
   });
 
-  it('is disabled by default', () => {
+  it('is enabled by default', () => {
     fakeConfig({});
-    expect(archiveThreadSkill.enabled!()).toBe(false);
+    expect(archiveThreadSkill.enabled!()).toBe(true);
   });
 
-  it('is enabled when config key is true', () => {
-    fakeConfig({ 'ai-assistant.skills.archiveThread': true });
-    expect(archiveThreadSkill.enabled!()).toBe(true);
+  it('can be disabled via config', () => {
+    fakeConfig({ 'ai-assistant.skills.archiveThread': false });
+    expect(archiveThreadSkill.enabled!()).toBe(false);
   });
 
   it('confirmDialog: Cancel returns deny without queuing', async () => {

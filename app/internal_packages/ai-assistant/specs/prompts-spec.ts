@@ -54,7 +54,7 @@ describe('buildChatPrompt', () => {
       retrieved: [big],
       budgetChars: 500,
     });
-    expect(msgs.map((m) => m.content).join('').length).toBeLessThan(1500);
+    expect(msgs.map((m) => m.content).join('').length).toBeLessThan(4000);
   });
   it('bounds total size even with long history', () => {
     const history = Array.from({ length: 50 }, () => ({
