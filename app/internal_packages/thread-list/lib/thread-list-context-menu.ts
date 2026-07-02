@@ -35,7 +35,8 @@ export default class ThreadListContextMenu {
   menuItemTemplate() {
     return DatabaseStore.modelify<Thread>(Thread, this.threadIds)
       .then((threads) => {
-        this.threads = threads;
+        // modelify returns undefined for IDs not found in the DB (e.g. deleted threads)
+        this.threads = threads.filter(Boolean);
 
         return Promise.all<TemplateItem>([
           this.findWithFrom(),
@@ -324,9 +325,7 @@ export default class ThreadListContextMenu {
         const id = this.threadIds[0];
         const thread = await DatabaseStore.findBy<Thread>(Thread, { id }).limit(1);
         if (!thread) return;
-        navigator.clipboard
-          .writeText(thread.getMailboxPermalink())
-          .catch((err) => console.error('Failed to copy to clipboard:', err));
+        require('@electron/remote').clipboard.writeText(thread.getMailboxPermalink());
       },
     };
   }

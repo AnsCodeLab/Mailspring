@@ -2,8 +2,8 @@
 Name=<%= productName %>
 Comment=<%= description %>
 GenericName=Mail Client
-Exec=mailspring --class=Mailspring %U
-Icon=mailspring
+Exec=mailspring %U
+Icon=<%= name %>
 Type=Application
 StartupWMClass=Mailspring
 Categories=GNOME;GTK;Network;Email;
