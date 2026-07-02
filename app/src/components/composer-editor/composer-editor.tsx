@@ -97,21 +97,6 @@ export class ComposerEditor extends React.Component<ComposerEditorProps, Compose
     this._mounted = true;
     this.props.onUpdatedSlateEditor && this.props.onUpdatedSlateEditor(this.editor);
     this.forceUpdate();
-
-    // Set default font face + size for new empty composers and reply/forward
-    // drafts (which start with a blockquote). Deferred so the editor is ready.
-    requestAnimationFrame(() => {
-      if (!this._mounted || !this.editor) return;
-      const doc = this.props.value.document;
-      const texts = doc.getTexts().toArray();
-      const isEmpty = texts.length === 0 || texts.every((t) => !t.text || t.text.trim() === '');
-      const hasBlockquote = !!doc.findDescendant((n: any) => n.type === 'blockquote');
-      if (isEmpty || hasBlockquote) {
-        this.editor.focus().moveToStart();
-        this.editor.addMark({ type: 'face', data: { value: 'sans-serif' } });
-        this.editor.addMark({ type: 'size', data: { value: '11pt' } });
-      }
-    });
   }
 
   componentWillUnmount() {
@@ -324,6 +309,14 @@ export class ComposerEditor extends React.Component<ComposerEditorProps, Compose
 
     const PluginTopComponents = this.editor ? plugins.filter((p) => p.topLevelComponent) : [];
 
+    // Applied as the inherited base style for typed text, rather than injected as Slate
+    // marks on mount — marks only land on genuinely empty documents and are silently lost
+    // for drafts that already have content (e.g. a signature), leaving newly typed text
+    // unstyled until the user manually reselects a font. CSS inheritance covers every case
+    // uniformly, and explicit face/size marks (from the toolbar) still render on top of it.
+    const defaultFace = AppEnv.config.get('core.composing.defaultFontFace') || 'sans-serif';
+    const defaultSizePt = AppEnv.config.get('core.composing.defaultFontSize');
+
     return (
       <KeyCommandsRegion
         className={`RichEditor-root ${className || ''}`}
@@ -332,7 +325,14 @@ export class ComposerEditor extends React.Component<ComposerEditorProps, Compose
         {this.editor && (
           <ComposerEditorToolbar editor={this.editor} plugins={plugins} value={value} />
         )}
-        <div className="RichEditor-content" onClick={this.onFocusIfBlurred}>
+        <div
+          className="RichEditor-content"
+          onClick={this.onFocusIfBlurred}
+          style={{
+            fontFamily: defaultFace,
+            fontSize: defaultSizePt ? `${defaultSizePt}pt` : undefined,
+          }}
+        >
           {this.editor &&
             PluginTopComponents.map((p, idx) => (
               <p.topLevelComponent key={idx} value={value} editor={this.editor} />

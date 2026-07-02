@@ -189,7 +189,7 @@ export function activateConfig() {
   });
   AppEnv.config.setSchema('core.composing.defaultFontSize', {
     type: 'string',
-    default: '12',
+    default: '11',
     title: localized('Default font size'),
     enum: ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24'],
     enumLabels: ['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt'],
