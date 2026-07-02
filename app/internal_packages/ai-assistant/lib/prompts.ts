@@ -11,6 +11,16 @@ export type RetrievedSource = {
   text: string;
 };
 export type ThreadMsg = { from: string; date: string; text: string; attachments?: string[] };
+export type SenderIdentity = { name: string; email: string };
+
+// Tells the model whose voice it is writing in. Without this it has no way to tell the
+// account owner apart from the other participants in the thread, and drafts/replies can
+// end up written from the wrong person's perspective or signed with the wrong name.
+function senderLine(sender?: SenderIdentity): string {
+  if (!sender || !sender.email) return '';
+  const who = sender.name ? `${sender.name} <${sender.email}>` : sender.email;
+  return `You are writing as the email account owner: ${who}. This is the sender identity - refer to yourself as "I"/"me" as this person, and sign off using their name, not any other participant's. `;
+}
 
 export const GROUNDED_SYSTEM =
   'You are a helpful AI email assistant inside Mailspring. ' +
@@ -53,6 +63,7 @@ export function buildChatPrompt(args: {
   threadSubject?: string;
   budgetChars?: number;
   historyFraction?: number;
+  sender?: SenderIdentity;
 }): ChatMessage[] {
   const budget = args.budgetChars ?? AIConfig.getContextBudget();
   const histFraction = args.historyFraction ?? AIConfig.getHistoryFraction();
@@ -77,7 +88,9 @@ export function buildChatPrompt(args: {
       return entry;
     })
     .join('\n\n');
-  const ctx: ChatMessage[] = [{ role: 'system', content: GROUNDED_SYSTEM }];
+  const ctx: ChatMessage[] = [
+    { role: 'system', content: GROUNDED_SYSTEM + senderLine(args.sender) },
+  ];
   if (thread || args.threadId) {
     const meta = args.threadId
       ? `[threadId: ${args.threadId}${args.threadSubject ? `, subject: "${args.threadSubject}"` : ''}]\n`
@@ -107,6 +120,7 @@ const NO_EMDASH =
 export function buildReplyPrompt(args: {
   threadMessages: ThreadMsg[];
   instruction: string;
+  sender?: SenderIdentity;
 }): ChatMessage[] {
   const thread = args.threadMessages
     .map((m) => `${m.from} (${m.date}): ${clip(m.text, 1500)}`)
@@ -114,7 +128,7 @@ export function buildReplyPrompt(args: {
   return [
     {
       role: 'system',
-      content: `Write a reply email. Output only the email body text - no preamble, no subject. Match a natural, professional tone. ${NO_EMDASH}`,
+      content: `${senderLine(args.sender)}Write a reply email. Output only the email body text - no preamble, no subject. Match a natural, professional tone. ${NO_EMDASH}`,
     },
     {
       role: 'user',
@@ -127,6 +141,7 @@ export function buildRewritePrompt(args: {
   text: string;
   style: 'shorter' | 'longer' | 'formal' | 'casual' | 'grammar' | 'rewrite';
   isHtml?: boolean;
+  sender?: SenderIdentity;
 }): ChatMessage[] {
   const verb: Record<string, string> = {
     shorter: 'Make this shorter while keeping the meaning.',
@@ -138,20 +153,24 @@ export function buildRewritePrompt(args: {
       : 'Fix spelling and grammar; keep wording and meaning otherwise unchanged.',
     rewrite: 'Rewrite this more clearly.',
   };
+  const sender = senderLine(args.sender);
   const systemMsg = args.isHtml
-    ? `You fix grammar in HTML email bodies. Return only the corrected HTML - preserve every tag and attribute, change only the text content where needed. ${NO_EMDASH}`
-    : `You rewrite email text. Output only the rewritten text - no preamble or quotes. ${NO_EMDASH}`;
+    ? `${sender}You fix grammar in HTML email bodies. Return only the corrected HTML - preserve every tag and attribute, change only the text content where needed. ${NO_EMDASH}`
+    : `${sender}You rewrite email text. Output only the rewritten text - no preamble or quotes. ${NO_EMDASH}`;
   return [
     { role: 'system', content: systemMsg },
     { role: 'user', content: `${verb[args.style]}\n\nTEXT:\n${args.text}` },
   ];
 }
 
-export function buildNextLinePrompt(args: { draftSoFar: string }): ChatMessage[] {
+export function buildNextLinePrompt(args: {
+  draftSoFar: string;
+  sender?: SenderIdentity;
+}): ChatMessage[] {
   return [
     {
       role: 'system',
-      content: `Continue the email naturally. Output only the next sentence or two to follow the draft - no preamble, no repetition of what is already written. ${NO_EMDASH}`,
+      content: `${senderLine(args.sender)}Continue the email naturally. Output only the next sentence or two to follow the draft - no preamble, no repetition of what is already written. ${NO_EMDASH}`,
     },
     { role: 'user', content: `DRAFT SO FAR:\n${args.draftSoFar}\n\nContinue:` },
   ];

@@ -1,6 +1,8 @@
 import React from 'react';
 import {
   FocusedContentStore,
+  FocusedPerspectiveStore,
+  AccountStore,
   DraftFactory,
   DatabaseStore,
   Thread,
@@ -11,7 +13,7 @@ import {
   localized,
 } from 'mailspring-exports';
 import { AIService, ChatMessage } from './ai-service';
-import { buildChatPrompt, RetrievedSource } from './prompts';
+import { buildChatPrompt, RetrievedSource, SenderIdentity } from './prompts';
 import { loadThreadMessages } from './thread-context';
 import { ensurePrivacyNoticeAccepted } from './privacy-notice';
 import { retrieve } from './retriever';
@@ -713,6 +715,18 @@ export default class AIChatPanel extends React.Component<
 
   // ─── Messaging ─────────────────────────────────────────────────────────────
 
+  // The account identity to write/reply/send as - the focused thread's account when one
+  // is open, otherwise the currently focused mailbox perspective's account. Without this
+  // the LLM has no way to tell the account owner apart from other thread participants.
+  _sender(): SenderIdentity | undefined {
+    const thread = this.state.thread;
+    const accountId = thread?.accountId || FocusedPerspectiveStore.current().accountIds[0];
+    const account = accountId ? AccountStore.accountForId(accountId) : null;
+    if (!account) return undefined;
+    const me = account.defaultMe();
+    return { name: me.name, email: me.email };
+  }
+
   _send = async (text?: string) => {
     const q = (text ?? this.state.input).trim();
     if (!q || this.state.busy) return;
@@ -753,6 +767,7 @@ export default class AIChatPanel extends React.Component<
         retrieved,
         threadId: thread?.id,
         threadSubject: thread?.subject || undefined,
+        sender: this._sender(),
       });
       let answer = '';
       const { Skills } = require('./skills/registry');

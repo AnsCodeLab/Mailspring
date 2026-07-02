@@ -71,6 +71,13 @@ export default class AIComposerAssist extends React.Component<any, State> {
     });
   };
 
+  // The Contact this draft is being sent from - tells the LLM whose voice to write in,
+  // rather than leaving it to guess who "I" refers to among the thread participants.
+  _sender() {
+    const from = this.props.draft.from?.[0];
+    return from ? { name: from.name, email: from.email } : undefined;
+  }
+
   _run = async (key: CommandKey) => {
     this.setState({ open: false, menuStyle: null });
     if (!(await ensurePrivacyNoticeAccepted())) return;
@@ -79,7 +86,7 @@ export default class AIComposerAssist extends React.Component<any, State> {
     if (key === 'nextline') {
       this.setState({ busy: true });
       try {
-        const s = await suggestNextLine(draft.body);
+        const s = await suggestNextLine(draft.body, this._sender());
         session.changes.add({
           body: (draft.body || '') + SanitizeTransformer.runSync('<span>' + s + '</span>'),
         });
@@ -107,9 +114,15 @@ export default class AIComposerAssist extends React.Component<any, State> {
       messages = buildReplyPrompt({
         threadMessages: [{ from: 'me', date: '', text: inputText }],
         instruction: '',
+        sender: this._sender(),
       });
     } else {
-      messages = buildRewritePrompt({ text: inputText, style: key, isHtml: useHtml });
+      messages = buildRewritePrompt({
+        text: inputText,
+        style: key,
+        isHtml: useHtml,
+        sender: this._sender(),
+      });
     }
 
     this.setState({ busy: true });
