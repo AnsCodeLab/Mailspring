@@ -47,15 +47,26 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Mailspring ${{ github.ref_name }}"
           body: |
-            Custom build of Mailspring based on v1.21.1 with UI customizations:
-            - Composer toolbar: clipboard section (Cut / Copy / Paste / Paste as plain text) + one-shot Format Painter
-            - Rebuilt font family & size controls as styled dropdowns (show the current value, blank on a mixed selection, "Custom…" entry); the dropdown now reflects the selected text's font
-            - Bundled free fonts (Roboto, Open Sans, Lato, Montserrat, Poppins, Merriweather, Lora, Source Code Pro) in place of proprietary fonts, so they render for everyone
-            - Toolbar reorder: hamburger left, window controls right (minimize → maximize → close)
-            - Compose, Refresh, Apply Rules, and Preferences buttons in message toolbar
-            - 11pt sans-serif default font in composer
-            - Export emails/threads to self-contained Markdown files (with inline images embedded as Base64)
-            - Linux: set window class for correct taskbar grouping
+            Custom build of Mailspring 1.22.0 with the following additions:
+
+            **AI Assistant**
+            - AI chat sidebar per email thread with citations and knowledge base search
+            - Agentic skills: search mailbox, create drafts, send email (with countdown confirmation), archive/trash, web search, fetch web pages
+            - Composer AI button (Rewrite, Shorter, Longer, Formal, Casual, Fix Grammar, Suggest Next Line, Draft Reply)
+            - Per-turn "Use as draft reply" button under each AI response
+            - Conversation history with session resume
+            - Supports any OpenAI-compatible API (local models via Ollama/LM Studio, OpenAI, etc.)
+
+            **Composer**
+            - Clipboard section (Cut / Copy / Paste / Paste as plain text) + Format Painter
+            - Bundled open-source fonts (Roboto, Open Sans, Lato, Montserrat, Poppins, Merriweather, Lora, Source Code Pro)
+            - Persistent default font face and size saved to preferences
+            - Rich-text paste from Word / Google Docs preserving bold, italic, links, images
+
+            **UI**
+            - Toolbar reorder: hamburger left, window controls right (minimize, maximize, close)
+            - Subscription tab hidden from Preferences
+            - Export emails/threads to Markdown with embedded images
           files: |
             app/dist/*.deb
             app/dist/*.rpm
