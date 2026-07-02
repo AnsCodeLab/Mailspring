@@ -21,4 +21,9 @@ describe('AIConfig defaults', () => {
   it('archive thread skill enabled by default', () =>
     expect(AIConfig.isSkillArchiveThreadEnabled()).toBe(true));
   it('rag mode defaults to default', () => expect(AIConfig.getRagMode()).toBe('default'));
+  it('provider defaults to api', () => expect(AIConfig.getProvider()).toBe('api'));
+  it('claude CLI path defaults to "claude"', () =>
+    expect(AIConfig.getClaudeCliPath()).toBe('claude'));
+  it('claude CLI model override defaults to empty', () =>
+    expect(AIConfig.getClaudeCliModel()).toBe(''));
 });

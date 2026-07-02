@@ -1,8 +1,11 @@
 // Centralized config keys + typed getters with defaults. AppEnv.config is a window global.
 const K = {
   enabled: 'ai-assistant.enabled',
+  provider: 'ai-assistant.provider',
   endpoint: 'ai-assistant.endpoint',
   model: 'ai-assistant.model',
+  claudeCliPath: 'ai-assistant.claudeCli.path',
+  claudeCliModel: 'ai-assistant.claudeCli.model',
   kbEnabled: 'ai-assistant.knowledgeBase.enabled',
   embedBackend: 'ai-assistant.embeddings.backend',
   embedInAppModel: 'ai-assistant.embeddings.inAppModel',
@@ -61,8 +64,11 @@ export const AIConfig = {
   keys: K,
   isEnabled: () => get(K.enabled, false) === true,
   isKnowledgeBaseEnabled: () => get(K.kbEnabled, false) === true,
+  getProvider: () => get<'api' | 'claude-cli'>(K.provider, 'api'),
   getEndpoint: () => String(get(K.endpoint, 'https://api.openai.com/v1')).replace(/\/+$/, ''),
   getModel: () => get(K.model, 'gpt-4o-mini'),
+  getClaudeCliPath: () => String(get(K.claudeCliPath, 'claude')).trim() || 'claude',
+  getClaudeCliModel: () => String(get(K.claudeCliModel, '')).trim(),
   getEmbeddingBackend: () => get<'in-app' | 'server'>(K.embedBackend, 'in-app'),
   getEmbeddingInAppModel: () => get(K.embedInAppModel, 'Xenova/all-MiniLM-L6-v2'),
   getEmbeddingServerUrl: () =>

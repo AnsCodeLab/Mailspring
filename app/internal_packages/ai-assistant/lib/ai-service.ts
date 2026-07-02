@@ -1,6 +1,7 @@
 import { KeyManager } from 'mailspring-exports';
 import { AIConfig, KEY_API } from './config';
 import { parseSSEChunk, extractDelta } from './sse';
+import { ClaudeCliService } from './claude-cli-service';
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -70,6 +71,25 @@ export const AIService = {
     signal?: AbortSignal;
     tools?: any[];
   }): AsyncIterable<string> {
+    if (AIConfig.getProvider() === 'claude-cli') {
+      if (tools && tools.length) {
+        throw new AIError(
+          'missing-config',
+          'Claude CLI mode does not support agent skills (tool calling). Switch the provider to ' +
+            '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.'
+        );
+      }
+      try {
+        yield* ClaudeCliService.chatStream({ messages, signal });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') throw err;
+        throw new AIError(
+          err?.kind === 'not-found' ? 'missing-config' : 'network',
+          err?.message || String(err)
+        );
+      }
+      return;
+    }
     const endpoint = AIConfig.getEndpoint();
     const body: any = { model: AIConfig.getModel(), messages, stream: true };
     if (tools && tools.length) body.tools = tools;
@@ -126,6 +146,13 @@ export const AIService = {
     content?: string;
     tool_calls?: Array<{ id: string; name: string; arguments: any }>;
   }> {
+    if (AIConfig.getProvider() === 'claude-cli') {
+      throw new AIError(
+        'missing-config',
+        'Claude CLI mode does not support agent skills (tool calling). Switch the provider to ' +
+          '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.'
+      );
+    }
     const endpoint = AIConfig.getEndpoint();
     const body: any = { model: AIConfig.getModel(), messages, stream: false };
     if (tools && tools.length) body.tools = tools;
@@ -173,6 +200,13 @@ export const AIService = {
     content?: string;
     tool_calls?: Array<{ id: string; name: string; arguments: any }>;
   }> {
+    if (AIConfig.getProvider() === 'claude-cli') {
+      throw new AIError(
+        'missing-config',
+        'Claude CLI mode does not support agent skills (tool calling). Switch the provider to ' +
+          '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.'
+      );
+    }
     const endpoint = AIConfig.getEndpoint();
     const body: any = { model: AIConfig.getModel(), messages, stream: true };
     if (tools && tools.length) body.tools = tools;
@@ -255,6 +289,7 @@ export const AIService = {
   },
 
   async listModels(): Promise<string[]> {
+    if (AIConfig.getProvider() === 'claude-cli') return ClaudeCliService.listModels();
     try {
       const res = await fetch(`${AIConfig.getEndpoint()}/models`, {
         signal: AbortSignal.timeout(8000),
@@ -268,6 +303,9 @@ export const AIService = {
   },
 
   async testConnection(): Promise<{ ok: boolean; error?: string }> {
+    if (AIConfig.getProvider() === 'claude-cli') {
+      return ClaudeCliService.testConnection();
+    }
     // Use GET /models — instant health check that works even before a model is warm.
     try {
       const res = await fetch(`${AIConfig.getEndpoint()}/models`, {

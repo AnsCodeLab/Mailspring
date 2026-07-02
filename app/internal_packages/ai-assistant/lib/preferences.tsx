@@ -404,92 +404,178 @@ export default class AIPreferences extends React.Component<
         <section>
           <h3>{localized('Chat model')}</h3>
           <label>
-            {localized('Provider')}
+            {localized('Transport')}
             <select
-              value={this.state.selectedProvider}
+              value={AIConfig.getProvider()}
               onChange={(e) => {
-                const p = CHAT_PROVIDERS.find((x) => x.id === e.target.value);
-                const url = p?.url || this.state.endpointValue;
-                this.setState({ selectedProvider: e.target.value, endpointValue: url });
-                this._set(K.endpoint, url);
+                this._set(K.provider, e.target.value);
                 this._fetchModels();
               }}
             >
-              {CHAT_PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label} ({p.sublabel})
-                </option>
-              ))}
+              <option value="api">{localized('OpenAI-compatible API')}</option>
+              <option value="claude-cli">{localized('Claude CLI (subscription, local)')}</option>
             </select>
           </label>
-          <label>
-            {localized('Endpoint URL')}
-            <input
-              type="text"
-              value={this.state.endpointValue}
-              onChange={(e) =>
-                this.setState({
-                  endpointValue: e.target.value,
-                  selectedProvider: detectChatProvider(e.target.value),
-                })
-              }
-              onBlur={(e) => {
-                this._set(K.endpoint, e.target.value);
-                this._fetchModels();
-              }}
-            />
-          </label>
-          <label>
-            {localized('Model')}
-            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-              {availableModels.length > 0 ? (
-                <select
-                  value={modelInList ? currentModel : '__manual__'}
-                  onChange={(e) => {
-                    if (e.target.value !== '__manual__') this._set(K.model, e.target.value);
-                  }}
-                  style={{ flex: 1 }}
-                >
-                  {availableModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                  {!modelInList && <option value="__manual__">{currentModel} (manual)</option>}
-                </select>
-              ) : (
+
+          {AIConfig.getProvider() === 'claude-cli' ? (
+            <>
+              <div
+                style={{ fontSize: 12, color: 'var(--text-color-subtle)', margin: '4px 0 10px' }}
+              >
+                {localized(
+                  'Uses your local Claude Code CLI login (subscription, no API key). ' +
+                    'Agent skills (Send Email, Search Mailbox, etc.) are not available in this mode ' +
+                    '- use it for chat and composer assist only.'
+                )}
+              </div>
+              <label>
+                {localized('Claude CLI path')}
                 <input
                   type="text"
-                  defaultValue={currentModel}
-                  onBlur={(e) => this._set(K.model, e.target.value)}
-                  style={{ flex: 1 }}
-                  placeholder="e.g. gpt-4o-mini"
+                  defaultValue={AIConfig.getClaudeCliPath()}
+                  onBlur={(e) => this._set(K.claudeCliPath, e.target.value)}
+                  placeholder="claude"
                 />
-              )}
-              <button
-                onClick={this._fetchModels}
-                disabled={loadingModels}
-                title={localized('Reload models from endpoint')}
-                style={{ flexShrink: 0 }}
-              >
-                {loadingModels ? '…' : '↺'}
-              </button>
-            </div>
-            {availableModels.length === 0 && !loadingModels && (
-              <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
-                {localized('Connect to endpoint to load available models')}
-              </div>
-            )}
-          </label>
-          <label>
-            {localized('API key')}
-            <input
-              type="password"
-              value={this.state.apiKey}
-              onChange={(e) => this.setState({ apiKey: e.target.value })}
-              onBlur={(e) => this._saveKey(KEY_API, e.target.value)}
-            />
-          </label>
+              </label>
+              <label>
+                {localized('Model')}
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {availableModels.length > 0 ? (
+                    <select
+                      value={
+                        availableModels.includes(AIConfig.getClaudeCliModel())
+                          ? AIConfig.getClaudeCliModel()
+                          : ''
+                      }
+                      onChange={(e) => this._set(K.claudeCliModel, e.target.value)}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">{localized('CLI default (last used)')}</option>
+                      {availableModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      defaultValue={AIConfig.getClaudeCliModel()}
+                      onBlur={(e) => this._set(K.claudeCliModel, e.target.value)}
+                      style={{ flex: 1 }}
+                      placeholder={localized('Blank for CLI default, or e.g. sonnet, opus')}
+                    />
+                  )}
+                  <button
+                    onClick={this._fetchModels}
+                    disabled={loadingModels}
+                    title={localized('Reload models available to your subscription')}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {loadingModels ? '…' : '↺'}
+                  </button>
+                </div>
+                {availableModels.length === 0 && !loadingModels && (
+                  <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
+                    {localized(
+                      'Model list unavailable. Run "claude" in a terminal and sign in, then reload.'
+                    )}
+                  </div>
+                )}
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                {localized('Provider')}
+                <select
+                  value={this.state.selectedProvider}
+                  onChange={(e) => {
+                    const p = CHAT_PROVIDERS.find((x) => x.id === e.target.value);
+                    const url = p?.url || this.state.endpointValue;
+                    this.setState({ selectedProvider: e.target.value, endpointValue: url });
+                    this._set(K.endpoint, url);
+                    this._fetchModels();
+                  }}
+                >
+                  {CHAT_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label} ({p.sublabel})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {localized('Endpoint URL')}
+                <input
+                  type="text"
+                  value={this.state.endpointValue}
+                  onChange={(e) =>
+                    this.setState({
+                      endpointValue: e.target.value,
+                      selectedProvider: detectChatProvider(e.target.value),
+                    })
+                  }
+                  onBlur={(e) => {
+                    this._set(K.endpoint, e.target.value);
+                    this._fetchModels();
+                  }}
+                />
+              </label>
+              <label>
+                {localized('Model')}
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {availableModels.length > 0 ? (
+                    <select
+                      value={modelInList ? currentModel : '__manual__'}
+                      onChange={(e) => {
+                        if (e.target.value !== '__manual__') this._set(K.model, e.target.value);
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      {availableModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                      {!modelInList && <option value="__manual__">{currentModel} (manual)</option>}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      defaultValue={currentModel}
+                      onBlur={(e) => this._set(K.model, e.target.value)}
+                      style={{ flex: 1 }}
+                      placeholder="e.g. gpt-4o-mini"
+                    />
+                  )}
+                  <button
+                    onClick={this._fetchModels}
+                    disabled={loadingModels}
+                    title={localized('Reload models from endpoint')}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {loadingModels ? '…' : '↺'}
+                  </button>
+                </div>
+                {availableModels.length === 0 && !loadingModels && (
+                  <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
+                    {localized('Connect to endpoint to load available models')}
+                  </div>
+                )}
+              </label>
+              <label>
+                {localized('API key')}
+                <input
+                  type="password"
+                  value={this.state.apiKey}
+                  onChange={(e) => this.setState({ apiKey: e.target.value })}
+                  onBlur={(e) => this._saveKey(KEY_API, e.target.value)}
+                />
+              </label>
+            </>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={this._test} disabled={this.state.testing}>
               {this.state.testing ? localized('Testing…') : localized('Test connection')}
