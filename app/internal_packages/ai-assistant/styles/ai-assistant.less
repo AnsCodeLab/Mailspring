@@ -719,6 +719,45 @@
   }
 }
 
+.ai-thread-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--accent-primary, #6366f1) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 25%, transparent);
+  color: var(--text-color);
+
+  .ai-thread-chip-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    em {
+      font-style: normal;
+      font-weight: 600;
+    }
+  }
+  .ai-thread-chip-new {
+    border: none;
+    background: none;
+    color: var(--accent-primary, #6366f1);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+  }
+  .ai-thread-chip-dismiss {
+    border: none;
+    background: none;
+    color: var(--text-color-subtle);
+    cursor: pointer;
+    padding: 0 2px;
+  }
+}
+
 // ─── Footer ────────────────────────────────────────────────────────────────────
 
 .ai-chat-actions {

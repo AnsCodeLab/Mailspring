@@ -437,6 +437,7 @@ export default class AIChatPanel extends React.Component<
     open: boolean;
     width: number;
     showHistory: boolean;
+    chipDismissedFor: string | null;
     historyItems: Array<{
       sessionId: string;
       subject: string;
@@ -466,6 +467,9 @@ export default class AIChatPanel extends React.Component<
   private _resizing = false;
   private _countdownInterval: any = null;
   private _phaseInterval: ReturnType<typeof setInterval> | null = null;
+  // The thread the current conversation started under - drives the "Now chatting
+  // about" chip when the user focuses a different thread mid-conversation.
+  private _conversationThreadId: string | null = null;
 
   state = {
     thread: FocusedContentStore.focused('thread'),
@@ -481,6 +485,7 @@ export default class AIChatPanel extends React.Component<
     open: AIConfig.isPanelOpen(),
     width: AIConfig.getPanelWidth(),
     showHistory: false,
+    chipDismissedFor: null as string | null,
     historyItems: [] as Array<{
       sessionId: string;
       subject: string;
@@ -604,7 +609,8 @@ export default class AIChatPanel extends React.Component<
       /* ignore */
     }
     AppEnv.config.set(AIConfig.keys.currentSession, sessionId);
-    this.setState({ showHistory: false, sessionId, turns });
+    this._conversationThreadId = this.state.thread?.id ?? null;
+    this.setState({ showHistory: false, sessionId, turns, chipDismissedFor: null });
   };
 
   _deleteConversation = async (sessionId: string, e: React.MouseEvent) => {
@@ -780,6 +786,9 @@ export default class AIChatPanel extends React.Component<
     const q = (text ?? this.state.input).trim();
     if (!q || this.state.busy) return;
     if (!(await ensurePrivacyNoticeAccepted())) return;
+    if (this.state.turns.length === 0) {
+      this._conversationThreadId = this.state.thread?.id ?? null;
+    }
     const turns: Turn[] = [
       ...this.state.turns,
       { role: 'user', content: q },
@@ -944,7 +953,14 @@ export default class AIChatPanel extends React.Component<
   _clearHistory = () => {
     // Start a new session — old conversation stays in history.
     const sessionId = AIConfig.newSession();
-    this.setState({ turns: [], retrieved: [], citedSources: [], sessionId });
+    this._conversationThreadId = null;
+    this.setState({
+      turns: [],
+      retrieved: [],
+      citedSources: [],
+      sessionId,
+      chipDismissedFor: null,
+    });
   };
 
   _draftReply = async (content?: string) => {
@@ -1109,10 +1125,10 @@ export default class AIChatPanel extends React.Component<
             </button>
             <button
               className="ai-clear-btn"
-              title={localized('Clear conversation')}
+              title={localized('New chat')}
               onClick={this._clearHistory}
             >
-              ↺
+              ＋
             </button>
             <button
               className="ai-close-btn"
@@ -1300,6 +1316,31 @@ export default class AIChatPanel extends React.Component<
 
             {/* Email countdown card */}
             {this._renderEmailCountdown()}
+
+            {/* Thread-change chip: conversation started on a different thread than the
+                one now focused. No chip when there's no conversation yet — the
+                suggestion pills above already invite chatting about the new thread. */}
+            {thread &&
+              turns.length > 0 &&
+              this._conversationThreadId !== thread.id &&
+              this.state.chipDismissedFor !== thread.id && (
+                <div className="ai-thread-chip">
+                  <span className="ai-thread-chip-label">
+                    {localized('Now chatting about:')}{' '}
+                    <em>{thread.subject || localized('(no subject)')}</em>
+                  </span>
+                  <button className="ai-thread-chip-new" onClick={this._clearHistory}>
+                    {localized('New chat')}
+                  </button>
+                  <button
+                    className="ai-thread-chip-dismiss"
+                    title={localized('Dismiss')}
+                    onClick={() => this.setState({ chipDismissedFor: thread.id })}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
             {/* Input */}
             <div className="ai-chat-input">
