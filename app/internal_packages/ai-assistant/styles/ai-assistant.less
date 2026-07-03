@@ -137,7 +137,7 @@
 
   .note {
     font-size: 10px;
-    color: var(--text-color-subtle);
+    color: @text-color-subtle;
     padding: 6px 10px 4px;
     border-top: 1px solid @border-color-divider;
     margin-top: 4px;
@@ -160,7 +160,7 @@
   border: none;
   border-left: 1px solid @border-color-divider;
   cursor: pointer;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
   padding: 0;
 
   .ai-tab-icon {
@@ -177,8 +177,8 @@
   }
 
   &:hover {
-    color: var(--text-color);
-    background: var(--component-active-bg);
+    color: @text-color;
+    background: @component-active-bg;
   }
 }
 
@@ -602,7 +602,7 @@
       .ai-status-text {
         font-style: italic;
         font-size: 12px;
-        color: var(--text-color-subtle);
+        color: @text-color-subtle;
         margin-right: 4px;
       }
     }
@@ -739,7 +739,7 @@
   font-size: 11px;
   background: color-mix(in srgb, var(--accent-primary, #6366f1) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent-primary, #6366f1) 25%, transparent);
-  color: var(--text-color);
+  color: @text-color;
 
   .ai-thread-chip-label {
     flex: 1;
@@ -762,7 +762,7 @@
   .ai-thread-chip-dismiss {
     border: none;
     background: none;
-    color: var(--text-color-subtle);
+    color: @text-color-subtle;
     cursor: pointer;
     padding: 0 2px;
   }
@@ -1132,13 +1132,13 @@
   padding: 10px 14px 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-color);
+  color: @text-color;
   border-bottom: 1px solid @border-color-divider;
 }
 
 .ai-history-count {
   font-weight: 400;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
 }
 
 .ai-history-filter {
@@ -1148,7 +1148,7 @@
   border-radius: 8px;
   border: 1px solid @input-border-color;
   background: @background-primary;
-  color: var(--text-color);
+  color: @text-color;
   outline: none;
 }
 
@@ -1158,13 +1158,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
 }
 
 .ai-history-empty {
   padding: 32px 16px;
   text-align: center;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
   font-size: 13px;
 }
 
@@ -1182,7 +1182,7 @@
     border-bottom: none;
   }
   &:hover {
-    background: var(--component-active-bg);
+    background: @component-active-bg;
   }
 }
 
@@ -1196,7 +1196,7 @@
 .ai-history-subject {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-color);
+  color: @text-color;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1205,13 +1205,13 @@
 
 .ai-history-date {
   font-size: 11px;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
   flex-shrink: 0;
 }
 
 .ai-history-preview {
   font-size: 12px;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1228,7 +1228,7 @@
 
 .ai-history-turns {
   font-size: 11px;
-  color: var(--text-color-subtle);
+  color: @text-color-subtle;
 }
 
 .ai-history-item-actions {
@@ -1242,10 +1242,10 @@
   border-radius: 10px;
   border: 1px solid @input-border-color;
   background: none;
-  color: var(--text-color);
+  color: @text-color;
   cursor: pointer;
   &:hover {
-    background: var(--component-active-bg);
+    background: @component-active-bg;
   }
 }
 
