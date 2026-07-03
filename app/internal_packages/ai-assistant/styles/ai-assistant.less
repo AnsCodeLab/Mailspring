@@ -1131,6 +1131,26 @@
   color: var(--text-color-subtle);
 }
 
+.ai-history-filter {
+  margin: 8px 12px 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid @input-border-color;
+  background: @background-primary;
+  color: var(--text-color);
+  outline: none;
+}
+
+.ai-history-group-label {
+  padding: 8px 14px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-color-subtle);
+}
+
 .ai-history-empty {
   padding: 32px 16px;
   text-align: center;
@@ -1227,10 +1247,16 @@
   background: none;
   color: var(--color-danger, #d9534f);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
   &:hover {
     background: color-mix(in srgb, var(--color-danger, #d9534f) 12%, transparent);
     border-color: var(--color-danger, #d9534f);
   }
+}
+
+.ai-history-item:hover .ai-history-delete-btn {
+  opacity: 1;
 }
 
 .ai-history-clear-all-btn {

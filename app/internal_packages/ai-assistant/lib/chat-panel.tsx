@@ -22,6 +22,7 @@ import { AIConfig } from './config';
 import { ChatStore } from './chat-store';
 import { SendPhase, statusForPhase, stopHighlighted } from './chat-status';
 import { getGlobalSuggestions } from './suggestions';
+import { dedupeTitles, groupByDate } from './history-utils';
 import { ChatActivityStore } from './chat-activity-store';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -437,6 +438,7 @@ export default class AIChatPanel extends React.Component<
     open: boolean;
     width: number;
     showHistory: boolean;
+    historyFilter: string;
     chipDismissedFor: string | null;
     historyItems: Array<{
       sessionId: string;
@@ -485,6 +487,7 @@ export default class AIChatPanel extends React.Component<
     open: AIConfig.isPanelOpen(),
     width: AIConfig.getPanelWidth(),
     showHistory: false,
+    historyFilter: '',
     chipDismissedFor: null as string | null,
     historyItems: [] as Array<{
       sessionId: string;
@@ -1032,6 +1035,15 @@ export default class AIChatPanel extends React.Component<
       return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
+    const filter = this.state.historyFilter.trim().toLowerCase();
+    const visible = dedupeTitles(historyItems).filter(
+      (i) =>
+        !filter ||
+        i.subject.toLowerCase().includes(filter) ||
+        i.preview.toLowerCase().includes(filter)
+    );
+    const groups = groupByDate(visible, new Date());
+
     return (
       <div className="ai-history-panel">
         <div className="ai-history-header">
@@ -1047,37 +1059,55 @@ export default class AIChatPanel extends React.Component<
             </button>
           )}
         </div>
+        {historyItems.length > 0 && (
+          <input
+            className="ai-history-filter"
+            type="text"
+            placeholder={localized('Search conversations…')}
+            value={this.state.historyFilter}
+            onChange={(e) => this.setState({ historyFilter: e.target.value })}
+          />
+        )}
         {historyItems.length === 0 ? (
           <div className="ai-history-empty">
             {localized('Start a conversation on any thread to see it here.')}
           </div>
+        ) : visible.length === 0 ? (
+          <div className="ai-history-empty">{localized('No conversations match your search.')}</div>
         ) : (
           <div className="ai-history-list">
-            {historyItems.map((item) => (
-              <div key={item.sessionId} className="ai-history-item">
-                <div className="ai-history-item-meta">
-                  <span className="ai-history-subject">{item.subject}</span>
-                  <span className="ai-history-date">{formatDate(item.lastAt)}</span>
-                </div>
-                <div className="ai-history-preview">{item.preview}</div>
-                <div className="ai-history-item-footer">
-                  <span className="ai-history-turns">{localized('%@ messages', item.count)}</span>
-                  <div className="ai-history-item-actions">
-                    <button
-                      className="ai-history-delete-btn"
-                      title={localized('Delete conversation')}
-                      onClick={(e) => this._deleteConversation(item.sessionId, e)}
-                    >
-                      {localized('Delete')}
-                    </button>
-                    <button
-                      className="ai-history-resume-btn"
-                      onClick={() => this._resumeConversation(item.sessionId)}
-                    >
-                      {localized('Resume')}
-                    </button>
+            {groups.map((g) => (
+              <div key={g.label}>
+                <div className="ai-history-group-label">{g.label}</div>
+                {g.items.map((item) => (
+                  <div key={item.sessionId} className="ai-history-item">
+                    <div className="ai-history-item-meta">
+                      <span className="ai-history-subject">{item.subject}</span>
+                      <span className="ai-history-date">{formatDate(item.lastAt)}</span>
+                    </div>
+                    <div className="ai-history-preview">{item.preview}</div>
+                    <div className="ai-history-item-footer">
+                      <span className="ai-history-turns">
+                        {localized('%@ messages', item.count)}
+                      </span>
+                      <div className="ai-history-item-actions">
+                        <button
+                          className="ai-history-delete-btn"
+                          title={localized('Delete conversation')}
+                          onClick={(e) => this._deleteConversation(item.sessionId, e)}
+                        >
+                          {localized('Delete')}
+                        </button>
+                        <button
+                          className="ai-history-resume-btn"
+                          onClick={() => this._resumeConversation(item.sessionId)}
+                        >
+                          {localized('Resume')}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             ))}
           </div>
