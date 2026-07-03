@@ -21,6 +21,7 @@ import { validateCitations } from './citations';
 import { AIConfig } from './config';
 import { ChatStore } from './chat-store';
 import { SendPhase, statusForPhase, stopHighlighted } from './chat-status';
+import { getGlobalSuggestions } from './suggestions';
 import { ChatActivityStore } from './chat-activity-store';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -30,13 +31,7 @@ type Turn = { role: 'user' | 'assistant'; content: string };
 
 // Context-aware initial suggestions based on thread metadata.
 function getInitialSuggestions(thread: any): string[] {
-  if (!thread)
-    return [
-      "What's new today?",
-      'Summarize this week',
-      'Summarize this month',
-      'Find unread emails',
-    ];
+  if (!thread) return getGlobalSuggestions(new Date());
   const sub = (thread.subject || '').toLowerCase();
   const snip = (thread.snippet || '').toLowerCase();
   const combined = sub + ' ' + snip;
@@ -1135,26 +1130,20 @@ export default class AIChatPanel extends React.Component<
           <>
             {/* Messages */}
             <div className="ai-chat-scroll" ref={this._scrollRef}>
-              {!thread && (
+              {!thread && turns.length === 0 && (
                 <div className="ai-empty-state">
                   <div className="ai-empty-icon">✦</div>
                   <div className="ai-empty-title">{localized('AI Assistant')}</div>
                   <div className="ai-empty-hint">
                     {localized('Ask about your mailbox, or open a thread to chat about it.')}
                   </div>
-                  {turns.length === 0 && (
-                    <div className="ai-suggestions">
-                      {getInitialSuggestions(null).map((s) => (
-                        <button
-                          key={s}
-                          className="ai-suggestion-chip"
-                          onClick={() => this._send(s)}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="ai-suggestions">
+                    {getInitialSuggestions(null).map((s) => (
+                      <button key={s} className="ai-suggestion-chip" onClick={() => this._send(s)}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
               {thread && turns.length === 0 && (
