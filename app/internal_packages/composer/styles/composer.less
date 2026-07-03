@@ -428,6 +428,10 @@ body.platform-win32 {
       margin: 0 auto;
       flex-direction: row;
       padding: 9px 22.5px;
+      // Plugin buttons (AI assist, send-later, templates, ...) register a beat after
+      // the window opens; reserve the bar's height so their arrival never shifts layout.
+      min-height: 46px;
+      align-items: center;
 
       &.restrict-width {
         max-width: @compose-width;
