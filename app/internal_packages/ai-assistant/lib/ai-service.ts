@@ -292,6 +292,7 @@ export const AIService = {
     if (AIConfig.getProvider() === 'claude-cli') return ClaudeCliService.listModels();
     try {
       const res = await fetch(`${AIConfig.getEndpoint()}/models`, {
+        headers: await authHeaders(),
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return [];
@@ -309,6 +310,7 @@ export const AIService = {
     // Use GET /models — instant health check that works even before a model is warm.
     try {
       const res = await fetch(`${AIConfig.getEndpoint()}/models`, {
+        headers: await authHeaders(),
         signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
