@@ -20,6 +20,7 @@ import { retrieve } from './retriever';
 import { validateCitations } from './citations';
 import { AIConfig } from './config';
 import { ChatStore } from './chat-store';
+import { SendPhase, statusForPhase, stopHighlighted } from './chat-status';
 import { ChatActivityStore } from './chat-activity-store';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -432,6 +433,9 @@ export default class AIChatPanel extends React.Component<
     turns: Turn[];
     input: string;
     busy: boolean;
+    sendPhase: SendPhase;
+    sendStartedAt: number;
+    nowTick: number;
     retrieved: RetrievedSource[];
     citedSources: RetrievedSource[];
     sessionId: string;
@@ -466,12 +470,16 @@ export default class AIChatPanel extends React.Component<
   private _inputRef = React.createRef<HTMLTextAreaElement>();
   private _resizing = false;
   private _countdownInterval: any = null;
+  private _phaseInterval: ReturnType<typeof setInterval> | null = null;
 
   state = {
     thread: FocusedContentStore.focused('thread'),
     turns: [] as Turn[],
     input: '',
     busy: false,
+    sendPhase: 'idle' as SendPhase,
+    sendStartedAt: 0,
+    nowTick: 0,
     retrieved: [] as RetrievedSource[],
     citedSources: [] as RetrievedSource[],
     sessionId: AIConfig.getCurrentSession(),
@@ -545,6 +553,7 @@ export default class AIChatPanel extends React.Component<
     if (this._configSub1) this._configSub1.dispose();
     if (this._configSub2) this._configSub2.dispose();
     if (this._countdownInterval) clearInterval(this._countdownInterval);
+    if (this._phaseInterval) clearInterval(this._phaseInterval);
     this._stopResize();
   }
 
@@ -788,6 +797,8 @@ export default class AIChatPanel extends React.Component<
     if (currentThreadId) ChatActivityStore.setActive(currentThreadId, true);
 
     this._abort = new AbortController();
+    this.setState({ sendPhase: 'retrieving', sendStartedAt: Date.now(), nowTick: Date.now() });
+    this._phaseInterval = setInterval(() => this.setState({ nowTick: Date.now() }), 1000);
     try {
       // Always include thread messages when a thread is focused.
       const threadMessages = await loadThreadMessages(this.state.thread);
@@ -817,6 +828,7 @@ export default class AIChatPanel extends React.Component<
       let answer = '';
       const { Skills } = require('./skills/registry');
       const { runAgent } = require('./agent');
+      this.setState({ sendPhase: 'waiting' });
 
       if (Skills.list().length > 0 && AIConfig.getProvider() !== 'claude-cli') {
         const agentOut = await runAgent({
@@ -824,12 +836,17 @@ export default class AIChatPanel extends React.Component<
           registry: Skills,
           callModel: async (msgs: any[], tools: any[]) => {
             const priorContent = turns[turns.length - 1].content;
+            // Each agent round-trip re-enters the waiting phase until its first token.
+            this.setState({ sendPhase: 'waiting' });
             const doStream = (t: any[]) =>
               AIService.chatWithToolsStream({
                 messages: msgs,
                 tools: t,
                 signal: this._abort?.signal,
                 onToken: (tok: string) => {
+                  if (this.state.sendPhase !== 'streaming') {
+                    this.setState({ sendPhase: 'streaming' });
+                  }
                   tok && (answer += tok);
                   turns[turns.length - 1].content += tok;
                   this.setState({ turns: [...turns] });
@@ -893,6 +910,9 @@ export default class AIChatPanel extends React.Component<
           messages: prompt,
           signal: this._abort?.signal,
         })) {
+          if (this.state.sendPhase !== 'streaming') {
+            this.setState({ sendPhase: 'streaming' });
+          }
           tok && (answer += tok);
           turns[turns.length - 1].content += tok;
           this.setState({ turns: [...turns] });
@@ -911,8 +931,12 @@ export default class AIChatPanel extends React.Component<
       turns[turns.length - 1].content = `⚠️ ${err.message || err}`;
       this.setState({ turns: [...turns] });
     } finally {
+      if (this._phaseInterval) {
+        clearInterval(this._phaseInterval);
+        this._phaseInterval = null;
+      }
       if (currentThreadId) ChatActivityStore.setActive(currentThreadId, false);
-      this.setState({ busy: false });
+      this.setState({ busy: false, sendPhase: 'idle' });
     }
   };
 
@@ -1154,6 +1178,14 @@ export default class AIChatPanel extends React.Component<
                         {t.role === 'assistant' ? (
                           <>
                             {t.content ? renderMarkdown(t.content) : null}
+                            {isStreaming && !t.content && (
+                              <span className="ai-status-text">
+                                {statusForPhase(
+                                  this.state.sendPhase,
+                                  Math.floor((this.state.nowTick - this.state.sendStartedAt) / 1000)
+                                )}
+                              </span>
+                            )}
                             {isStreaming && <span className="ai-cursor">▊</span>}
                           </>
                         ) : (
@@ -1298,7 +1330,17 @@ export default class AIChatPanel extends React.Component<
               />
               <div className="ai-input-row">
                 {busy ? (
-                  <button className="ai-send-btn cancel" onClick={this._cancel}>
+                  <button
+                    className={`ai-send-btn cancel${
+                      stopHighlighted(
+                        this.state.sendPhase,
+                        Math.floor((this.state.nowTick - this.state.sendStartedAt) / 1000)
+                      )
+                        ? ' urgent'
+                        : ''
+                    }`}
+                    onClick={this._cancel}
+                  >
                     {localized('Stop')}
                   </button>
                 ) : (

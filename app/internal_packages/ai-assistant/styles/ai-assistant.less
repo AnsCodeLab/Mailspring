@@ -588,6 +588,13 @@
         color: var(--accent-primary, #6366f1);
         margin-left: 1px;
       }
+
+      .ai-status-text {
+        font-style: italic;
+        font-size: 12px;
+        color: var(--text-color-subtle);
+        margin-right: 4px;
+      }
     }
 
     // Copy / Retry action buttons — hidden until turn is hovered
@@ -809,6 +816,11 @@
         color: @text-color;
         border: 1px solid @border-color-divider;
         font-weight: 500;
+      }
+
+      &.cancel.urgent {
+        border-color: var(--color-danger, #d9534f);
+        color: var(--color-danger, #d9534f);
       }
     }
   }
