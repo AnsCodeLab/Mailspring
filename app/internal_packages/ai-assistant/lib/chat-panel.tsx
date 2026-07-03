@@ -490,8 +490,10 @@ export default class AIChatPanel extends React.Component<
 
   private _chatStore(): ChatStore {
     if (!this.__chatStore) {
+      const path = require('path');
       this.__chatStore = new ChatStore(
-        require('path').join(AppEnv.getConfigDirPath(), 'ai-index.db')
+        path.join(AppEnv.getConfigDirPath(), 'ai-chat.db'),
+        path.join(AppEnv.getConfigDirPath(), 'ai-index.db')
       );
     }
     return this.__chatStore;
