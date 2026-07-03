@@ -476,6 +476,7 @@ export default class AIPreferences extends React.Component<
                     />
                   )}
                   <button
+                    className="btn"
                     onClick={this._fetchModels}
                     disabled={loadingModels}
                     title={localized('Reload models available to your subscription')}
@@ -559,6 +560,7 @@ export default class AIPreferences extends React.Component<
                     />
                   )}
                   <button
+                    className="btn"
                     onClick={this._fetchModels}
                     disabled={loadingModels}
                     title={localized('Reload models from endpoint')}
@@ -586,7 +588,7 @@ export default class AIPreferences extends React.Component<
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={this._test} disabled={this.state.testing}>
+            <button className="btn" onClick={this._test} disabled={this.state.testing}>
               {this.state.testing ? localized('Testing…') : localized('Test connection')}
             </button>
             {this.state.testResult && (
@@ -732,10 +734,12 @@ export default class AIPreferences extends React.Component<
                 />
               )}
               <div style={{ marginTop: 6 }}>
-                <button onClick={this._reindex} disabled={this.state.reindexing}>
+                <button className="btn" onClick={this._reindex} disabled={this.state.reindexing}>
                   {localized('Re-index')}
                 </button>{' '}
-                <button onClick={this._clearIndex}>{localized('Clear index')}</button>
+                <button className="btn" onClick={this._clearIndex}>
+                  {localized('Clear index')}
+                </button>
               </div>
             </div>
           )}
@@ -989,7 +993,9 @@ export default class AIPreferences extends React.Component<
                     </label>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                    <button onClick={this._resetAdvanced}>{localized('Reset to defaults')}</button>
+                    <button className="btn" onClick={this._resetAdvanced}>
+                      {localized('Reset to defaults')}
+                    </button>
                     <span style={{ fontSize: 11, color: 'var(--text-color-subtle)' }}>
                       {localized(
                         'Chunk size or overlap changes require re-indexing the knowledge base.'
@@ -1071,7 +1077,9 @@ export default class AIPreferences extends React.Component<
                           autoTuneDescription(autoTuneStats, AIConfig.getModel(), preferSpeed)
                         )}
                         <div style={{ marginTop: 8 }}>
-                          <button onClick={this._runAutoTune}>{localized('Recompute')}</button>
+                          <button className="btn" onClick={this._runAutoTune}>
+                            {localized('Recompute')}
+                          </button>
                           {autoTuneStats.messageCount === 0 && (
                             <span
                               style={{
@@ -1087,7 +1095,9 @@ export default class AIPreferences extends React.Component<
                       </div>
                     ) : (
                       <div style={{ marginTop: 8 }}>
-                        <button onClick={this._runAutoTune}>{localized('Compute now')}</button>
+                        <button className="btn" onClick={this._runAutoTune}>
+                          {localized('Compute now')}
+                        </button>
                       </div>
                     ))}
 
