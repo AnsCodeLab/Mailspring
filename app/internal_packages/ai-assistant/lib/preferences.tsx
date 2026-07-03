@@ -1,6 +1,6 @@
 import React from 'react';
 import { localized, KeyManager } from 'mailspring-exports';
-import { AIConfig, RAG_DEFAULTS, KEY_API, KEY_WEBSEARCH_API } from './config';
+import { AIConfig, RAG_DEFAULTS, LOCAL_FAST_PRESET, KEY_API, KEY_WEBSEARCH_API } from './config';
 import { computeAutoTune, autoTuneDescription, AutoTuneResult, CorpusStats } from './auto-tune';
 import { AIService } from './ai-service';
 
@@ -148,7 +148,7 @@ export default class AIPreferences extends React.Component<
     endpointValue: string;
     selectedProvider: string;
     advancedResetKey: number;
-    ragMode: 'default' | 'auto-tune' | 'custom';
+    ragMode: 'default' | 'auto-tune' | 'custom' | 'local-fast';
     autoTuning: boolean;
     autoTuneStats: CorpusStats | null;
     autoTuneValues: AutoTuneResult | null;
@@ -345,7 +345,7 @@ export default class AIPreferences extends React.Component<
     });
   };
 
-  _setRagMode = (mode: 'default' | 'auto-tune' | 'custom') => {
+  _setRagMode = (mode: 'default' | 'auto-tune' | 'custom' | 'local-fast') => {
     AppEnv.config.set(AIConfig.keys.ragMode, mode);
     if (mode === 'default') {
       this._applyParamValues(RAG_DEFAULTS as AutoTuneResult);
@@ -356,6 +356,13 @@ export default class AIPreferences extends React.Component<
       });
     } else if (mode === 'auto-tune') {
       this.setState({ ragMode: 'auto-tune', autoTuning: true }, () => this._runAutoTune());
+    } else if (mode === 'local-fast') {
+      this._applyParamValues(LOCAL_FAST_PRESET as AutoTuneResult);
+      this.setState({
+        ragMode: 'local-fast',
+        advancedResetKey: this.state.advancedResetKey + 1,
+        adv: { ...LOCAL_FAST_PRESET },
+      });
     } else {
       this.setState({ ragMode: 'custom' });
     }
@@ -388,7 +395,7 @@ export default class AIPreferences extends React.Component<
       (!presetEmbed && !IN_APP_MODELS.find((m) => m.id === embedSelectValue));
 
     return (
-      <div className="container-ai-assistant" style={{ maxWidth: 600 }}>
+      <div className="container-ai-assistant" style={{ maxWidth: 600, margin: '0 auto' }}>
         <section>
           <h2>{localized('AI Assistant')}</h2>
           <label>
@@ -739,11 +746,11 @@ export default class AIPreferences extends React.Component<
               style={{
                 cursor: 'pointer',
                 fontSize: 12,
-                color: 'var(--text-color-subtle)',
+                color: 'var(--accent-primary, #6366f1)',
                 marginBottom: 8,
               }}
             >
-              {localized('Advanced settings (click to expand)')}
+              <span className="ai-adv-chevron">▸</span> {localized('Advanced settings')}
             </summary>
             {(() => {
               const { adv, ragMode, autoTuning, autoTuneStats, autoTuneValues } = this.state;
@@ -997,8 +1004,9 @@ export default class AIPreferences extends React.Component<
                       [
                         ['default', localized('Default')],
                         ['auto-tune', localized('Auto-tune')],
+                        ['local-fast', localized('Local model (fast)')],
                         ['custom', localized('Custom')],
-                      ] as Array<['default' | 'auto-tune' | 'custom', string]>
+                      ] as Array<['default' | 'auto-tune' | 'custom' | 'local-fast', string]>
                     ).map(([id, label]) => (
                       <button
                         key={id}
@@ -1018,11 +1026,16 @@ export default class AIPreferences extends React.Component<
                       localized(
                         'Parameters computed from your indexed emails and the selected model context window.'
                       )}
+                    {ragMode === 'local-fast' &&
+                      localized(
+                        'Smaller context tuned for small local models (faster responses, less recall).'
+                      )}
                     {ragMode === 'custom' && localized('Fine-tune every parameter manually.')}
                   </div>
 
                   {/* Mode content */}
                   {ragMode === 'default' && readOnlyGrid(RAG_DEFAULTS as AutoTuneResult)}
+                  {ragMode === 'local-fast' && readOnlyGrid(LOCAL_FAST_PRESET as AutoTuneResult)}
 
                   {ragMode === 'auto-tune' &&
                     (autoTuning ? (

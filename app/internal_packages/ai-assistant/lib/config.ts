@@ -51,6 +51,15 @@ export const RAG_DEFAULTS = {
   webSearchResults: 8,
 } as const;
 
+// Preset for small local models (4-8B): a 24k-char context means minutes of prompt
+// processing on llama.cpp-class hardware; trade recall for latency.
+export const LOCAL_FAST_PRESET = {
+  ...RAG_DEFAULTS,
+  contextBudget: 6000,
+  retrieveK: 4,
+  maxAgentSteps: 4,
+} as const;
+
 export const KEY_API = 'ai-assistant.apiKey';
 export const KEY_EMBED_API = 'ai-assistant.embeddings.apiKey';
 export const KEY_WEBSEARCH_API = 'ai-assistant.webSearch.apiKey';
@@ -104,7 +113,7 @@ export const AIConfig = {
   // Agent
   getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, RAG_DEFAULTS.maxAgentSteps)),
   // RAG mode
-  getRagMode: () => get<'default' | 'auto-tune' | 'custom'>(K.ragMode, 'default'),
+  getRagMode: () => get<'default' | 'auto-tune' | 'custom' | 'local-fast'>(K.ragMode, 'default'),
   // Skill toggles
   isSkillSendEmailEnabled: () => get<boolean>(K.skillSendEmail, true) !== false,
   isSkillTrashThreadEnabled: () => get<boolean>(K.skillTrashThread, true) !== false,
