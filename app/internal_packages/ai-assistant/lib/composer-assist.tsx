@@ -1,10 +1,23 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { localized, SanitizeTransformer } from 'mailspring-exports';
+import { localized, SanitizeTransformer, RegExpUtils } from 'mailspring-exports';
 import { AIService } from './ai-service';
 import { buildRewritePrompt, buildReplyPrompt } from './prompts';
 import { suggestNextLine } from './next-line';
 import { ensurePrivacyNoticeAccepted } from './privacy-notice';
+
+// The Mailspring signature element ("Sent from Mailspring...") is metadata, not prose:
+// never send it to the model (wasted tokens, branding leaks into rewrites) and never
+// let the model rewrite it. Split it out before every AI command, re-append after.
+export function splitSignature(body: string): { content: string; signature: string } {
+  const match = RegExpUtils.mailspringSignatureRegex().exec(body || '');
+  if (!match) return { content: body || '', signature: '' };
+  const idx = match.index;
+  return {
+    content: (body || '').slice(0, idx) + (body || '').slice(idx + match[0].length),
+    signature: match[0],
+  };
+}
 
 type CommandKey =
   | 'reply'
@@ -82,13 +95,14 @@ export default class AIComposerAssist extends React.Component<any, State> {
     this.setState({ open: false, menuStyle: null });
     if (!(await ensurePrivacyNoticeAccepted())) return;
     const { draft, session } = this.props;
+    const { content: bodySansSig, signature } = splitSignature(draft.body || '');
 
     if (key === 'nextline') {
       this.setState({ busy: true });
       try {
-        const s = await suggestNextLine(draft.body, this._sender());
+        const s = await suggestNextLine(bodySansSig, this._sender());
         session.changes.add({
-          body: (draft.body || '') + SanitizeTransformer.runSync('<span>' + s + '</span>'),
+          body: bodySansSig + SanitizeTransformer.runSync('<span>' + s + '</span>') + signature,
         });
       } catch (err: any) {
         AppEnv.showErrorDialog(err.message || String(err));
@@ -103,8 +117,8 @@ export default class AIComposerAssist extends React.Component<any, State> {
     // For all other commands: strip to plain text first.
     const useHtml = key === 'grammar';
     const inputText = useHtml
-      ? draft.body || ''
-      : (draft.body || '')
+      ? bodySansSig
+      : bodySansSig
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
@@ -132,7 +146,7 @@ export default class AIComposerAssist extends React.Component<any, State> {
       const html = useHtml
         ? SanitizeTransformer.runSync(result)
         : SanitizeTransformer.runSync(`<div>${result.replace(/\n/g, '<br/>')}</div>`);
-      session.changes.add({ body: html });
+      session.changes.add({ body: html + signature });
     } catch (err: any) {
       AppEnv.showErrorDialog(err.message || String(err));
     } finally {
@@ -151,6 +165,9 @@ export default class AIComposerAssist extends React.Component<any, State> {
               {localized(c.label)}
             </div>
           ))}
+          <div className="note">
+            {localized('Rewrite commands output plain text · Fix grammar keeps formatting')}
+          </div>
         </div>
       ) : null;
 
