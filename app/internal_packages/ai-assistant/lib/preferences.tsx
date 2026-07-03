@@ -1,6 +1,6 @@
 import React from 'react';
 import { localized, KeyManager } from 'mailspring-exports';
-import { AIConfig, RAG_DEFAULTS, LOCAL_FAST_PRESET, KEY_API, KEY_WEBSEARCH_API } from './config';
+import { AIConfig, RAG_DEFAULTS, KEY_API, KEY_WEBSEARCH_API } from './config';
 import { computeAutoTune, autoTuneDescription, AutoTuneResult, CorpusStats } from './auto-tune';
 import { AIService } from './ai-service';
 
@@ -148,7 +148,8 @@ export default class AIPreferences extends React.Component<
     endpointValue: string;
     selectedProvider: string;
     advancedResetKey: number;
-    ragMode: 'default' | 'auto-tune' | 'custom' | 'local-fast';
+    ragMode: 'default' | 'auto-tune' | 'custom';
+    preferSpeed: boolean;
     autoTuning: boolean;
     autoTuneStats: CorpusStats | null;
     autoTuneValues: AutoTuneResult | null;
@@ -179,6 +180,7 @@ export default class AIPreferences extends React.Component<
     selectedProvider: detectChatProvider(AIConfig.getEndpoint()),
     advancedResetKey: 0,
     ragMode: AIConfig.getRagMode(),
+    preferSpeed: AIConfig.isRagPreferSpeedEnabled(),
     autoTuning: false,
     autoTuneStats: null as CorpusStats | null,
     autoTuneValues: null as AutoTuneResult | null,
@@ -335,7 +337,9 @@ export default class AIPreferences extends React.Component<
   _runAutoTune = () => {
     const { Indexer } = require('./indexer');
     const stats: CorpusStats = Indexer.corpusStats();
-    const values = computeAutoTune(stats, AIConfig.getModel());
+    const values = computeAutoTune(stats, AIConfig.getModel(), {
+      preferSpeed: this.state.preferSpeed,
+    });
     this._applyParamValues(values);
     this.setState({
       autoTuning: false,
@@ -345,7 +349,12 @@ export default class AIPreferences extends React.Component<
     });
   };
 
-  _setRagMode = (mode: 'default' | 'auto-tune' | 'custom' | 'local-fast') => {
+  _setPreferSpeed = (preferSpeed: boolean) => {
+    AppEnv.config.set(AIConfig.keys.ragPreferSpeed, preferSpeed);
+    this.setState({ preferSpeed }, () => this._runAutoTune());
+  };
+
+  _setRagMode = (mode: 'default' | 'auto-tune' | 'custom') => {
     AppEnv.config.set(AIConfig.keys.ragMode, mode);
     if (mode === 'default') {
       this._applyParamValues(RAG_DEFAULTS as AutoTuneResult);
@@ -356,13 +365,6 @@ export default class AIPreferences extends React.Component<
       });
     } else if (mode === 'auto-tune') {
       this.setState({ ragMode: 'auto-tune', autoTuning: true }, () => this._runAutoTune());
-    } else if (mode === 'local-fast') {
-      this._applyParamValues(LOCAL_FAST_PRESET as AutoTuneResult);
-      this.setState({
-        ragMode: 'local-fast',
-        advancedResetKey: this.state.advancedResetKey + 1,
-        adv: { ...LOCAL_FAST_PRESET },
-      });
     } else {
       this.setState({ ragMode: 'custom' });
     }
@@ -753,7 +755,8 @@ export default class AIPreferences extends React.Component<
               <span className="ai-adv-chevron">▸</span> {localized('Advanced settings')}
             </summary>
             {(() => {
-              const { adv, ragMode, autoTuning, autoTuneStats, autoTuneValues } = this.state;
+              const { adv, ragMode, preferSpeed, autoTuning, autoTuneStats, autoTuneValues } =
+                this.state;
 
               // Shared helpers
               const overlapPct =
@@ -1004,9 +1007,8 @@ export default class AIPreferences extends React.Component<
                       [
                         ['default', localized('Default')],
                         ['auto-tune', localized('Auto-tune')],
-                        ['local-fast', localized('Local model (fast)')],
                         ['custom', localized('Custom')],
-                      ] as Array<['default' | 'auto-tune' | 'custom' | 'local-fast', string]>
+                      ] as Array<['default' | 'auto-tune' | 'custom', string]>
                     ).map(([id, label]) => (
                       <button
                         key={id}
@@ -1026,16 +1028,30 @@ export default class AIPreferences extends React.Component<
                       localized(
                         'Parameters computed from your indexed emails and the selected model context window.'
                       )}
-                    {ragMode === 'local-fast' &&
-                      localized(
-                        'Smaller context tuned for small local models (faster responses, less recall).'
-                      )}
                     {ragMode === 'custom' && localized('Fine-tune every parameter manually.')}
                   </div>
 
                   {/* Mode content */}
                   {ragMode === 'default' && readOnlyGrid(RAG_DEFAULTS as AutoTuneResult)}
-                  {ragMode === 'local-fast' && readOnlyGrid(LOCAL_FAST_PRESET as AutoTuneResult)}
+
+                  {ragMode === 'auto-tune' && (
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 12,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={preferSpeed}
+                        onChange={(e) => this._setPreferSpeed(e.target.checked)}
+                      />
+                      {localized('Prioritize speed (smaller context, good for slower hardware)')}
+                    </label>
+                  )}
 
                   {ragMode === 'auto-tune' &&
                     (autoTuning ? (
@@ -1052,7 +1068,7 @@ export default class AIPreferences extends React.Component<
                       <div>
                         {readOnlyGrid(
                           autoTuneValues,
-                          autoTuneDescription(autoTuneStats, AIConfig.getModel())
+                          autoTuneDescription(autoTuneStats, AIConfig.getModel(), preferSpeed)
                         )}
                         <div style={{ marginTop: 8 }}>
                           <button onClick={this._runAutoTune}>{localized('Recompute')}</button>

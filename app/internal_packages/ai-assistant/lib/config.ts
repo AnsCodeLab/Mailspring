@@ -28,6 +28,7 @@ const K = {
   maxAgentSteps: 'ai-assistant.agent.maxSteps',
   // RAG mode
   ragMode: 'ai-assistant.rag.mode',
+  ragPreferSpeed: 'ai-assistant.rag.preferSpeed',
   // Skill toggles (default off — each must be explicitly enabled)
   skillSendEmail: 'ai-assistant.skills.sendEmail',
   skillTrashThread: 'ai-assistant.skills.trashThread',
@@ -49,15 +50,6 @@ export const RAG_DEFAULTS = {
   maxAgentSteps: 8,
   // More results improve coverage without overwhelming the prompt
   webSearchResults: 8,
-} as const;
-
-// Preset for small local models (4-8B): a 24k-char context means minutes of prompt
-// processing on llama.cpp-class hardware; trade recall for latency.
-export const LOCAL_FAST_PRESET = {
-  ...RAG_DEFAULTS,
-  contextBudget: 6000,
-  retrieveK: 4,
-  maxAgentSteps: 4,
 } as const;
 
 export const KEY_API = 'ai-assistant.apiKey';
@@ -112,8 +104,14 @@ export const AIConfig = {
     Math.min(0.9, Math.max(0.1, get<number>(K.historyFraction, RAG_DEFAULTS.historyFraction))),
   // Agent
   getMaxAgentSteps: () => Math.max(1, get<number>(K.maxAgentSteps, RAG_DEFAULTS.maxAgentSteps)),
-  // RAG mode
-  getRagMode: () => get<'default' | 'auto-tune' | 'custom' | 'local-fast'>(K.ragMode, 'default'),
+  // RAG mode. Old 'local-fast' saves (removed standalone mode) fold into auto-tune + speed toggle.
+  getRagMode: (): 'default' | 'auto-tune' | 'custom' => {
+    const raw = get<string>(K.ragMode, 'default');
+    return raw === 'local-fast' ? 'auto-tune' : (raw as 'default' | 'auto-tune' | 'custom');
+  },
+  isRagPreferSpeedEnabled: () =>
+    get<string>(K.ragMode, 'default') === 'local-fast' ||
+    get<boolean>(K.ragPreferSpeed, false) === true,
   // Skill toggles
   isSkillSendEmailEnabled: () => get<boolean>(K.skillSendEmail, true) !== false,
   isSkillTrashThreadEnabled: () => get<boolean>(K.skillTrashThread, true) !== false,
