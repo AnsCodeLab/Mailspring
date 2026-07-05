@@ -73,6 +73,41 @@ describe('buildChatPrompt', () => {
   });
 });
 
+describe('buildChatPrompt knowledge-base miss note', () => {
+  it('notes that the knowledge base had no relevant sources when searched and empty', () => {
+    const msgs = buildChatPrompt({
+      question: 'q',
+      threadMessages: [],
+      history: [],
+      retrieved: [],
+      kbSearched: true,
+    });
+    const joined = msgs.map((m) => m.content).join('\n');
+    expect(joined).toContain('found no relevant sources');
+  });
+  it('adds no note when sources were retrieved', () => {
+    const msgs = buildChatPrompt({
+      question: 'q',
+      threadMessages: [],
+      history: [],
+      retrieved: [src('1', 'hello world')],
+      kbSearched: true,
+    });
+    const joined = msgs.map((m) => m.content).join('\n');
+    expect(joined).not.toContain('found no relevant sources');
+  });
+  it('adds no note when the knowledge base was not searched', () => {
+    const msgs = buildChatPrompt({
+      question: 'q',
+      threadMessages: [],
+      history: [],
+      retrieved: [],
+    });
+    const joined = msgs.map((m) => m.content).join('\n');
+    expect(joined).not.toContain('found no relevant sources');
+  });
+});
+
 describe('buildRewritePrompt', () => {
   it('includes the text and the style instruction', () => {
     const msgs = buildRewritePrompt({ text: 'Dear sir', style: 'shorter' });

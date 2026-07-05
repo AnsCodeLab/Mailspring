@@ -24,15 +24,36 @@ export class VectorStore {
       CREATE TABLE IF NOT EXISTS indexed_messages (messageId TEXT PRIMARY KEY, contentHash TEXT, model TEXT, dim INTEGER, indexedAt INTEGER);
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
     `);
+    // BM25 keyword index for hybrid retrieval. rowid mirrors chunks.id; kept in sync by
+    // upsertMessage/removeMessage/clear (the only write paths). Databases created before
+    // this table existed are backfilled from their chunks on first open.
+    const hadFts = !!this.db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chunks_fts'`)
+      .get();
+    if (!hadFts) {
+      this.db.exec(`CREATE VIRTUAL TABLE chunks_fts USING fts5(chunkText, subject, sender)`);
+      this.db.exec(
+        `INSERT INTO chunks_fts (rowid, chunkText, subject, sender) SELECT id, chunkText, subject, sender FROM chunks`
+      );
+    }
+  }
+  private deleteFtsForMessage(messageId: string): void {
+    this.db
+      .prepare('DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE messageId = ?)')
+      .run(messageId);
   }
   upsertMessage(meta: MsgMeta, chunks: Array<{ text: string; vector: number[] }>): void {
     const tx = this.db.transaction(() => {
+      this.deleteFtsForMessage(meta.messageId);
       this.db.prepare('DELETE FROM chunks WHERE messageId = ?').run(meta.messageId);
       const ins = this.db.prepare(
         'INSERT INTO chunks (messageId, threadId, accountId, date, sender, subject, chunkText, embedding, dim) VALUES (?,?,?,?,?,?,?,?,?)'
       );
-      for (const c of chunks)
-        ins.run(
+      const insFts = this.db.prepare(
+        'INSERT INTO chunks_fts (rowid, chunkText, subject, sender) VALUES (?,?,?,?)'
+      );
+      for (const c of chunks) {
+        const { lastInsertRowid } = ins.run(
           meta.messageId,
           meta.threadId,
           meta.accountId,
@@ -43,6 +64,8 @@ export class VectorStore {
           vectorToBuffer(c.vector),
           meta.dim
         );
+        insFts.run(lastInsertRowid, c.text, meta.subject, meta.sender);
+      }
       this.db
         .prepare(
           'INSERT OR REPLACE INTO indexed_messages (messageId, contentHash, model, dim, indexedAt) VALUES (?,?,?,?,?)'
@@ -53,10 +76,37 @@ export class VectorStore {
   }
   removeMessage(messageId: string): void {
     const tx = this.db.transaction(() => {
+      this.deleteFtsForMessage(messageId);
       this.db.prepare('DELETE FROM chunks WHERE messageId = ?').run(messageId);
       this.db.prepare('DELETE FROM indexed_messages WHERE messageId = ?').run(messageId);
     });
     tx();
+  }
+  // BM25 keyword search over chunk text/subject/sender. The query is reduced to quoted
+  // phrase terms so user input can never hit FTS5 operator syntax (AND, NOT, parens).
+  keywordSearch(query: string, k: number) {
+    const terms = (query || '')
+      .split(/\s+/)
+      .map((t) => t.replace(/"/g, '').trim())
+      .filter(Boolean);
+    if (!terms.length) return [];
+    const match = terms.map((t) => `"${t}"`).join(' OR ');
+    const rows = this.db
+      .prepare(
+        `SELECT c.id, c.messageId, c.threadId, c.sender, c.subject, c.date, c.chunkText
+         FROM chunks_fts f JOIN chunks c ON c.id = f.rowid
+         WHERE chunks_fts MATCH ? ORDER BY bm25(chunks_fts) LIMIT ?`
+      )
+      .all(match, k) as any[];
+    return rows.map((r) => ({
+      id: String(r.id),
+      messageId: r.messageId,
+      threadId: r.threadId,
+      sender: r.sender,
+      subject: r.subject,
+      date: r.date,
+      chunkText: r.chunkText,
+    }));
   }
   isIndexed(messageId: string, contentHash: string): boolean {
     const row = this.db
@@ -101,7 +151,7 @@ export class VectorStore {
     this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value);
   }
   clear(): void {
-    this.db.exec('DELETE FROM chunks; DELETE FROM indexed_messages;');
+    this.db.exec('DELETE FROM chunks_fts; DELETE FROM chunks; DELETE FROM indexed_messages;');
   }
   close(): void {
     this.db.close();

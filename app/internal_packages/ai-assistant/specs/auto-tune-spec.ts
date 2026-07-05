@@ -95,6 +95,7 @@ describe('computeAutoTune', () => {
     expect(result.historyFraction).toBe(RAG_DEFAULTS.historyFraction);
     expect(result.maxAgentSteps).toBe(RAG_DEFAULTS.maxAgentSteps);
     expect(result.webSearchResults).toBe(RAG_DEFAULTS.webSearchResults);
+    expect(result.minScore).toBe(RAG_DEFAULTS.minScore);
   });
 
   it('rounds context budget to the nearest 1000', () => {

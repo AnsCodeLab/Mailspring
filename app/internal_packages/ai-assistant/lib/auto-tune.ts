@@ -10,6 +10,7 @@ export type AutoTuneResult = {
   chunkSize: number;
   chunkOverlap: number;
   retrieveK: number;
+  minScore: number;
   contextBudget: number;
   historyFraction: number;
   maxAgentSteps: number;
@@ -80,6 +81,7 @@ export function computeAutoTune(
     chunkSize,
     chunkOverlap,
     retrieveK,
+    minScore: RAG_DEFAULTS.minScore,
     contextBudget,
     historyFraction: RAG_DEFAULTS.historyFraction,
     maxAgentSteps,

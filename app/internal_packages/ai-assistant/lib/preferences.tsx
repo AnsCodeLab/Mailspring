@@ -157,6 +157,7 @@ export default class AIPreferences extends React.Component<
       chunkSize: number;
       chunkOverlap: number;
       retrieveK: number;
+      minScore: number;
       contextBudget: number;
       historyFraction: number;
       maxAgentSteps: number;
@@ -188,6 +189,7 @@ export default class AIPreferences extends React.Component<
       chunkSize: AIConfig.getChunkSize(),
       chunkOverlap: AIConfig.getChunkOverlap(),
       retrieveK: AIConfig.getRetrieveK(),
+      minScore: AIConfig.getMinScore(),
       contextBudget: AIConfig.getContextBudget(),
       historyFraction: AIConfig.getHistoryFraction(),
       maxAgentSteps: AIConfig.getMaxAgentSteps(),
@@ -304,6 +306,7 @@ export default class AIPreferences extends React.Component<
       [K.chunkSize]: RAG_DEFAULTS.chunkSize,
       [K.chunkOverlap]: RAG_DEFAULTS.chunkOverlap,
       [K.retrieveK]: RAG_DEFAULTS.retrieveK,
+      [K.minScore]: RAG_DEFAULTS.minScore,
       [K.contextBudget]: RAG_DEFAULTS.contextBudget,
       [K.historyFraction]: RAG_DEFAULTS.historyFraction,
       [K.maxAgentSteps]: RAG_DEFAULTS.maxAgentSteps,
@@ -315,6 +318,7 @@ export default class AIPreferences extends React.Component<
         chunkSize: RAG_DEFAULTS.chunkSize,
         chunkOverlap: RAG_DEFAULTS.chunkOverlap,
         retrieveK: RAG_DEFAULTS.retrieveK,
+        minScore: RAG_DEFAULTS.minScore,
         contextBudget: RAG_DEFAULTS.contextBudget,
         historyFraction: RAG_DEFAULTS.historyFraction,
         maxAgentSteps: RAG_DEFAULTS.maxAgentSteps,
@@ -328,6 +332,7 @@ export default class AIPreferences extends React.Component<
     AppEnv.config.set(K.chunkSize, values.chunkSize);
     AppEnv.config.set(K.chunkOverlap, values.chunkOverlap);
     AppEnv.config.set(K.retrieveK, values.retrieveK);
+    AppEnv.config.set(K.minScore, values.minScore);
     AppEnv.config.set(K.contextBudget, values.contextBudget);
     AppEnv.config.set(K.historyFraction, values.historyFraction);
     AppEnv.config.set(K.maxAgentSteps, values.maxAgentSteps);
@@ -817,6 +822,11 @@ export default class AIPreferences extends React.Component<
                       )}
                     </label>
                     <label>
+                      {localized('Relevance threshold')}
+                      {roVal(values.minScore)}
+                      {hint('Minimum similarity for a source to be used (0 disables)')}
+                    </label>
+                    <label>
                       {localized('Context budget (chars)')}
                       {roVal(values.contextBudget.toLocaleString())}
                       {hint(`≈ ${Math.round(values.contextBudget / 4).toLocaleString()} tokens`)}
@@ -911,6 +921,25 @@ export default class AIPreferences extends React.Component<
                         : hint(
                             `~${kbChars.toLocaleString()} chars of knowledge base injected per turn.`
                           )}
+                    </label>
+                    <label>
+                      {localized('Relevance threshold')}
+                      <input
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        defaultValue={adv.minScore}
+                        onChange={(e) => _adv('minScore', Number(e.target.value))}
+                        onBlur={(e) => this._set(K.minScore, Number(e.target.value))}
+                      />
+                      {adv.minScore === 0
+                        ? hint('Disabled: every top-K source is injected, relevant or not', true)
+                        : adv.minScore > 0.6
+                          ? hint('Very strict: most sources will be filtered out', true)
+                          : hint(
+                              'Sources scoring below this similarity are dropped. Exact keyword matches always pass.'
+                            )}
                     </label>
                     <label>
                       {localized('Context budget (chars)')}

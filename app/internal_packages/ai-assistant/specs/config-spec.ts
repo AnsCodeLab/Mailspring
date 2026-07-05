@@ -26,4 +26,16 @@ describe('AIConfig defaults', () => {
     expect(AIConfig.getClaudeCliPath()).toBe('claude'));
   it('claude CLI model override defaults to empty', () =>
     expect(AIConfig.getClaudeCliModel()).toBe(''));
+  it('minScore defaults to 0.25', () => expect(AIConfig.getMinScore()).toBe(0.25));
+});
+
+describe('AIConfig.getMinScore clamping', () => {
+  it('clamps to [0, 1]', () => {
+    const spy = spyOn(AppEnv.config, 'get').andReturn(-0.5);
+    expect(AIConfig.getMinScore()).toBe(0);
+    spy.andReturn(1.5);
+    expect(AIConfig.getMinScore()).toBe(1);
+    spy.andReturn(0.4);
+    expect(AIConfig.getMinScore()).toBe(0.4);
+  });
 });

@@ -64,6 +64,9 @@ export function buildChatPrompt(args: {
   budgetChars?: number;
   historyFraction?: number;
   sender?: SenderIdentity;
+  // true when the knowledge base was actually searched for this question, so an empty
+  // `retrieved` means "nothing relevant" rather than "search never ran"
+  kbSearched?: boolean;
 }): ChatMessage[] {
   const budget = args.budgetChars ?? AIConfig.getContextBudget();
   const histFraction = args.historyFraction ?? AIConfig.getHistoryFraction();
@@ -111,6 +114,15 @@ export function buildChatPrompt(args: {
   }
   const sb = sourcesBlock(allSources, ctxBudget);
   if (sb) ctx.push({ role: 'system', content: clip(sb, ctxBudget) });
+  else if (args.kbSearched) {
+    ctx.push({
+      role: 'system',
+      content:
+        "KNOWLEDGE BASE: A semantic and keyword search of the user's indexed email found no relevant sources for this question. " +
+        'Do not invent email content. If the current thread does not contain the answer, say you could not find it in their email, ' +
+        'or try the available search tools with different wording.',
+    });
+  }
   return [...ctx, ...kept, { role: 'user', content: args.question }];
 }
 

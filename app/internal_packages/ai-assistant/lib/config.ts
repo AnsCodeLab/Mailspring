@@ -22,6 +22,7 @@ const K = {
   chunkSize: 'ai-assistant.rag.chunkSize',
   chunkOverlap: 'ai-assistant.rag.chunkOverlap',
   retrieveK: 'ai-assistant.rag.retrieveK',
+  minScore: 'ai-assistant.rag.minScore',
   contextBudget: 'ai-assistant.rag.contextBudget',
   historyFraction: 'ai-assistant.rag.historyFraction',
   // Agent
@@ -42,6 +43,9 @@ export const RAG_DEFAULTS = {
   chunkOverlap: 150,
   // More chunks needed when each is smaller; 10 covers ~8k chars of KB context
   retrieveK: 10,
+  // Minimum cosine similarity for a KB chunk to count as relevant; below this the chunk is
+  // dropped instead of padding the prompt with noise. 0 disables the floor.
+  minScore: 0.25,
   // Modern LLMs support 128k+ tokens; 24k chars lets a full thread fit without clipping
   contextBudget: 24000,
   // Give 70% of budget to thread + sources rather than chat history
@@ -99,6 +103,7 @@ export const AIConfig = {
   getChunkSize: () => Math.max(200, get<number>(K.chunkSize, RAG_DEFAULTS.chunkSize)),
   getChunkOverlap: () => Math.max(0, get<number>(K.chunkOverlap, RAG_DEFAULTS.chunkOverlap)),
   getRetrieveK: () => Math.max(1, get<number>(K.retrieveK, RAG_DEFAULTS.retrieveK)),
+  getMinScore: () => Math.min(1, Math.max(0, get<number>(K.minScore, RAG_DEFAULTS.minScore))),
   getContextBudget: () => Math.max(1000, get<number>(K.contextBudget, RAG_DEFAULTS.contextBudget)),
   getHistoryFraction: () =>
     Math.min(0.9, Math.max(0.1, get<number>(K.historyFraction, RAG_DEFAULTS.historyFraction))),

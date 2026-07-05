@@ -814,10 +814,12 @@ export default class AIChatPanel extends React.Component<
         content: t.content,
       }));
       let retrieved: RetrievedSource[] = [];
+      let kbSearched = false;
       try {
         const { Indexer } = require('./indexer');
         if (AIConfig.isKnowledgeBaseEnabled() && Indexer.store()) {
           retrieved = await retrieve(q, Indexer.store());
+          kbSearched = true;
         }
       } catch {
         // indexer not yet available
@@ -831,6 +833,7 @@ export default class AIChatPanel extends React.Component<
         threadId: thread?.id,
         threadSubject: thread?.subject || undefined,
         sender: this._sender(),
+        kbSearched,
       });
       let answer = '';
       const { Skills } = require('./skills/registry');
