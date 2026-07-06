@@ -37,7 +37,12 @@ function convertFromHTML(html: string) {
 }
 function convertToHTML(value: Value) {
   resolveConversion();
-  return Conversion.convertToHTML(value);
+  const html = Conversion.convertToHTML(value);
+  // Mirrors the fallback in composer-editor.tsx, which applies the same default as live
+  // CSS on the editor while composing — this makes it part of the sent message too.
+  const defaultFace = AppEnv.config.get('core.composing.defaultFontFace') || 'sans-serif';
+  const defaultSizePt = AppEnv.config.get('core.composing.defaultFontSize');
+  return Conversion.wrapHTMLWithDefaultFont(html, defaultFace, defaultSizePt);
 }
 function convertToShapeWithoutContent(value: Value) {
   resolveConversion();

@@ -418,6 +418,21 @@ export function convertToHTML(value: Value) {
   return HtmlSerializer.serialize(value);
 }
 
+// Plain typed text carries no face/size mark of its own — the composer's default font
+// preference is applied live as CSS on the editor, but that CSS never travels with the
+// message. Wrapping the serialized body in a container carrying the same default (as an
+// inline style, so it beats any other stylesheet's own font rules) makes the rendered
+// message consistent whether it's viewed while composing, by the recipient, or reopened
+// in Mailspring's own thread view.
+export function wrapHTMLWithDefaultFont(html: string, face?: string, sizePt?: string) {
+  if (!html) return html;
+  const styles: string[] = [];
+  if (face) styles.push(`font-family: ${face}`);
+  if (sizePt) styles.push(`font-size: ${sizePt}pt`);
+  if (!styles.length) return html;
+  return `<div style="${styles.join('; ')};">${html}</div>`;
+}
+
 export function convertToPlainText(value: Value) {
   if (!value) return '';
 

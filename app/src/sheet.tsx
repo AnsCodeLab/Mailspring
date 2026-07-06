@@ -9,6 +9,30 @@ import { SheetDepthContext } from './sheet-context';
 
 const FLEX = 10000;
 
+// The global toolbar (hamburger menu, search, compose/refresh/filter, AI toggle, and the
+// custom minimize/maximize/close buttons on Linux/Windows) is mirrored to sit on top of the
+// LAST content column, sized to match that column's own rendered width -- which can be far
+// narrower than the toolbar's actual content needs (e.g. ThreadList's own minWidth is only
+// 100px). When that column shrinks to its own declared minimum, the toolbar's fixed-width
+// buttons render past the visible edge entirely. Measured live: the toolbar's real content
+// (hamburger + search remnants + compose/refresh/filter + the 72px window-controls group)
+// needs close to 800px before the window-controls stop landing off-screen -- rounded up
+// here for a safety margin (locales, larger icon sets, etc).
+export const GLOBAL_TOOLBAR_CHROME_MIN_WIDTH = 800;
+
+// Ensures the LAST column (which mirrors sheet-toolbar.tsx's own `state.columns[length-1]`
+// placement of the global toolbar) is never narrower than the toolbar chrome needs, so it's
+// never possible to resize the window down to a state where those buttons get clipped.
+export function applyToolbarChromeFloor<T extends { minWidth: number }>(columns: T[]): T[] {
+  if (!columns.length) return columns;
+  const last = columns.length - 1;
+  return columns.map((col, idx) =>
+    idx === last
+      ? { ...col, minWidth: Math.max(col.minWidth, GLOBAL_TOOLBAR_CHROME_MIN_WIDTH) }
+      : col
+  );
+}
+
 const COLUMN_META: Record<string, { role: string; label: () => string }> = {
   RootSidebar: { role: 'complementary', label: () => localized('Account sidebar') },
   ThreadList: { role: 'region', label: () => localized('Thread list') },
@@ -210,6 +234,7 @@ export default class Sheet extends React.Component<SheetProps, SheetState> {
         state.columns[i].handle = ResizableRegion.Handle.Left;
       }
     }
+    state.columns = applyToolbarChromeFloor(state.columns);
     return state;
   }
 
