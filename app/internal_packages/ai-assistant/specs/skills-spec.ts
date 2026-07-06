@@ -189,6 +189,35 @@ describe('webSearchSkill', () => {
     expect(Array.isArray(result)).toBe(true);
     expect((result as any[])[0].title).toBe('T1');
   });
+
+  it('calls Exa with the x-api-key header and maps highlights to snippets', async () => {
+    fakeConfig({
+      'ai-assistant.webSearch.enabled': true,
+      'ai-assistant.webSearch.url': 'https://api.exa.ai/search',
+      'ai-assistant.webSearch.results': 3,
+    });
+    spyOn(require('mailspring-exports').KeyManager, 'getPassword').andReturn(
+      Promise.resolve('exa-test-key')
+    );
+    const fetchSpy = spyOn(window, 'fetch').andReturn(
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            results: [{ title: 'Exa result', url: 'https://c.com', highlights: ['Exa snippet'] }],
+          }),
+      } as any)
+    );
+    const result = await webSearchSkill.run({ query: 'test query' }, {});
+    expect((result as any[])[0]).toEqual({
+      title: 'Exa result',
+      url: 'https://c.com',
+      snippet: 'Exa snippet',
+    });
+    const [url, opts] = fetchSpy.mostRecentCall.args;
+    expect(url).toBe('https://api.exa.ai/search');
+    expect(opts.headers['x-api-key']).toBe('exa-test-key');
+  });
 });
 
 // ─── mailbox_search ──────────────────────────────────────────────────────────

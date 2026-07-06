@@ -79,6 +79,13 @@ const WEB_SEARCH_PROVIDERS = [
     keyUrl: 'https://serper.dev/',
   },
   {
+    id: 'exa',
+    label: 'Exa',
+    sublabel: 'Free tier: 20,000 req/month, AI-native search',
+    url: 'https://api.exa.ai/search',
+    keyUrl: 'https://exa.ai/',
+  },
+  {
     id: 'searxng',
     label: 'SearXNG',
     sublabel: 'Self-hosted, no API key needed',
@@ -126,6 +133,7 @@ function detectWebSearchProvider(url: string) {
   if (url.includes('brave.com')) return 'brave';
   if (url.includes('tavily.com')) return 'tavily';
   if (url.includes('serper.dev')) return 'serper';
+  if (url.includes('exa.ai')) return 'exa';
   if (url.includes('localhost') || url.includes('searxng') || url.includes('searx'))
     return 'searxng';
   return url ? 'custom' : 'brave';

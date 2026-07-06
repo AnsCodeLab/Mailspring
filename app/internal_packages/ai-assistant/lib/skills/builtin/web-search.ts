@@ -39,10 +39,11 @@ async function runDDGSearch(query: string, count: number): Promise<SearchResult[
   return results;
 }
 
-function detectProvider(url: string): 'brave' | 'tavily' | 'serper' | 'searxng' {
+function detectProvider(url: string): 'brave' | 'tavily' | 'serper' | 'exa' | 'searxng' {
   if (url.includes('brave.com')) return 'brave';
   if (url.includes('tavily.com')) return 'tavily';
   if (url.includes('serper.dev')) return 'serper';
+  if (url.includes('exa.ai')) return 'exa';
   return 'searxng';
 }
 
@@ -94,6 +95,25 @@ async function runSearch(
       .map((r: any) => ({ title: r.title, url: r.link, snippet: r.snippet || '' }));
   }
 
+  if (provider === 'exa') {
+    if (key) authHeaders['x-api-key'] = key;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeaders },
+      body: JSON.stringify({
+        query,
+        numResults: count,
+        contents: { highlights: true },
+      }),
+    });
+    const json = await res.json();
+    return (json.results || []).slice(0, count).map((r: any) => ({
+      title: r.title,
+      url: r.url,
+      snippet: (r.highlights && r.highlights[0]) || '',
+    }));
+  }
+
   // SearXNG
   const res = await fetch(`${url}/search?q=${encodeURIComponent(query)}&format=json`, {
     headers: key ? { Authorization: `Bearer ${key}` } : {},
@@ -109,7 +129,7 @@ export const webSearchSkill: Skill = {
   tier: 'read',
   description:
     'Search the web. Returns titles, URLs, and snippets. ' +
-    'Uses a configured provider (Brave/Tavily/Serper/SearXNG) when set, otherwise falls back to DuckDuckGo.',
+    'Uses a configured provider (Brave/Tavily/Serper/Exa/SearXNG) when set, otherwise falls back to DuckDuckGo.',
   parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
   // Always available — DDG requires no API key or configuration.
   enabled: () => true,
