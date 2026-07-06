@@ -9,12 +9,12 @@ import {
   EmlUtils,
   Thread,
   Message,
+  DatabaseStore,
   ComponentRegistry,
 } from 'mailspring-exports';
 import { RetinaImg, ButtonDropdown, Menu } from 'mailspring-component-kit';
 import {
-  fetchThreadMessages,
-  buildThreadMarkdown,
+  buildSingleMessageMarkdown,
   saveMarkdownFile,
 } from '../../export-to-markdown/lib/export-utils';
 
@@ -108,12 +108,17 @@ export default class MessageControls extends React.Component<MessageControlsProp
   };
 
   _onExportMarkdown = async () => {
-    const { thread } = this.props;
+    const { thread, message } = this.props;
     try {
-      const messages = await fetchThreadMessages(thread.id);
-      if (!messages.length) return;
-      const content = buildThreadMarkdown(thread, messages);
-      await saveMarkdownFile(content, thread.subject);
+      let msg = message;
+      if (!msg.body) {
+        msg = await DatabaseStore.find<Message>(Message, message.id).include(
+          Message.attributes.body
+        );
+        if (!msg) return;
+      }
+      const content = buildSingleMessageMarkdown(msg);
+      await saveMarkdownFile(content, msg.subject || thread.subject);
     } catch (err) {
       AppEnv.showErrorDialog({
         title: localized('Export Failed'),

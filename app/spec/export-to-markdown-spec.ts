@@ -160,18 +160,41 @@ describe('MessageControls "Export as Markdown" dropdown item', () => {
     expect(items.map((i) => i.name)).toContain('Export as Markdown');
   });
 
-  it('exports the whole thread (not just the open message) when selected', async () => {
-    spyOn(ExportUtils, 'fetchThreadMessages').andCallFake(async () => [makeMessage()]);
-    spyOn(ExportUtils, 'buildThreadMarkdown').andReturn('# md content');
+  it('exports only the open message (not the whole thread) when selected', async () => {
+    spyOn(ExportUtils, 'buildSingleMessageMarkdown').andReturn('# md content');
     spyOn(ExportUtils, 'saveMarkdownFile').andCallFake(async () => {});
+    spyOn(ExportUtils, 'fetchThreadMessages');
 
-    const thread = makeThread('Exportable Thread');
-    const items = makeControls({ thread })._items();
+    const thread = makeThread('Some Thread');
+    const message = { ...makeMessage({ subject: 'Just this message' }), canReplyAll: () => true };
+    const items = makeControls({ thread, message })._items();
     const exportItem = items.find((i) => i.name === 'Export as Markdown');
 
     await exportItem.select();
 
-    expect(ExportUtils.fetchThreadMessages).toHaveBeenCalledWith(thread.id);
-    expect(ExportUtils.saveMarkdownFile).toHaveBeenCalledWith('# md content', thread.subject);
+    expect(ExportUtils.buildSingleMessageMarkdown).toHaveBeenCalledWith(message);
+    expect(ExportUtils.saveMarkdownFile).toHaveBeenCalledWith('# md content', message.subject);
+    expect(ExportUtils.fetchThreadMessages).not.toHaveBeenCalled();
+  });
+
+  it('loads the message body first when it is not already present', async () => {
+    const { DatabaseStore, Message } = require('mailspring-exports');
+    const loadedMessage = { ...makeMessage({ id: 'msg-2' }), canReplyAll: () => true };
+    const chain: any = { include: () => Promise.resolve(loadedMessage) };
+    spyOn(DatabaseStore, 'find').andReturn(chain);
+    spyOn(ExportUtils, 'buildSingleMessageMarkdown').andReturn('# md content');
+    spyOn(ExportUtils, 'saveMarkdownFile').andCallFake(async () => {});
+
+    const bodylessMessage = {
+      ...makeMessage({ id: 'msg-2', body: undefined }),
+      canReplyAll: () => true,
+    };
+    const items = makeControls({ message: bodylessMessage })._items();
+    const exportItem = items.find((i) => i.name === 'Export as Markdown');
+
+    await exportItem.select();
+
+    expect(DatabaseStore.find).toHaveBeenCalledWith(Message, 'msg-2');
+    expect(ExportUtils.buildSingleMessageMarkdown).toHaveBeenCalledWith(loadedMessage);
   });
 });
