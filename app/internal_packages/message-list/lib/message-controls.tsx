@@ -12,6 +12,11 @@ import {
   ComponentRegistry,
 } from 'mailspring-exports';
 import { RetinaImg, ButtonDropdown, Menu } from 'mailspring-component-kit';
+import {
+  fetchThreadMessages,
+  buildThreadMarkdown,
+  saveMarkdownFile,
+} from '../../export-to-markdown/lib/export-utils';
 
 interface MessageControlsProps {
   thread: Thread;
@@ -44,13 +49,19 @@ export default class MessageControls extends React.Component<MessageControlsProp
       select: this._onShowOriginal,
     };
 
+    const exportMarkdown = {
+      name: localized('Export as Markdown'),
+      image: 'ic-toolbar-native-share.png',
+      select: this._onExportMarkdown,
+    };
+
     if (!this.props.message.canReplyAll()) {
-      return [reply, forward, showOriginal];
+      return [reply, forward, showOriginal, exportMarkdown];
     }
     const defaultReplyType = AppEnv.config.get('core.sending.defaultReplyType');
     return defaultReplyType === 'reply-all'
-      ? [replyAll, reply, forward, showOriginal]
-      : [reply, replyAll, forward, showOriginal];
+      ? [replyAll, reply, forward, showOriginal, exportMarkdown]
+      : [reply, replyAll, forward, showOriginal, exportMarkdown];
   }
 
   _dropdownMenu(items: Array<{ name: string; image: string; select: () => void }>) {
@@ -94,6 +105,21 @@ export default class MessageControls extends React.Component<MessageControlsProp
   _onForward = () => {
     const { thread, message } = this.props;
     Actions.composeForward({ thread, message });
+  };
+
+  _onExportMarkdown = async () => {
+    const { thread } = this.props;
+    try {
+      const messages = await fetchThreadMessages(thread.id);
+      if (!messages.length) return;
+      const content = buildThreadMarkdown(thread, messages);
+      await saveMarkdownFile(content, thread.subject);
+    } catch (err) {
+      AppEnv.showErrorDialog({
+        title: localized('Export Failed'),
+        message: String(err),
+      });
+    }
   };
 
   _onDownloadEml = () => {

@@ -3,6 +3,8 @@ import {
   buildThreadMarkdown,
   buildSingleMessageMarkdown,
 } from '../internal_packages/export-to-markdown/lib/export-utils';
+import * as ExportUtils from '../internal_packages/export-to-markdown/lib/export-utils';
+import MessageControls from '../internal_packages/message-list/lib/message-controls';
 
 // Minimal Message stub — only fields used by the markdown builders
 function makeMessage(overrides: Record<string, unknown> = {}) {
@@ -138,5 +140,38 @@ describe('buildSingleMessageMarkdown', () => {
   it('uses "Email" when subject is empty', () => {
     const result = buildSingleMessageMarkdown(makeMessage({ subject: '' }));
     expect(result.startsWith('# Email')).toBe(true);
+  });
+});
+
+describe('MessageControls "Export as Markdown" dropdown item', () => {
+  beforeEach(() => {
+    spyOn(AppEnv.config, 'get').andReturn(undefined);
+  });
+
+  function makeControls(overrides: { thread?: any; message?: any } = {}) {
+    return new MessageControls({
+      thread: overrides.thread || makeThread(),
+      message: overrides.message || { ...makeMessage(), canReplyAll: () => true },
+    } as any);
+  }
+
+  it('includes an Export as Markdown entry in the reply-caret dropdown', () => {
+    const items = makeControls()._items();
+    expect(items.map((i) => i.name)).toContain('Export as Markdown');
+  });
+
+  it('exports the whole thread (not just the open message) when selected', async () => {
+    spyOn(ExportUtils, 'fetchThreadMessages').andCallFake(async () => [makeMessage()]);
+    spyOn(ExportUtils, 'buildThreadMarkdown').andReturn('# md content');
+    spyOn(ExportUtils, 'saveMarkdownFile').andCallFake(async () => {});
+
+    const thread = makeThread('Exportable Thread');
+    const items = makeControls({ thread })._items();
+    const exportItem = items.find((i) => i.name === 'Export as Markdown');
+
+    await exportItem.select();
+
+    expect(ExportUtils.fetchThreadMessages).toHaveBeenCalledWith(thread.id);
+    expect(ExportUtils.saveMarkdownFile).toHaveBeenCalledWith('# md content', thread.subject);
   });
 });
