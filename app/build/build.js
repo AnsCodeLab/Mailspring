@@ -80,7 +80,7 @@ function resolveRealSymlinkPaths() {
 async function runCopyPlatformSpecificResources({ buildPath, platform: plat }) {
   const winResourcesSource = path.resolve(appDir, 'build', 'resources', 'win');
   const winResourcesTarget = path.resolve(buildPath, '..');
-  if (plat === 'win32') {
+  if (platform === 'win32') {
     fsPlus.copySync(winResourcesSource, winResourcesTarget);
   }
 }
