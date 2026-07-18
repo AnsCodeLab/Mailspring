@@ -28,6 +28,7 @@ export interface IOutlineViewItem {
   onMarkAllAsRead?: (...args: any[]) => any;
   onEdited?: (...args: any[]) => any;
   onExport?: (...args: any[]) => any;
+  onExportMbox?: (...args: any[]) => any;
   onCreateChild?: (...args: any[]) => any;
 }
 
