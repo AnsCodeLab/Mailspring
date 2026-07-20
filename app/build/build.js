@@ -413,7 +413,7 @@ async function createDebInstaller() {
   };
   writeFromTemplate(path.join(linuxAssetsDir, 'debian', 'control.in'), data);
   writeFromTemplate(path.join(linuxAssetsDir, 'Mailspring.desktop.in'), data);
-  writeFromTemplate(path.join(linuxAssetsDir, 'mailspring.appdata.xml.in'), data);
+  writeFromTemplate(path.join(linuxAssetsDir, 'mailspring.metainfo.xml.in'), data);
 
   const icon = path.join(appDir, 'build', 'resources', 'linux', 'icons', '512.png');
   await spawn({
@@ -442,7 +442,7 @@ async function createRpmInstaller() {
     linuxShareDir: '/usr/local/share/mailspring',
     linuxAssetsDir,
     contentsDir,
-    // Absolute source dir for Mailspring.desktop / mailspring.appdata.xml, referenced from the
+    // Absolute source dir for Mailspring.desktop / mailspring.metainfo.xml, referenced from the
     // spec's %prep section (see mailspring.spec.in) so newer rpmbuild versions that reset the
     // build subdirectory before %install still find these files.
     outputDir,
@@ -450,7 +450,7 @@ async function createRpmInstaller() {
 
   writeFromTemplate(path.join(linuxAssetsDir, 'redhat', 'mailspring.spec.in'), templateData);
   writeFromTemplate(path.join(linuxAssetsDir, 'Mailspring.desktop.in'), templateData);
-  writeFromTemplate(path.join(linuxAssetsDir, 'mailspring.appdata.xml.in'), templateData);
+  writeFromTemplate(path.join(linuxAssetsDir, 'mailspring.metainfo.xml.in'), templateData);
 
   await spawn({
     cmd: path.join(appDir, 'script', 'mkrpm'),
