@@ -253,7 +253,8 @@ export default class SidebarItem {
         onEdited: opts.editable ? onEditItem : undefined,
         onExport: opts.exportable ? onExportFolder : undefined,
         onCreateChild: opts.editable ? onCreateChild : undefined,
-        onMarkAllAsRead: opts.markableAllRead && perspective.category() ? onMarkAllAsRead : undefined,
+        onMarkAllAsRead:
+          opts.markableAllRead && perspective.category() ? onMarkAllAsRead : undefined,
         onCollapseToggled: toggleItemCollapsed,
 
         onDrop(item, event) {
