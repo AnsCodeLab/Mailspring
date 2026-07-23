@@ -1,8 +1,6 @@
 @import 'ui-variables';
 @import 'ui-mixins';
 
-@count-color: @source-list-active-color;
-
 .outline-view {
   order: 1;
 
@@ -111,14 +109,9 @@
       order: 3;
       flex-shrink: 0;
       font-weight: @font-weight-semi-bold;
-      color: @count-color;
-      margin-left: @padding-small-horizontal * 0.8;
-      box-shadow: 0 0.5px 0 @count-color, 0 -0.5px 0 @count-color, 0.5px 0 0 @count-color,
-        -0.5px 0 0 @count-color;
-    }
-    .item-count-box.alt-count {
       color: @source-list-active-bg;
       background: @source-list-active-color;
+      margin-left: @padding-small-horizontal * 0.8;
       box-shadow: none;
     }
     .item-count-box.archive,
