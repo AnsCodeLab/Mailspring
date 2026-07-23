@@ -28,6 +28,10 @@ describe('sidebar-item', function sidebarItemSpec() {
   });
 
   describe('onMarkAllAsRead', () => {
+    beforeEach(() => {
+      AppEnv.savedState.sidebarKeysCollapsed = {};
+    });
+
     it('queues a ChangeUnreadTask for unread threads in the category', () => {
       const unreadThreads = [
         { id: 'thread-1', accountId: TEST_ACCOUNT_ID },
@@ -38,7 +42,7 @@ describe('sidebar-item', function sidebarItemSpec() {
           return this;
         },
         then(callback) {
-          return callback(unreadThreads);
+          return Promise.resolve(callback(unreadThreads));
         },
       }));
       const queueTask = spyOn(Actions, 'queueTask');
@@ -61,7 +65,7 @@ describe('sidebar-item', function sidebarItemSpec() {
           return this;
         },
         then(callback) {
-          return callback([]);
+          return Promise.resolve(callback([]));
         },
       }));
       const queueTask = spyOn(Actions, 'queueTask');
