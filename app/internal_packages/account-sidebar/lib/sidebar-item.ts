@@ -138,7 +138,8 @@ const onMarkAllAsRead = function (item: ISidebarItem) {
           canBeUndone: true,
         })
       );
-    });
+    })
+    .catch(AppEnv.reportError);
 };
 
 function detectFolderSeparator(accountId: string): string {
