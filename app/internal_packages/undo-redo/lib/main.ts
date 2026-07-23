@@ -2,7 +2,8 @@ import { ComponentRegistry, WorkspaceStore } from 'mailspring-exports';
 import UndoRedoToast from './undo-redo-toast';
 
 export function activate() {
-  if (AppEnv.isMainWindow()) {
+  const { windowType } = AppEnv.getLoadSettings();
+  if (AppEnv.isMainWindow() || windowType === 'composer') {
     ComponentRegistry.register(UndoRedoToast, {
       location: WorkspaceStore.Sheet.Global.Footer,
     });
@@ -10,7 +11,8 @@ export function activate() {
 }
 
 export function deactivate() {
-  if (AppEnv.isMainWindow()) {
+  const { windowType } = AppEnv.getLoadSettings();
+  if (AppEnv.isMainWindow() || windowType === 'composer') {
     ComponentRegistry.unregister(UndoRedoToast);
   }
 }

@@ -10,6 +10,7 @@
   },
   "windowTypes": {
     "default": true,
-    "thread-popout": true
+    "thread-popout": true,
+    "composer": true
   }
 }
