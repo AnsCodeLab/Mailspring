@@ -12,6 +12,9 @@ import {
   Actions,
   RegExpUtils,
   localized,
+  DatabaseStore,
+  Thread,
+  TaskFactory,
 } from 'mailspring-exports';
 
 import * as SidebarActions from './sidebar-actions';
@@ -105,6 +108,37 @@ const onExportFolder = function (item: ISidebarItem) {
       );
     }
   );
+};
+
+const onMarkAllAsRead = function (item: ISidebarItem) {
+  const category = item.perspective.category();
+  if (!category) {
+    return;
+  }
+
+  const matchers = [
+    Thread.attributes.categories.containsAny([category.id]),
+    Thread.attributes.unread.equal(true),
+  ];
+  if (!['spam', 'trash'].includes(category.role)) {
+    matchers.push(Thread.attributes.inAllMail.equal(true));
+  }
+
+  DatabaseStore.findAll<Thread>(Thread)
+    .where(matchers)
+    .then((threads) => {
+      if (threads.length === 0) {
+        return;
+      }
+      Actions.queueTask(
+        TaskFactory.taskForSettingUnread({
+          threads,
+          unread: false,
+          source: 'Sidebar Context Menu: Mark All As Read',
+          canBeUndone: true,
+        })
+      );
+    });
 };
 
 function detectFolderSeparator(accountId: string): string {
@@ -218,6 +252,7 @@ export default class SidebarItem {
         onEdited: opts.editable ? onEditItem : undefined,
         onExport: opts.exportable ? onExportFolder : undefined,
         onCreateChild: opts.editable ? onCreateChild : undefined,
+        onMarkAllAsRead: opts.markableAllRead && perspective.category() ? onMarkAllAsRead : undefined,
         onCollapseToggled: toggleItemCollapsed,
 
         onDrop(item, event) {
@@ -277,6 +312,9 @@ export default class SidebarItem {
     if (opts.exportable == null) {
       const role = categories[0] != null ? categories[0].role : null;
       opts.exportable = !role || !EXCLUDED_EXPORT_ROLES.has(role);
+    }
+    if (opts.markableAllRead == null) {
+      opts.markableAllRead = true;
     }
     opts.contextMenuLabel = contextMenuLabel;
     return this.forPerspective(id, perspective, opts);

@@ -14,6 +14,7 @@ export interface ISidebarItem {
   onDelete?: () => void;
   onEdited?: (item, name: string) => void;
   onExport?: () => void;
+  onMarkAllAsRead?: () => void;
   onCreateChild?: (item, childName: string) => void;
   onCollapseToggled: () => void;
   onDrop: (item, event) => void;
@@ -23,6 +24,7 @@ export interface ISidebarItem {
   deletable?: boolean;
   editable?: boolean;
   exportable?: boolean;
+  markableAllRead?: boolean;
   deleted?: boolean;
 }
 
