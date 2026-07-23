@@ -98,3 +98,26 @@ implementation below.
 Per the assignment, the full `npm test` suite and project-wide lint were
 intentionally not run; only the `account-sidebar` specs directory above was
 executed, as scoped.
+
+## Post-review fixes (independent review gate, step 11)
+
+Two review findings required code/test changes (see `plan.md` § Independent Review Verdict): added `.catch(AppEnv.reportError)` to the DB query in `onMarkAllAsRead`, and fixed a test-isolation gap (`beforeEach` resetting `AppEnv.savedState.sidebarKeysCollapsed` in the `onMarkAllAsRead` describe block, plus making the spec's `DatabaseStore.findAll` mock `then()` return a real `Promise` so `.catch()` on it doesn't throw).
+
+**Re-verified independently by the orchestrator (not just the implementor) after these fixes**, same command as above:
+
+```
+  sidebar-item
+    ✓ preserves nested labels on rename
+    ✓ preserves labels on rename
+    onMarkAllAsRead
+      ✓ queues a ChangeUnreadTask for unread threads in the category
+      ✓ is a no-op when there are no unread threads
+      ✓ is present on items built via forCategories
+      ✓ is not present on items built via forUnread
+      ✓ is not present on items built via forStarred
+      ✓ is not present on items built via forDrafts
+
+  8 passing
+```
+
+`./node_modules/.bin/tsc -p app/tsconfig.json --noEmit` — exit code 0, no errors.
