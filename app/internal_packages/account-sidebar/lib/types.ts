@@ -16,6 +16,7 @@ export interface ISidebarItem {
   onExport?: () => void;
   onMarkAllAsRead?: () => void;
   onExportMbox?: () => void;
+  onMarkAllAsRead?: () => void;
   onCreateChild?: (item, childName: string) => void;
   onCollapseToggled: () => void;
   onDrop: (item, event) => void;
