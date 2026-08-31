@@ -117,7 +117,8 @@ class KeyManager {
       encryptedCredentials !== 'null'
     ) {
       try {
-        raw = await safeStorage.decryptString(Buffer.from(encryptedCredentials, 'utf-8'));
+        raw = (await safeStorage.decryptStringAsync(Buffer.from(encryptedCredentials, 'utf-8')))
+          .result;
       } catch (err) {
         console.error('Mailspring encountered an error reading passwords from the keychain.');
         console.error(err);
@@ -131,7 +132,7 @@ class KeyManager {
   }
 
   async _writeKeyHash(keys: KeySet) {
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       const platformHint =
         process.platform === 'linux'
           ? buildLinuxPasswordStoreHint(
@@ -144,7 +145,7 @@ class KeyManager {
         ) + platformHint
       );
     }
-    const enrcyptedCredentials = await safeStorage.encryptString(JSON.stringify(keys));
+    const enrcyptedCredentials = await safeStorage.encryptStringAsync(JSON.stringify(keys));
     AppEnv.config.set(configCredentialsKey, enrcyptedCredentials);
   }
 
