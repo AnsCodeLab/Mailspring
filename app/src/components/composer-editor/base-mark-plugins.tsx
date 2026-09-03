@@ -9,7 +9,9 @@ import {
   BuildFontFacePicker,
   BuildFontSizeInput,
   safeActiveMarks,
+  removeMarksOfTypeInRange,
 } from './toolbar-component-factories';
+import { CHARACTER_MARK_TYPES } from './toolbar-utils';
 
 import BaseBlockPlugins from './base-block-plugins';
 import { ComposerEditorPlugin, Rule } from './types';
@@ -71,6 +73,15 @@ function isMeaningfulFontStyle(style: string) {
   return style && style !== '14px';
 }
 
+// Background-color "meaninglessness" is a different check from foreground-color: a
+// black background is a perfectly meaningful highlight, but the browser's default
+// (no background applied at all) reads back as 'transparent'/'rgba(0,0,0,0)'.
+export function isMeaningfulBackgroundColor(color: string) {
+  if (!color) return false;
+  const meaningless = ['transparent', 'rgba(0,0,0,0)', 'initial', 'inherit'];
+  return !meaningless.includes(color.replace(/ /g, ''));
+}
+
 export const MARK_CONFIG: {
   [key: string]: IEditorToolbarConfigItem;
 } = {
@@ -117,6 +128,29 @@ export const MARK_CONFIG: {
     },
   },
 
+  superscript: {
+    type: 'superscript',
+    tagNames: ['sup'],
+    render: (props) => <sup>{props.children}</sup>,
+    button: {
+      isActive: (value) =>
+        safeActiveMarks(value).some((m) => m.type === MARK_CONFIG.superscript.type),
+      onToggle: (editor) => editor.toggleMark(MARK_CONFIG.superscript.type),
+      iconClass: 'fa fa-superscript',
+    },
+  },
+  subscript: {
+    type: 'subscript',
+    tagNames: ['sub'],
+    render: (props) => <sub>{props.children}</sub>,
+    button: {
+      isActive: (value) =>
+        safeActiveMarks(value).some((m) => m.type === MARK_CONFIG.subscript.type),
+      onToggle: (editor) => editor.toggleMark(MARK_CONFIG.subscript.type),
+      iconClass: 'fa fa-subscript',
+    },
+  },
+
   codeInline: {
     type: 'codeInline',
     tagNames: ['code'],
@@ -128,6 +162,13 @@ export const MARK_CONFIG: {
     tagNames: [],
     render: ({ children, mark }) => (
       <span style={{ color: mark.data.value || mark.data.get('value') }}>{children}</span>
+    ),
+  },
+  highlight: {
+    type: 'highlight',
+    tagNames: [],
+    render: ({ children, mark }) => (
+      <span style={{ backgroundColor: mark.data.value || mark.data.get('value') }}>{children}</span>
     ),
   },
   size: {
@@ -181,6 +222,17 @@ const rules: Rule[] = [
           object: 'mark',
           type: 'color',
           data: { value: el.style.color },
+        });
+      }
+      if (
+        el instanceof HTMLElement &&
+        el.style &&
+        isMeaningfulBackgroundColor(el.style.backgroundColor)
+      ) {
+        marks.push({
+          object: 'mark',
+          type: 'highlight',
+          data: { value: el.style.backgroundColor },
         });
       }
       if (el instanceof HTMLElement && el.style && isMeaningfulFontStyle(el.style.fontSize)) {
@@ -278,6 +330,25 @@ const rules: Rule[] = [
   },
 ];
 
+// Removes every character mark (toggle AND value types — bold, italic, …, color, face,
+// size, highlight, superscript, subscript) from the current selection.
+export function clearFormatting(editor: Editor) {
+  const { selection } = editor.value;
+  for (const type of CHARACTER_MARK_TYPES) {
+    removeMarksOfTypeInRange(editor, selection, type);
+  }
+  return editor.focus();
+}
+
+const ClearFormattingButton = BuildToggleButton({
+  type: 'clear-formatting',
+  button: {
+    isActive: () => false,
+    onToggle: (editor) => clearFormatting(editor),
+    iconClass: 'fa fa-eraser',
+  },
+});
+
 const BaseMarkPlugin: ComposerEditorPlugin = {
   toolbarComponents: []
     .concat(
@@ -287,6 +358,12 @@ const BaseMarkPlugin: ComposerEditorPlugin = {
     )
     .concat([
       BuildColorPicker({ type: 'color', default: '#000000' }),
+      BuildColorPicker({
+        type: 'highlight',
+        default: 'transparent',
+        allowClear: true,
+        clearLabel: localized('No highlight'),
+      }),
       BuildFontFacePicker({
         type: 'face',
         default: DEFAULT_FONT_FACE,
@@ -299,6 +376,7 @@ const BaseMarkPlugin: ComposerEditorPlugin = {
         configKey: 'core.composing.defaultFontSize',
         iconClass: 'fa fa-text-height',
       }),
+      ClearFormattingButton,
     ]),
   renderMark,
   appCommands: {
