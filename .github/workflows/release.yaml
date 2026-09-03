@@ -58,15 +58,21 @@ jobs:
             - Supports any OpenAI-compatible API (local models via Ollama/LM Studio, OpenAI, etc.)
 
             **Composer**
+            - Full rich-text toolbar: undo/redo, paragraph styles (Normal/Heading 1/Heading 2/Quote), text alignment, highlight color, indent/outdent, superscript/subscript, clear formatting, horizontal rule, insert inline image, and text direction (LTR/RTL)
             - Clipboard section (Cut / Copy / Paste / Paste as plain text) + Format Painter
             - Bundled open-source fonts (Roboto, Open Sans, Lato, Montserrat, Poppins, Merriweather, Lora, Source Code Pro)
             - Persistent default font face and size saved to preferences
             - Rich-text paste from Word / Google Docs preserving bold, italic, links, images
+            - Pasted images (PNG/JPEG/GIF/BMP/WebP) now render inline instead of as a plain attachment
+            - New Email now defaults "From" to the account of the selected thread when viewing a unified/multi-account inbox, instead of always the first account
 
             **UI**
             - Toolbar reorder: hamburger left, window controls right (minimize, maximize, close)
             - Subscription tab hidden from Preferences
             - Export emails/threads to Markdown with embedded images
+
+            **Linux**
+            - Fixed "could not store your password securely" error appearing even when a working secret service (GNOME Keyring/KWallet) is reachable, on launchers that don't propagate `XDG_CURRENT_DESKTOP`/`DESKTOP_SESSION` (systemd user units, some window managers, process supervisors)
           files: |
             app/dist/*.deb
             app/dist/*.rpm
