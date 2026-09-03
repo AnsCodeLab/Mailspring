@@ -1,8 +1,9 @@
 import React from 'react';
 import { ImageAttachmentItem } from 'mailspring-component-kit';
-import { AttachmentStore } from 'mailspring-exports';
+import { Actions, AttachmentStore } from 'mailspring-exports';
 import { File as MailspringFile } from '../../flux/models/file';
 import { isQuoteNode } from './base-block-plugins';
+import { BuildToggleButton } from './toolbar-component-factories';
 import { ComposerEditorPlugin } from './types';
 import { Editor, Inline, Node } from 'slate';
 import { schema } from './conversion';
@@ -110,10 +111,37 @@ export const changes = {
   },
 };
 
+const InsertImageButton = BuildToggleButton({
+  type: 'image',
+  button: {
+    isActive: () => false,
+    onToggle: (editor: Editor) => {
+      const { draft } = editor.props.propsForPlugins;
+      AppEnv.showOpenDialog(
+        {
+          properties: ['openFile'],
+          filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] }],
+        },
+        (paths) => {
+          if (!paths || !paths.length) return;
+          Actions.addAttachment({
+            filePath: paths[0],
+            headerMessageId: draft.headerMessageId,
+            inline: true,
+            onCreated: (file: MailspringFile) => changes.insert(editor, file),
+          });
+        }
+      );
+    },
+    iconClass: 'fa fa-image',
+  },
+});
+
 const plugins: ComposerEditorPlugin[] = [
   {
     renderNode,
     rules,
+    toolbarComponents: [InsertImageButton],
   },
 ];
 
