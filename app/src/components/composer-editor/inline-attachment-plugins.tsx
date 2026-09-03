@@ -1,6 +1,6 @@
 import React from 'react';
 import { ImageAttachmentItem } from 'mailspring-component-kit';
-import { Actions, AttachmentStore } from 'mailspring-exports';
+import { Actions, AttachmentStore, MessageWithEditorState } from 'mailspring-exports';
 import { File as MailspringFile } from '../../flux/models/file';
 import { isQuoteNode } from './base-block-plugins';
 import { BuildToggleButton } from './toolbar-component-factories';
@@ -9,6 +9,15 @@ import { Editor, Inline, Node } from 'slate';
 import { schema } from './conversion';
 
 export const IMAGE_TYPE = 'image';
+
+// The mounted slate-react Editor component (not the plain `Editor` from 'slate') carries
+// the React props it was rendered with, including `propsForPlugins` threaded down from
+// ComposerEditor — see the same access pattern in ImageNode below and in
+// grammar-check-plugins.tsx. Slate's own `Editor` type has no `.props`, so this is the
+// minimal typed shape for the one field this file reads off it.
+type EditorWithPluginProps = Editor & {
+  props: { propsForPlugins: { draft: MessageWithEditorState } };
+};
 
 function ImageNode(props) {
   const { attributes, node, editor, targetIsHTML, isFocused } = props;
@@ -116,7 +125,7 @@ const InsertImageButton = BuildToggleButton({
   button: {
     isActive: () => false,
     onToggle: (editor: Editor) => {
-      const { draft } = editor.props.propsForPlugins;
+      const { draft } = (editor as unknown as EditorWithPluginProps).props.propsForPlugins;
       AppEnv.showOpenDialog(
         {
           properties: ['openFile'],

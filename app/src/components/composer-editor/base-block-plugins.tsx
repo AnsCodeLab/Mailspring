@@ -129,7 +129,13 @@ export function nextAlignValue(current: string | null | undefined, clicked: stri
 export function setDivBlockData(editor: Editor, patch: Record<string, any>) {
   const { focusBlock } = editor.value;
   if (!focusBlock) return editor;
-  return editor.setNodeByKey(focusBlock.key, { data: mergeBlockData(focusBlock.data, patch) });
+  // @types/slate's BlockProperties requires `type` even though setNodeByKey only patches
+  // the properties given — pass the block's own (unchanged) type alongside the data patch
+  // to satisfy the signature without widening to `any`/a cast.
+  return editor.setNodeByKey(focusBlock.key, {
+    type: focusBlock.type,
+    data: mergeBlockData(focusBlock.data, patch),
+  });
 }
 
 export function indentBlock(editor: Editor) {
