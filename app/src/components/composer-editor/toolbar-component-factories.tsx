@@ -8,6 +8,7 @@ import {
   faceFromMarkValue,
   resolveDisplay,
   ptFromMarkValue,
+  resolveDropdownBlockType,
 } from './toolbar-utils';
 
 // Helper Functions
@@ -42,10 +43,11 @@ export interface IEditorToolbarConfigItem {
     isActive: (value: Value) => boolean;
     onToggle: (editor: Editor, active: boolean) => any;
     iconClass: string;
+    isDisabled?: (value: Value) => boolean;
   };
 }
 
-function removeMarksOfTypeInRange(editor: Editor, range: Range | Selection, type: string) {
+export function removeMarksOfTypeInRange(editor: Editor, range: Range | Selection, type: string) {
   if (range.isCollapsed) {
     const active = safeActiveMarks(editor.value).find((m) => m.type === type);
     if (active) {
@@ -191,16 +193,22 @@ export function applyValueForMarkSafe(editor: Editor, type: string, markValue: a
 
 export function BuildToggleButton({
   type,
-  button: { iconClass, isActive, onToggle },
+  button: { iconClass, isActive, onToggle, isDisabled },
 }: IEditorToolbarConfigItem) {
   return ({ editor, className, value }: ComposerEditorPluginToolbarComponentProps) => {
-    const active = isActive(value);
+    const disabled = isDisabled ? isDisabled(value) : false;
+    const active = !disabled && isActive(value);
     const onMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
-      onToggle(editor, active);
       e.preventDefault();
+      if (disabled) return;
+      onToggle(editor, active);
     };
     return (
-      <button className={`${className} ${active ? 'active' : ''}`} onMouseDown={onMouseDown}>
+      <button
+        className={`${className} ${active ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+        disabled={disabled}
+        onMouseDown={onMouseDown}
+      >
         <i title={type} className={iconClass} />
       </button>
     );
@@ -359,6 +367,12 @@ export function BuildColorPicker(config) {
       }
     };
 
+    _onClear = (e: React.MouseEvent) => {
+      e.preventDefault();
+      this.setState({ expanded: false });
+      applyValueForMark(this.props.editor, config.type, null);
+    };
+
     _onChangeComplete = ({ hex }) => {
       this.setState({ expanded: false });
       const { editor } = this.props;
@@ -395,6 +409,11 @@ export function BuildColorPicker(config) {
           />
           {expanded && (
             <div className="dropdown">
+              {config.allowClear && (
+                <button className="no-color" onMouseDown={this._onClear}>
+                  <i className="fa fa-ban" /> {config.clearLabel || localized('Clear')}
+                </button>
+              )}
               <CompactPicker color={color} onChangeComplete={this._onChangeComplete} />
             </div>
           )}
@@ -701,5 +720,85 @@ export function BuildFontFacePicker(config: {
         </div>
       );
     }
+  };
+}
+
+// Paragraph-style dropdown (Normal / Heading 1 / Heading 2 / Quote, …) — parallel to
+// BuildFontPicker but drives a block-type transform (`onSetBlockType`) instead of a
+// character mark. `isDisabled` lets callers keep the control visible-but-inert (e.g.
+// nested inside a list item or blockquote) rather than hiding it.
+export function BuildBlockTypeDropdown(config: {
+  options: { name: string; value: string }[];
+  default: string;
+  isDisabled: (value: Value) => boolean;
+  onSetBlockType: (editor: Editor, type: string) => any;
+}) {
+  return class BlockTypeDropdown extends React.Component<ComposerEditorPluginToolbarComponentProps> {
+    _onSetValue = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const { editor } = this.props;
+      config.onSetBlockType(editor, e.target.value);
+      editor.focus();
+    };
+
+    render() {
+      const { value, className } = this.props;
+      const disabled = config.isDisabled(value);
+      const currentType = value.focusBlock ? value.focusBlock.type : undefined;
+      const selected = resolveDropdownBlockType(
+        currentType,
+        config.options.map((o) => o.value),
+        config.default
+      );
+
+      return (
+        <button
+          style={{ padding: 0, paddingRight: 6 }}
+          className={`${className} with-select ${disabled ? 'disabled' : ''}`}
+        >
+          <select value={selected} disabled={disabled} onChange={this._onSetValue} tabIndex={-1}>
+            {config.options.map(({ name, value: optionValue }) => (
+              <option key={optionValue} value={optionValue}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </button>
+      );
+    }
+  };
+}
+
+// Mutually-exclusive group of toggle buttons (e.g. text alignment) sharing one disabled
+// predicate. BuildToggleButton is binary per-button and has no notion of siblings, so a
+// dedicated factory owns the "only one active at a time" rendering.
+export function BuildAlignButtonGroup(config: {
+  options: { value: string; iconClass: string; title: string }[];
+  isActive: (value: Value, optionValue: string) => boolean;
+  isDisabled: (value: Value) => boolean;
+  onToggle: (editor: Editor, value: Value, optionValue: string) => any;
+}) {
+  return ({ editor, className, value }: ComposerEditorPluginToolbarComponentProps) => {
+    const disabled = config.isDisabled(value);
+    return (
+      <span className={`${className} align-button-group`}>
+        {config.options.map((opt) => {
+          const active = !disabled && config.isActive(value, opt.value);
+          return (
+            <button
+              key={opt.value}
+              className={`${active ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+              disabled={disabled}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (disabled) return;
+                config.onToggle(editor, value, opt.value);
+              }}
+            >
+              <i title={opt.title} className={opt.iconClass} />
+            </button>
+          );
+        })}
+      </span>
+    );
   };
 }

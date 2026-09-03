@@ -1,8 +1,15 @@
 // Pure, editor-independent helpers for the composer toolbar. No React, no Slate
 // mutation — everything here is unit-tested in composer-toolbar-utils-spec.ts.
 
-export const TOGGLE_MARK_TYPES = ['bold', 'italic', 'underline', 'strike'];
-export const VALUE_MARK_TYPES = ['color', 'face', 'size'];
+export const TOGGLE_MARK_TYPES = [
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'superscript',
+  'subscript',
+];
+export const VALUE_MARK_TYPES = ['color', 'face', 'size', 'highlight'];
 export const CHARACTER_MARK_TYPES = [...TOGGLE_MARK_TYPES, ...VALUE_MARK_TYPES];
 
 const LEGACY_TO_PT: Record<number, number> = { 1: 8, 2: 10, 3: 12, 4: 14, 5: 18, 6: 24 };
@@ -88,4 +95,16 @@ export function canCopyOrCut(isCollapsed: boolean): boolean {
 
 export function canPaint(captured: CapturedMark[]): boolean {
   return captured.length > 0;
+}
+
+// Resolves the `<select>` value for a block-type dropdown: the current block's type if
+// it's one of the dropdown's own options, otherwise the fallback (e.g. a code block or a
+// list item isn't one of the dropdown's options, so it displays as the fallback without
+// silently misrepresenting an unrelated block as one of the named styles).
+export function resolveDropdownBlockType(
+  currentBlockType: string | undefined,
+  optionValues: string[],
+  fallback: string
+): string {
+  return currentBlockType && optionValues.includes(currentBlockType) ? currentBlockType : fallback;
 }

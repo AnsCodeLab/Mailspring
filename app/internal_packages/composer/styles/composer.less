@@ -171,6 +171,25 @@
     color: @component-active-color;
   }
 
+  button.disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  select:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .align-button-group {
+    display: inline-flex;
+    align-items: center;
+
+    button {
+      max-width: 26px;
+    }
+  }
+
   .dropdown {
     z-index: 4;
     position: absolute;
@@ -195,6 +214,26 @@
       vertical-align: middle;
       box-shadow: @text-color 0 0.5px, @text-color 0 -0.5px, @text-color 0.5px 0,
         @text-color -0.5px 0;
+    }
+
+    .dropdown .no-color {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      padding: 4px 8px;
+      margin-bottom: 4px;
+      background: none;
+      border: none;
+      border-bottom: 1px solid @border-color-divider;
+      color: @text-color;
+      text-align: left;
+      cursor: pointer;
+      max-width: none;
+
+      &:hover {
+        background: fade(@black, 6%);
+      }
     }
   }
 

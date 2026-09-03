@@ -23,6 +23,8 @@ import LinkPlugins from './link-plugins';
 import EmojiPlugins, { EMOJI_TYPE } from './emoji-plugins';
 import GrammarCheckPlugins from './grammar-check-plugins';
 import ClipboardPlugins from './clipboard-plugins';
+import HistoryPlugins from './history-plugins';
+import HrPlugins, { HR_TYPE } from './hr-plugins';
 import { Rule, ComposerEditorPlugin } from './types';
 
 import './patch-chrome-ime';
@@ -31,6 +33,9 @@ import { deepenPlaintextQuote } from './plaintext';
 export const schema = {
   blocks: {
     [UNEDITABLE_TYPE]: {
+      isVoid: true,
+    },
+    [HR_TYPE]: {
       isVoid: true,
     },
   },
@@ -53,6 +58,7 @@ export const schema = {
 // Note: order is important here because we deserialize HTML with rules
 // in this order. <code class="var"> before <code>, etc.
 export const plugins: ComposerEditorPlugin[] = [
+  ...HistoryPlugins,
   ...ClipboardPlugins,
   ...InlineAttachmentPlugins,
   ...UneditablePlugins,
@@ -62,6 +68,7 @@ export const plugins: ComposerEditorPlugin[] = [
   ...GrammarCheckPlugins,
   ...LinkPlugins,
   ...BaseBlockPlugins,
+  ...HrPlugins,
   ...MarkdownPlugins,
 ];
 

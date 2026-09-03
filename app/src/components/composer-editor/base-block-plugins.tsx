@@ -5,8 +5,13 @@ import EditList from '@bengotow/slate-edit-list';
 import AutoReplace from 'slate-auto-replace';
 import When from 'slate-when';
 
-import { MessageWithEditorState } from 'mailspring-exports';
-import { BuildToggleButton, IEditorToolbarConfigItem } from './toolbar-component-factories';
+import { MessageWithEditorState, localized } from 'mailspring-exports';
+import {
+  BuildToggleButton,
+  BuildBlockTypeDropdown,
+  BuildAlignButtonGroup,
+  IEditorToolbarConfigItem,
+} from './toolbar-component-factories';
 import { ComposerEditorPlugin } from './types';
 
 function nodeIsEmpty(node: Node) {
@@ -62,6 +67,93 @@ function toggleBlockTypeWithBreakout(editor: Editor, type: string) {
 
 export const BLOCKQUOTE_TYPE = 'blockquote';
 
+export function isWithinListOrQuote(value: Value): boolean {
+  return (
+    isBlockTypeOrWithinType(value, BLOCK_CONFIG.list_item.type) ||
+    isBlockTypeOrWithinType(value, BLOCKQUOTE_TYPE)
+  );
+}
+
+// The heading dropdown converts the current block in place (plain `editor.setBlocks`,
+// no breakout transform), which is only safe when the block isn't nested inside a list
+// item or blockquote. It stays enabled while already inside a heading — that's how you
+// switch back to Normal.
+export function isHeadingDropdownDisabled(value: Value): boolean {
+  return isWithinListOrQuote(value);
+}
+
+// Alignment/direction only ever apply to BLOCK_CONFIG.div; disable (not hide) the
+// controls anywhere else they'd be meaningless or unsafe: inside a list item or
+// blockquote (same nesting risk as the heading dropdown), or on a heading itself.
+export function isAlignDirDisabled(value: Value): boolean {
+  return (
+    isWithinListOrQuote(value) ||
+    isBlockTypeOrWithinType(value, BLOCK_CONFIG.heading_one.type) ||
+    isBlockTypeOrWithinType(value, BLOCK_CONFIG.heading_two.type)
+  );
+}
+
+// `div` node data is an Immutable.Map on the live-editing render path but a plain
+// object on the HTML-serialize path (the deserialize rule below returns a plain JS
+// object for `data`) — every read of block data must handle both shapes.
+export function readBlockData(data: any, key: string): any {
+  if (!data) return undefined;
+  return typeof data.get === 'function' ? data.get(key) : data[key];
+}
+
+// `editor.setNodeByKey`/`setBlocks` REPLACE a block's entire `data` field rather than
+// merging into it, so every block-data write must merge the patch into the existing
+// data itself first, or a write of `align` would silently drop an existing `className`
+// or `dir` (and vice versa).
+export function mergeBlockData(currentData: any, patch: Record<string, any>): any {
+  if (currentData && typeof currentData.merge === 'function') {
+    return currentData.merge(patch);
+  }
+  return { ...(currentData || {}), ...patch };
+}
+
+export function currentBlockAlign(value: Value): string | undefined {
+  return value.focusBlock ? readBlockData(value.focusBlock.data, 'align') : undefined;
+}
+
+export function currentBlockDir(value: Value): string | undefined {
+  return value.focusBlock ? readBlockData(value.focusBlock.data, 'dir') : undefined;
+}
+
+// Clicking an already-active alignment button clears it; clicking a different one
+// applies it.
+export function nextAlignValue(current: string | null | undefined, clicked: string): string | null {
+  return current === clicked ? null : clicked;
+}
+
+export function setDivBlockData(editor: Editor, patch: Record<string, any>) {
+  const { focusBlock } = editor.value;
+  if (!focusBlock) return editor;
+  // @types/slate's BlockProperties requires `type` even though setNodeByKey only patches
+  // the properties given — pass the block's own (unchanged) type alongside the data patch
+  // to satisfy the signature without widening to `any`/a cast.
+  return editor.setNodeByKey(focusBlock.key, {
+    type: focusBlock.type,
+    data: mergeBlockData(focusBlock.data, patch),
+  });
+}
+
+export function indentBlock(editor: Editor) {
+  const focusBlock = editor.value.focusBlock;
+  if (focusBlock && focusBlock.type === BLOCK_CONFIG.div.type) {
+    return editor.setBlocks(BLOCK_CONFIG.blockquote.type);
+  }
+  return editor;
+}
+
+export function outdentBlock(editor: Editor) {
+  const focusBlock = editor.value.focusBlock;
+  if (focusBlock && focusBlock.type === BLOCK_CONFIG.blockquote.type) {
+    return editor.setBlocks(BLOCK_CONFIG.div.type);
+  }
+  return editor;
+}
+
 export const BLOCK_CONFIG: {
   [key: string]: IEditorToolbarConfigItem;
 } = {
@@ -69,23 +161,30 @@ export const BLOCK_CONFIG: {
     type: 'div',
     tagNames: ['div', 'br', 'p'],
     render: ({ node, attributes, children, targetIsHTML }) => {
-      let explicitHTMLAttributes = undefined;
+      const align = readBlockData(node.data, 'align');
+      const explicitDir = readBlockData(node.data, 'dir');
+      const style: React.CSSProperties = {};
+      if (align) style.textAlign = align;
+      const styleProp = Object.keys(style).length ? style : undefined;
 
-      if (targetIsHTML) {
-        explicitHTMLAttributes = {};
-        if (node.isLeafBlock() && node.getTextDirection() === 'rtl') {
-          explicitHTMLAttributes.dir = 'rtl';
-        }
+      // An explicit user-set direction always wins; only fall back to Slate's
+      // content-based auto-detection (HTML export only) when none was set.
+      let dir: string = undefined;
+      if (explicitDir === 'rtl' || explicitDir === 'ltr') {
+        dir = explicitDir;
+      } else if (targetIsHTML && node.isLeafBlock() && node.getTextDirection() === 'rtl') {
+        dir = 'rtl';
       }
 
       if (targetIsHTML && nodeIsEmpty(node)) {
-        return <br {...attributes} />;
+        return <br {...attributes} dir={dir} style={styleProp} />;
       }
       return (
         <div
           {...attributes}
-          {...explicitHTMLAttributes}
-          className={node.data['className'] || node.data.get('className')}
+          dir={dir}
+          className={readBlockData(node.data, 'className')}
+          style={styleProp}
         >
           {children}
         </div>
@@ -244,6 +343,31 @@ function renderNode(props, editor: Editor = null, next = () => {}) {
   return config ? config.render(props) : next();
 }
 
+// Merges className + align + dir into one data object so a single deserialized node can
+// carry multiple style-driving keys at once (the block-config lookup above only returns
+// ONE matched config, so this must be a single combined object, not several separate
+// single-key returns).
+function buildBlockDeserializeData(
+  el: HTMLElement
+): { className?: string; align?: string; dir?: string } | undefined {
+  const data: { className?: string; align?: string; dir?: string } = {};
+
+  const className = el.getAttribute('class');
+  if (className) data.className = className;
+
+  const align = el.style && el.style.textAlign;
+  if (align) data.align = align;
+
+  const dirAttr = el.getAttribute('dir');
+  if (dirAttr === 'rtl' || dirAttr === 'ltr') {
+    data.dir = dirAttr;
+  } else if (el.style && el.style.direction === 'rtl') {
+    data.dir = 'rtl';
+  }
+
+  return Object.keys(data).length ? data : undefined;
+}
+
 const rules = [
   {
     deserialize(el: HTMLElement, next) {
@@ -272,13 +396,11 @@ const rules = [
 
       // return block
       if (config) {
-        const className = el.getAttribute('class');
-        const data = className ? { className } : undefined;
         return {
           object: 'block',
           type: config.type,
           nodes: next(el.childNodes),
-          data: data,
+          data: buildBlockDeserializeData(el),
         };
       }
     },
@@ -367,12 +489,76 @@ export function hideQuotedTextByDefault(draft: MessageWithEditorState) {
   return true;
 }
 
+const BLOCK_TYPE_OPTIONS = [
+  { name: localized('Normal'), value: BLOCK_CONFIG.div.type },
+  { name: localized('Heading 1'), value: BLOCK_CONFIG.heading_one.type },
+  { name: localized('Heading 2'), value: BLOCK_CONFIG.heading_two.type },
+  { name: localized('Quote'), value: BLOCKQUOTE_TYPE },
+];
+
+const BlockTypeDropdown = BuildBlockTypeDropdown({
+  options: BLOCK_TYPE_OPTIONS,
+  default: BLOCK_CONFIG.div.type,
+  isDisabled: isHeadingDropdownDisabled,
+  onSetBlockType: (editor, type) => editor.setBlocks(type),
+});
+
+const ALIGN_OPTIONS = [
+  { value: 'left', iconClass: 'fa fa-align-left', title: localized('Align left') },
+  { value: 'center', iconClass: 'fa fa-align-center', title: localized('Align center') },
+  { value: 'right', iconClass: 'fa fa-align-right', title: localized('Align right') },
+  { value: 'justify', iconClass: 'fa fa-align-justify', title: localized('Justify') },
+];
+
+const AlignButtonGroup = BuildAlignButtonGroup({
+  options: ALIGN_OPTIONS,
+  isActive: (value, align) => currentBlockAlign(value) === align,
+  isDisabled: isAlignDirDisabled,
+  onToggle: (editor, value, align) =>
+    setDivBlockData(editor, { align: nextAlignValue(currentBlockAlign(value), align) }),
+});
+
+const IndentButton = BuildToggleButton({
+  type: 'indent',
+  button: {
+    isActive: () => false,
+    onToggle: (editor) => indentBlock(editor),
+    iconClass: 'fa fa-indent',
+  },
+});
+
+const OutdentButton = BuildToggleButton({
+  type: 'outdent',
+  button: {
+    isActive: () => false,
+    onToggle: (editor) => outdentBlock(editor),
+    iconClass: 'fa fa-outdent',
+  },
+});
+
+const DirToggleButton = BuildToggleButton({
+  type: 'dir',
+  button: {
+    isActive: (value) => currentBlockDir(value) === 'rtl',
+    isDisabled: isAlignDirDisabled,
+    onToggle: (editor, active) => setDivBlockData(editor, { dir: active ? 'ltr' : 'rtl' }),
+    iconClass: 'fa fa-text-width',
+  },
+});
+
 // plugins
 
 const MailspringBaseBlockPlugin: ComposerEditorPlugin = {
-  toolbarComponents: Object.values(BLOCK_CONFIG)
-    .filter((config) => config.button)
-    .map(BuildToggleButton),
+  toolbarComponents: [
+    BlockTypeDropdown,
+    ...Object.values(BLOCK_CONFIG)
+      .filter((config) => config.button)
+      .map(BuildToggleButton),
+    AlignButtonGroup,
+    IndentButton,
+    OutdentButton,
+    DirToggleButton,
+  ],
   renderNode,
   appCommands: {
     'core:select-all': (event, editor: Editor) => {
@@ -395,18 +581,8 @@ const MailspringBaseBlockPlugin: ComposerEditorPlugin = {
       const { isActive, onToggle } = BLOCK_CONFIG.ul_list.button;
       return onToggle(editor, isActive(editor.value));
     },
-    'contenteditable:indent': (event, editor: Editor) => {
-      const focusBlock = editor.value.focusBlock;
-      if (focusBlock && focusBlock.type === BLOCK_CONFIG.div.type) {
-        return editor.setBlocks(BLOCK_CONFIG.blockquote.type);
-      }
-    },
-    'contenteditable:outdent': (event, editor: Editor) => {
-      const focusBlock = editor.value.focusBlock;
-      if (focusBlock && focusBlock.type === BLOCK_CONFIG.blockquote.type) {
-        return editor.setBlocks(BLOCK_CONFIG.div.type);
-      }
-    },
+    'contenteditable:indent': (event, editor: Editor) => indentBlock(editor),
+    'contenteditable:outdent': (event, editor: Editor) => outdentBlock(editor),
   },
   rules,
 };
