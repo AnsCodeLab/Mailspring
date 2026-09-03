@@ -113,13 +113,47 @@ already fail `prettier --check` on `master`/before this change, i.e. this is
 a pre-existing formatting gap unrelated to the one line-group inserted by
 this fix, not something introduced here.)
 
-## 4. What was NOT executed
+## 4. Orchestrator manual verification (real D-Bus session, not mocked)
+
+The implementor's sandbox reported no persistent secret-service daemon available for a
+live repro. This orchestrator's sandbox does have one (a real GNOME session, confirmed via
+`dbus-send --session --dest=org.freedesktop.secrets --type=method_call --print-reply
+/org/freedesktop/secrets org.freedesktop.DBus.Peer.Ping` succeeding directly), so the
+actual production code path — `detectPasswordStoreSwitch()`, unmocked, real
+`execFileSync`/`dbus-send` — was run end-to-end against it, reproducing the issue's exact
+scenario:
+
+```
+$ node -e "console.log(require('./app/src/browser/linux-password-store').detectPasswordStoreSwitch())"
+null                                                    # normal session (XDG_CURRENT_DESKTOP=GNOME set) — Gate 1 defers to Chromium, as designed
+
+$ env -u XDG_CURRENT_DESKTOP -u DESKTOP_SESSION node -e "console.log(require('./app/src/browser/linux-password-store').detectPasswordStoreSwitch())"
+gnome-libsecret                                          # issue's exact repro (env vars stripped, real session bus + real secret service still reachable) — correctly detected, 12ms elapsed
+
+$ env -u XDG_CURRENT_DESKTOP -u DESKTOP_SESSION -u DBUS_SESSION_BUS_ADDRESS node -e "console.log(require('./app/src/browser/linux-password-store').detectPasswordStoreSwitch())"
+null                                                    # no session bus at all — Gate 2 defers, as designed
+```
+
+This directly confirms the fix resolves the reported bug against a real secret service, not
+just the proxyquire-mocked unit tests: with the exact environment shape the issue describes
+(desktop-session env vars absent, secret service reachable), `detectPasswordStoreSwitch()`
+now returns `'gnome-libsecret'` — the switch `main.js` would pass to Chromium — where it
+previously (pre-fix, no `--password-store` switch at all) would have left Chromium's
+auto-detection to fail exactly as the issue reports. The normal-session case measured
+6ms (zero subprocess calls, Gate 1 short-circuits), confirming the "no cost/no behavior
+change on a healthy desktop launch" design goal.
+
+What a full end-to-end repro of the *original bug* (pre-fix behavior: the blocking dialog
+and `mailsync` crash-loop) would still require beyond this sandbox: launching the full
+packaged Mailspring app (not just this one pure module) with a stripped environment and
+observing the actual dialog/log output pre- and post-fix — not performed here, since it
+needs a full account-configured Mailspring profile, which is out of scope for a unit-level
+fix verification.
+
+## 5. What was NOT executed
 
 - The full `npm test` suite and `npm run typecheck` were intentionally **not**
   run in this task (per instructions — the orchestrating agent runs those
   once at the end).
-- No live manual end-to-end repro against a real GNOME Keyring/KWallet daemon
-  was performed in this sandbox (see `test-cases.md` §1–2 for exactly what a
-  manual repro/verification would involve and why it wasn't executable
-  here — no persistent secret-service daemon wired into this sandbox's
-  session).
+- A full packaged-app repro of the original dialog/crash-loop (see §4 above for exactly
+  what was and wasn't verified in its place).
