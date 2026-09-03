@@ -895,6 +895,19 @@ describe('DraftFactory', function draftFactory() {
     });
   });
 
+  // `FocusedPerspectiveStore._current`'s declared type is inferred from its
+  // `= MailboxPerspective.forNothing()` initializer as the narrow
+  // `EmptyMailboxPerspective`, so a plain `MailboxPerspective` instance isn't
+  // directly assignable to it (production code sidesteps this via an untyped
+  // `_setPerspective(perspective, ...)` parameter — not available to this test
+  // file, and not something to introduce). `current()`'s declared return type is
+  // the correct, broader `MailboxPerspective`, so use that as the precise cast
+  // target instead of widening to `any`.
+  function setFocusedPerspective(perspective: MailboxPerspective) {
+    const store = FocusedPerspectiveStore as unknown as { _current: MailboxPerspective };
+    store._current = perspective;
+  }
+
   describe('_accountForNewDraft', () => {
     let secondAccount = null;
 
@@ -917,7 +930,7 @@ describe('DraftFactory', function draftFactory() {
         accountId: secondAccount.id,
         subject: 'Other Account Thread',
       });
-      FocusedPerspectiveStore._current = new MailboxPerspective([account.id]);
+      setFocusedPerspective(new MailboxPerspective([account.id]));
       Actions.setFocus({ collection: 'thread', item: otherAccountThread });
 
       const draft = await DraftFactory.createDraft();
@@ -926,7 +939,7 @@ describe('DraftFactory', function draftFactory() {
     });
 
     it("falls back to the perspective's first account when the perspective is multi-account and no thread is focused", async () => {
-      FocusedPerspectiveStore._current = new MailboxPerspective([account.id, secondAccount.id]);
+      setFocusedPerspective(new MailboxPerspective([account.id, secondAccount.id]));
 
       const draft = await DraftFactory.createDraft();
       expect(draft.accountId).toEqual(account.id);
@@ -939,7 +952,7 @@ describe('DraftFactory', function draftFactory() {
         accountId: secondAccount.id,
         subject: 'Second Account Thread',
       });
-      FocusedPerspectiveStore._current = new MailboxPerspective([account.id, secondAccount.id]);
+      setFocusedPerspective(new MailboxPerspective([account.id, secondAccount.id]));
       Actions.setFocus({ collection: 'thread', item: secondAccountThread });
 
       const draft = await DraftFactory.createDraft();
@@ -948,7 +961,7 @@ describe('DraftFactory', function draftFactory() {
     });
 
     it('prefers the focused thread account regardless of account ordering in the perspective (mirror case)', async () => {
-      FocusedPerspectiveStore._current = new MailboxPerspective([secondAccount.id, account.id]);
+      setFocusedPerspective(new MailboxPerspective([secondAccount.id, account.id]));
       Actions.setFocus({ collection: 'thread', item: fakeThread });
 
       const draft = await DraftFactory.createDraft();
@@ -962,7 +975,7 @@ describe('DraftFactory', function draftFactory() {
         accountId: 'account-id-not-in-perspective',
         subject: 'Stale Cross-Account Thread',
       });
-      FocusedPerspectiveStore._current = new MailboxPerspective([account.id, secondAccount.id]);
+      setFocusedPerspective(new MailboxPerspective([account.id, secondAccount.id]));
       Actions.setFocus({ collection: 'thread', item: staleThread });
 
       const draft = await DraftFactory.createDraft();
@@ -972,7 +985,7 @@ describe('DraftFactory', function draftFactory() {
 
     it('always uses the pinned core.sending.defaultAccountIdForSend account, regardless of perspective or focused thread', async () => {
       AppEnv.config.set('core.sending.defaultAccountIdForSend', secondAccount.id);
-      FocusedPerspectiveStore._current = new MailboxPerspective([account.id]);
+      setFocusedPerspective(new MailboxPerspective([account.id]));
 
       const draft = await DraftFactory.createDraft();
       expect(draft.accountId).toEqual(secondAccount.id);
