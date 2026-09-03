@@ -723,3 +723,269 @@ test('Tab key cycles through template variables and typing replaces them', async
 
   await composerPage!.keyboard.press('Meta+Escape');
 });
+
+// --- New toolbar formatting controls (issue #7) ---
+// Popout compose (the 'c' shortcut) is used here instead of opening a thread and
+// replying: it works without mailsync/thread fixture data, matching the "Compose new
+// message" tests above.
+
+test('heading dropdown changes the block to Heading 1', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Heading text');
+
+  const headingSelect = composer.locator('.with-select select');
+  await headingSelect.selectOption('heading_one');
+  await composerPage!.waitForTimeout(300);
+
+  await expect(bodyEditable.locator('h1').first()).toContainText('Heading text');
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('align-group toggles active state and applies text-align', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Align text');
+
+  // left, center, right, justify — center is index 1
+  const centerButton = composer.locator('.align-button-group button').nth(1);
+  await centerButton.click();
+  await composerPage!.waitForTimeout(300);
+
+  await expect(centerButton).toHaveClass(/active/);
+  const alignedBlock = bodyEditable.locator('> div').filter({ hasText: 'Align text' }).first();
+  await expect(alignedBlock).toHaveCSS('text-align', 'center');
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('highlight color picker opens and applies a background color', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Highlighted text');
+  await composerPage!.keyboard.press('Shift+Home');
+
+  // The mark color picker is appended before the highlight picker in the toolbar
+  // (color, highlight, face, size, clear-formatting), so highlight is index 1.
+  const highlightPicker = composer.locator('.color-picker').nth(1);
+  await highlightPicker.locator('button').first().click();
+
+  const dropdown = highlightPicker.locator('.dropdown');
+  await expect(dropdown).toBeVisible({ timeout: 3_000 });
+
+  const swatch = dropdown.locator('div[title]').first();
+  await swatch.click();
+  await composerPage!.waitForTimeout(300);
+
+  const highlighted = bodyEditable.locator('span[style*="background-color"]');
+  await expect(highlighted.first()).toBeVisible({ timeout: 3_000 });
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('superscript toggle wraps text in sup', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+
+  await composerPage!.keyboard.type('Superscript text');
+  await composerPage!.keyboard.press('Shift+Home');
+  await composer.locator('button:has(i.fa-superscript)').click();
+  await expect(bodyEditable.locator('sup').first()).toContainText('Superscript text');
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('subscript toggle wraps text in sub', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+
+  await composerPage!.keyboard.type('Subscript text');
+  await composerPage!.keyboard.press('Shift+Home');
+  await composer.locator('button:has(i.fa-subscript)').click();
+  await expect(bodyEditable.locator('sub').first()).toContainText('Subscript text');
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('indent/outdent buttons change block type', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Indent text');
+
+  await composer.locator('button:has(i.fa-indent)').click();
+  await composerPage!.waitForTimeout(300);
+  await expect(bodyEditable.locator('blockquote').first()).toContainText('Indent text');
+
+  await composer.locator('button:has(i.fa-outdent)').click();
+  await composerPage!.waitForTimeout(300);
+  await expect(bodyEditable.locator('blockquote')).toHaveCount(0);
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('clear-formatting removes bold and italic after applying them', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Formatted text');
+  await composerPage!.keyboard.press('Shift+Home');
+  await composer.locator('button:has(i.fa-bold)').click();
+  await composer.locator('button:has(i.fa-italic)').click();
+
+  await expect(bodyEditable.locator('strong, b').first()).toBeVisible({ timeout: 3_000 });
+  await expect(bodyEditable.locator('em, i').first()).toBeVisible({ timeout: 3_000 });
+
+  await composer.locator('button:has(i.fa-eraser)').click();
+  await composerPage!.waitForTimeout(300);
+
+  await expect(bodyEditable.locator('strong, b')).toHaveCount(0);
+  await expect(bodyEditable.locator('em, i')).toHaveCount(0);
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('horizontal rule insert adds an hr element and lands the cursor in an empty block after it', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Before hr');
+
+  await composer.locator('.hr-section').click();
+  await composerPage!.waitForTimeout(300);
+  await expect(bodyEditable.locator('hr')).toHaveCount(1);
+
+  await composerPage!.keyboard.type('After hr');
+  await expect(bodyEditable).toContainText('After hr');
+
+  // The typed text must land in the empty block AFTER the hr, not before it.
+  const html = await bodyEditable.innerHTML();
+  expect(html.indexOf('<hr')).toBeGreaterThan(-1);
+  expect(html.indexOf('<hr')).toBeLessThan(html.indexOf('After hr'));
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('undo/redo round-trips a bold toggle', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+  await composerPage!.keyboard.type('Undo redo text');
+  await composerPage!.keyboard.press('Shift+Home');
+  await composer.locator('button:has(i.fa-bold)').click();
+
+  await expect(bodyEditable.locator('strong, b').first()).toBeVisible({ timeout: 3_000 });
+
+  const undoButton = composer.locator('.history-section').first();
+  await undoButton.click();
+  await composerPage!.waitForTimeout(300);
+  await expect(bodyEditable.locator('strong, b')).toHaveCount(0);
+
+  const redoButton = composer.locator('.history-section').nth(1);
+  await redoButton.click();
+  await composerPage!.waitForTimeout(300);
+  await expect(bodyEditable.locator('strong, b').first()).toBeVisible({ timeout: 3_000 });
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
+
+test('insert-image toolbar button renders and is clickable without throwing', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const imageButton = composer.locator('button:has(i.fa-image)');
+  await expect(imageButton).toBeVisible({ timeout: 5_000 });
+  await expect(imageButton.locator('i')).toHaveAttribute('title', 'image');
+
+  // A real click opens a native OS file dialog that Playwright cannot drive and
+  // that would hang the app/test — `trial: true` runs every actionability check
+  // (visible, stable, enabled, receives pointer events) without dispatching the
+  // click, proving the button is clickable without opening the dialog.
+  await imageButton.click({ trial: true });
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
