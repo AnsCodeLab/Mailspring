@@ -431,6 +431,14 @@ describe('isMeaningfulBackgroundColor', () => {
     expect(isMeaningfulBackgroundColor('#ffff00')).toBe(true);
   });
 
+  it('treats white as no highlight (common Outlook/MSO wrapper background noise)', () => {
+    expect(isMeaningfulBackgroundColor('white')).toBe(false);
+    expect(isMeaningfulBackgroundColor('#ffffff')).toBe(false);
+    expect(isMeaningfulBackgroundColor('#fff')).toBe(false);
+    expect(isMeaningfulBackgroundColor('rgb(255, 255, 255)')).toBe(false);
+    expect(isMeaningfulBackgroundColor('rgba(255, 255, 255, 1)')).toBe(false);
+  });
+
   it('treats empty/falsy as not meaningful', () => {
     expect(isMeaningfulBackgroundColor('')).toBe(false);
     expect(isMeaningfulBackgroundColor(undefined as any)).toBe(false);

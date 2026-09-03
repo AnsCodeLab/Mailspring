@@ -74,12 +74,26 @@ function isMeaningfulFontStyle(style: string) {
 }
 
 // Background-color "meaninglessness" is a different check from foreground-color: a
-// black background is a perfectly meaningful highlight, but the browser's default
-// (no background applied at all) reads back as 'transparent'/'rgba(0,0,0,0)'.
+// black background is a perfectly meaningful highlight, but the browser's default (no
+// background applied at all) reads back as 'transparent'/'rgba(0,0,0,0)'. White is the
+// mirror case of the foreground check's black exclusion: real-world HTML emails
+// routinely set an explicit white background-color on wrapper divs/tables/quote
+// containers for cross-client (Outlook/MSO) fidelity — that's page-background noise,
+// not a user-intentional highlight, so it must be excluded the same way black text is.
 export function isMeaningfulBackgroundColor(color: string) {
   if (!color) return false;
-  const meaningless = ['transparent', 'rgba(0,0,0,0)', 'initial', 'inherit'];
-  return !meaningless.includes(color.replace(/ /g, ''));
+  const meaningless = [
+    'transparent',
+    'rgba(0,0,0,0)',
+    'initial',
+    'inherit',
+    'white',
+    'rgb(255,255,255)',
+    'rgba(255,255,255,1)',
+    '#fff',
+    '#ffffff',
+  ];
+  return !meaningless.includes(color.replace(/ /g, '').toLowerCase());
 }
 
 export const MARK_CONFIG: {
