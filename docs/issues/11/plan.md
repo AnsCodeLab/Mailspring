@@ -98,8 +98,10 @@ exercising the same code path the running app uses, not a simulation of it. Add 
    first in the perspective, and vice versa via a differently-ordered perspective) to rule
    out any hidden dependency on array order.
 4. Multi-account perspective, focused thread belongs to an account NOT in the current
-   perspective's `accountIds` (simulating a stale focus after switching perspectives) →
-   falls back to `accountIds[0]`, does not throw, does not leak the stale account.
+   perspective's `accountIds` (a stale/cross-account focus set directly via `Actions.setFocus`
+   — see Plan Review Gate item 3 below for why this is the actual reachable trigger, not
+   perspective switching itself) → falls back to `accountIds[0]`, does not throw, does not
+   leak the stale account.
 5. `core.sending.defaultAccountIdForSend` pinned to a specific account → always wins,
    regardless of perspective or focused thread (confirms the existing, correct precedence is
    untouched by this change).
@@ -143,3 +145,50 @@ real decision path.
   already correctly derive `from` from the specific message/thread being replied to via
   `_fromContactForReply`, independent of `_accountForNewDraft()`; this issue and fix are
   scoped to the **blank/new** compose path only (`createDraft()` with no thread context).
+
+## Plan Review Gate — verdict: APPROVE WITH CHANGES
+
+Independent reviewer findings, verified against current source before adopting (binding):
+
+1. **Blocking, confirmed real**: `master-before-each.ts` resets `AccountStore` and
+   `FocusedPerspectiveStore._current` before every spec, but never resets
+   `FocusedContentStore`. No existing spec currently calls `Actions.setFocus` with a thread
+   (verified via repo-wide grep), so there's no leakage TODAY — but this plan's new tests
+   are the first to do so, and Jasmine runs the entire suite in one process with these
+   singletons persisting across every spec file. **Required**: reset
+   `FocusedContentStore`'s internal `_focused`/`_keyboardCursor` state in this spec file's
+   own `afterEach` (scoped to this file only — do not modify the shared
+   `master-before-each.ts` for a need only this spec has, to avoid affecting every other
+   spec's timing/behavior).
+2. **Confirmed real, documented not fixed (correctly out of scope)**: `createDraft()`
+   (`draft-factory.ts:56-90`) uses the `account` returned by `_accountForNewDraft()` for
+   `account.autoaddress` (auto-CC/BCC) at line 78, AFTER `Object.assign(defaults, fields)` —
+   meaning even `createDraftForReply`/`createDraftForForward`, which override `from`/
+   `accountId` via `fields`, have ALWAYS sourced auto-CC/BCC from
+   `_accountForNewDraft()`'s account, not from the actual replied-to message's account. This
+   is a pre-existing latent quirk, not introduced by this fix — but this fix's change to
+   `_accountForNewDraft()`'s return value in the multi-account-perspective case means that
+   quirk's behavior shifts too (now more often coincidentally matches the relevant thread's
+   account instead of always the arbitrary first one). Net effect is neutral-to-positive,
+   not a new regression, and fixing the auto-CC/BCC sourcing itself is a separate,
+   pre-existing issue — explicitly noted here so it isn't mistaken for new fallout from this
+   change, not fixed as part of it.
+3. **Confirmed via source trace, narrative corrected**: `ThreadListStore`
+   (`app/internal_packages/thread-list/lib/thread-list-store.ts`)'s
+   `_onPerspectiveChanged` unconditionally calls `Actions.setFocus({collection: 'thread',
+   item: null})` on every perspective change — so "stale focus after switching
+   perspectives" does NOT happen via normal sidebar navigation. Test 4's actual reachable
+   trigger is a direct cross-account `Actions.setFocus` call bypassing perspective-change
+   machinery entirely (e.g. `chat-panel.tsx`, `sidebar-related-threads.tsx`,
+   `unread-notifications/main.ts` all call `Actions.setFocus` directly with a thread that
+   may belong to a different account than the current perspective). The guard in the fix
+   itself is unchanged and still correct — only the test's scenario narrative needed
+   correcting, which the "Testing" section above now reflects.
+4. **Confirmed, no action needed**: first-launch/no-perspective case is already safe
+   without any special-casing — `MailboxPerspective.forNothing()` (the empty starting
+   state) has `accountIds: []`, so `perspectiveAccountIds.length > 1` is false and the new
+   branch never engages.
+5. **Confirmed correct**: scoping to blank/new-compose only is right — `createDraftForReply`/
+   `createDraftForForward` both override `from`/`accountId` via `Object.assign(defaults,
+   fields)` with `fields` applied second, so `_accountForNewDraft()`'s return value for
+   those two paths only affects the auto-CC/BCC quirk in finding 2 above, not `from` itself.
