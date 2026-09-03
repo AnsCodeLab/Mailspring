@@ -22,7 +22,14 @@ function mockProbeSuccess() {
 }
 
 function mockProbeFailure() {
-  execFileSyncSpy.andThrow(new Error('probe failed'));
+  // andThrow is a real runtime API on this repo's bundled Jasmine (see
+  // spec-runner/jasmine.js's own JSDoc) but isn't declared by the
+  // @types/jasmine@1.3.x package installed here (andReturn/andCallFake/
+  // andCallThrough are) - use andCallFake to the same effect instead of
+  // reaching for an undeclared method.
+  execFileSyncSpy.andCallFake(() => {
+    throw new Error('probe failed');
+  });
 }
 
 function mockProbeSequence(results: Array<'success' | 'failure'>) {
