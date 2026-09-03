@@ -91,3 +91,26 @@ extension list already covers every format once the temp file has the right exte
 
 - `draft.plaintext` mode (never inserts inline content, by design — untouched).
 - `shouldDisplayAsImage`'s size bounds (512B–5MB) — unrelated to this bug, not touched.
+
+## Plan Review Gate — verdict: APPROVE WITH CHANGES
+
+Independent reviewer findings (binding):
+
+1. **BLOCKING, confirmed by re-reading the source**: the plan's claim that
+   `Utils.shouldDisplayAsImage` "already covers every format" is FALSE.
+   `app/src/flux/models/utils.ts:187`'s `extensions` array is
+   `['.jpg', '.bmp', '.gif', '.png', '.jpeg']` — **`.webp` is missing**. After the MIME-map
+   fix alone, a pasted WebP image would still produce the correct `.webp` temp file but
+   still fail `shouldDisplayAsImage` and fall back to a plain attachment, contradicting
+   this issue's own acceptance criteria. **`utils.ts` is now in scope**: add `.webp` to the
+   `extensions` array as part of this fix.
+2. **Non-blocking, adopted**: `handleFilePasted` is more testable than the plan claimed.
+   `app/spec/components/tokenizing-text-field-spec.tsx:190-193` already establishes the
+   precedented technique (`Object.defineProperty` injecting `dataTransfer`/`clipboardData`
+   onto a plain `Event`) to drive drag/drop-style handlers directly in a spec. Add a direct
+   regression spec for `handleFilePasted` itself (real `Blob`/`FileReader`, fake
+   `clipboardData.items`), in addition to the pure `extensionForClipboardMimeType` spec, so
+   a future refactor that drops the extension map can't silently regress undetected.
+3. **Informational, no action needed**: confirmed no other caller shares the modified MIME
+   map (`signature-photo-picker.tsx`, `flux/models/file.ts` have independent, unrelated
+   object literals); confirmed drag-and-drop never routes through `handleFilePasted`.
