@@ -306,6 +306,13 @@ const start = () => {
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
   app.commandLine.appendSwitch('js-flags', '--harmony');
 
+  if (process.platform === 'linux') {
+    const passwordStore = require('./linux-password-store').detectPasswordStoreSwitch();
+    if (passwordStore) {
+      app.commandLine.appendSwitch('password-store', passwordStore);
+    }
+  }
+
   const options = parseCommandLine(process.argv);
   global.errorLogger = setupErrorLogger(options);
   const configDirPath = setupConfigDir(options);

@@ -10,6 +10,28 @@ const { safeStorage } = require('@electron/remote');
 const configCredentialsKey = 'credentials';
 
 /**
+ * Builds the Linux-specific hint appended to the "could not store your
+ * password securely" error. The two branches must stay distinct: when a
+ * secret service is actually reachable right now (see
+ * `browser/linux-password-store.js`'s `isAnySecretServiceReachable()` -
+ * deliberately ungated, unlike `detectPasswordStoreSwitch()`, since a
+ * normal desktop session can still reach this failure path for reasons
+ * other than the one that issue fixes, e.g. a locked keyring), telling the
+ * user to install/start a keyring they already have is wrong - this is the
+ * residual "something deeper is wrong" case. When no secret service is
+ * reachable, the original "please install and run one" guidance applies.
+ */
+export function buildLinuxPasswordStoreHint(secretServiceReachable: boolean): string {
+  return secretServiceReachable
+    ? localized(
+        ' On Linux, Mailspring detected a running secret service but could not use it to store your password. Please make sure it is unlocked, then restart Mailspring.'
+      )
+    : localized(
+        ' On Linux, Mailspring requires a secret service such as GNOME Keyring or KWallet. Please ensure one is installed and running, then restart Mailspring.'
+      );
+}
+
+/**
  * A basic wrap around electron's secure key management. Consolidates all of
  * our keys under a single namespaced keymap and provides migration
  * support.
@@ -112,8 +134,8 @@ class KeyManager {
     if (!safeStorage.isEncryptionAvailable()) {
       const platformHint =
         process.platform === 'linux'
-          ? localized(
-              ' On Linux, Mailspring requires a secret service such as GNOME Keyring or KWallet. Please ensure one is installed and running, then restart Mailspring.'
+          ? buildLinuxPasswordStoreHint(
+              require('./browser/linux-password-store').isAnySecretServiceReachable()
             )
           : '';
       throw new Error(
