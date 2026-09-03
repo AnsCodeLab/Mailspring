@@ -135,3 +135,24 @@ above and unrelated to the new section this issue appends starting at line
 | 8. Horizontal rule | PASS — e2e `horizontal rule insert adds an hr element and lands the cursor in an empty block after it`; cursor-safety PASS via Jasmine `insertHorizontalRule` |
 | 9. Insert inline image | PASS (render/actionability-only, per assignment scope — no OS dialog automation) — e2e `insert-image toolbar button renders and is clickable without throwing` |
 | 10. Text direction | PASS — covered by the same `BLOCK_CONFIG.div.render` Jasmine tests as alignment (explicit-dir-wins, empty-block export carry-through); toggle button reuses the same `BuildToggleButton`/`isAlignDirDisabled` mechanism verified for alignment. No dedicated e2e test was added beyond the Jasmine coverage since it shares 100% of its render/data-merge code path with alignment (already e2e-verified) and differs only in which data key is written. |
+
+## Orchestrator verification (independent of the implementor's claims)
+
+Re-run personally, not just read: `tsc -p app/tsconfig.json --noEmit` (found and fixed 2
+real type errors the implementor's scoped run hadn't caught — `setNodeByKey`'s `type`
+requirement, `Editor.props` typing on the image-insert button), the 75/52-passing Jasmine
+run, the 10 new Playwright e2e tests, and a full `compose.spec.ts` run confirming the
+`openThread()`-fixture-DB limitation is pre-existing (byte-identical failure reproduced by
+checking out the unmodified base commit and re-running `Cmd+B toggles bold in composer`
+in isolation).
+
+## Independent Review Gate — verdict: APPROVE (after one fix)
+
+Cold review (fresh subagent, diff + plan doc only, no implementor summary) found the
+implementation faithfully satisfies all 10 features and all 12 binding plan-review
+resolutions, with one real moderate-priority finding: `isMeaningfulBackgroundColor` didn't
+exclude white, the overwhelmingly common non-meaningful background value real-world HTML
+emails set on wrapper `<div>`/`<table>` elements for Outlook/MSO cross-client fidelity —
+reopening such a draft would spuriously mark that content as user-highlighted. Fixed by
+mirroring the existing black-exclusion already applied to the foreground `color` mark;
+covered by a new Jasmine case; full spec file re-run at 52/52 passing after the fix.
