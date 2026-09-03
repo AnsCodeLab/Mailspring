@@ -157,3 +157,21 @@ fix verification.
   once at the end).
 - A full packaged-app repro of the original dialog/crash-loop (see §4 above for exactly
   what was and wasn't verified in its place).
+
+## 6. Independent Review Gate — verdict: APPROVE (after one fix)
+
+Cold review (fresh subagent, diff + plan doc only, no implementer summary) found the
+implementation faithfully satisfies the plan's two-gate/three-candidate design, `main.js`'s
+insertion point, and `key-manager.ts`'s branch extraction, with one real (if narrow,
+low-priority) finding: `key-manager.ts`'s hint-branch check used the *gated*
+`detectPasswordStoreSwitch()`, which always short-circuits to `null` on a normal desktop
+session (`XDG_CURRENT_DESKTOP` set) regardless of actual reachability — so on that one edge
+case (normal session, backend still fails for an unrelated reason, e.g. a locked keyring),
+the user would see the "please install one" message even though a service exists. Fixed by
+adding `isAnySecretServiceReachable()` — deliberately without Gate 1 (a cost optimization
+that only matters for the startup-blocking call site), keeping Gate 2 (a correctness/safety
+gate against `dbus-send` autolaunch, not a cost optimization) — for `key-manager.ts`'s
+diagnostic, non-startup-blocking call site. Re-verified: 15/15 passing (both spec files),
+`tsc`/`eslint` clean, and a live check against this sandbox's real GNOME session confirming
+`isAnySecretServiceReachable()` returns `true` even with `XDG_CURRENT_DESKTOP` set (Gate 1
+correctly bypassed), unlike `detectPasswordStoreSwitch()`.
