@@ -176,3 +176,77 @@ Result: no output, exit code `0` — no lint errors or warnings in either modifi
 - Playwright e2e suite — not executable in this sandbox for this issue; see plan.md's
   "Interactive / build verification" section for the confirmed root cause (macOS-only
   hardcoded `FIXTURE_DIR` fixture path in `playwright/helpers.ts`).
+
+## 5. Orchestrator verification (independent of the implementor's claims)
+
+### 5.1 `tsc --noEmit` found and required a real fix
+
+```
+./node_modules/.bin/tsc -p app/tsconfig.json --noEmit
+```
+
+Initially failed with 6 errors: `Type 'MailboxPerspective' is not assignable to type
+'EmptyMailboxPerspective'` at every `FocusedPerspectiveStore._current = new
+MailboxPerspective([...])` call site in the new spec block.
+`FocusedPerspectiveStore._current`'s declared type is inferred from its `=
+MailboxPerspective.forNothing()` field initializer as the narrow `EmptyMailboxPerspective`
+— production code (`_setPerspective`) sidesteps this via an untyped parameter, not
+available/appropriate for new test code under this repo's no-`any` rule. Fixed by adding a
+precisely-typed `setFocusedPerspective(perspective: MailboxPerspective)` helper
+(`app/spec/stores/draft-factory-spec.ts`) using a named, minimal-shape cast — not `any` —
+and routing all 6 call sites through it. Re-verified: `tsc --noEmit` clean, `eslint` clean,
+`draft-factory-spec.ts` still 65/65 passing after the fix.
+
+### 5.2 "test full flow 5 times" — literal 5 consecutive runs, no flakiness
+
+Per explicit request, ran the full `draft-factory-spec.ts` file 5 consecutive times (this is
+exactly the risk category the Plan Review Gate flagged — `FocusedContentStore` state
+leaking across specs/runs — so repeated runs are the correct way to prove the `afterEach`
+cleanup actually works, not just that it exists):
+
+```
+for i in 1 2 3 4 5; do
+  xvfb-run -a ./node_modules/.bin/electron ./app --enable-logging --test -f "draft-factory-spec"
+done
+```
+
+Result: **65 passing** on every single run, 0 failures, 0 flakiness. Total wall time for all
+5 runs: 30.7s.
+
+### 5.3 Full project-wide Jasmine suite (not just this file)
+
+```
+xvfb-run -a ./node_modules/.bin/electron ./app --enable-logging --test
+```
+
+Result: **1746 passing, 0 failing.** Confirms the new `Actions.setFocus`/
+`FocusedPerspectiveStore._current` mutations in `draft-factory-spec.ts` do not leak into or
+break any other spec file in the entire suite — direct evidence the Plan Review Gate's
+leakage concern is fully resolved, not just addressed in theory.
+
+### 5.4 Real app boot ("build, test full flow")
+
+Full production-installer build (`npm run build`, `@electron/packager` + Sentry sourcemap
+upload + `.deb`/`.rpm` creation) was judged disproportionate and risky for a startup smoke
+check (slow, requires signing/Sentry credentials unrelated to this change's correctness).
+Instead: launched the actual dev-mode Electron app with the fix applied
+(`xvfb-run -a ./node_modules/.bin/electron ./app --enable-logging --dev`, this repo's own
+documented `npm start` equivalent) and confirmed a clean boot:
+
+```
+Running database migrations
+App load time: 566ms
+...
+{"error":null}
+```
+
+No crash, no error beyond expected sandbox-environment noise (Wayland/GPU cosmetic
+warnings, an update-check 500 from lack of network access to Mailspring's real update
+server — both pre-existing and unrelated to this change). Since this sandbox has no
+configured mail accounts, a full click-through of "select a thread in a unified inbox →
+click Compose → inspect From" isn't possible here (same fixture-data limitation as
+`plan.md`'s "Interactive / build verification" section already documents) — the 6 real-store
+Jasmine scenarios in §2 above, run 5x with zero flakiness in §5.2 and zero suite-wide
+regressions in §5.3, are the full-flow verification for the actual decision logic; this
+boot check additionally confirms the change is safe in the real running application, not
+just the spec harness.
