@@ -92,10 +92,13 @@ function detectPasswordStoreSwitch() {
   if (process.env.XDG_CURRENT_DESKTOP || process.env.DESKTOP_SESSION) {
     return null;
   }
+  return probeCandidates();
+}
+
+function probeCandidates() {
   if (!process.env.DBUS_SESSION_BUS_ADDRESS) {
     return null;
   }
-
   for (const candidate of CANDIDATES) {
     if (pingService(candidate.dest, candidate.path)) {
       return candidate.passwordStore;
@@ -104,4 +107,25 @@ function detectPasswordStoreSwitch() {
   return null;
 }
 
-module.exports = { detectPasswordStoreSwitch };
+/**
+ * Diagnostic-only reachability check, deliberately WITHOUT Gate 1 (the
+ * XDG_CURRENT_DESKTOP/DESKTOP_SESSION early-out). `detectPasswordStoreSwitch()`
+ * intentionally skips probing on a normal desktop session to keep every
+ * healthy launch free of subprocess cost - but that means it can't tell
+ * "no secret service at all" apart from "a service exists but the write
+ * still failed for some other reason" on a normal session, which is exactly
+ * the distinction `key-manager.ts` needs for its error-hint copy. This is
+ * only called from the interactive password-write failure path (long after
+ * startup, not startup-blocking), so the cost of an unconditional probe is
+ * irrelevant here. Gate 2 (DBUS_SESSION_BUS_ADDRESS) still applies - it's a
+ * correctness/safety gate (autolaunch-hang avoidance), not a cost
+ * optimization, and remains necessary at any call time.
+ */
+function isAnySecretServiceReachable() {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+  return probeCandidates() !== null;
+}
+
+module.exports = { detectPasswordStoreSwitch, isAnySecretServiceReachable };

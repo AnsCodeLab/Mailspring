@@ -8,6 +8,7 @@ import proxyquire from 'proxyquire';
 
 let execFileSyncSpy: jasmine.Spy;
 let detectPasswordStoreSwitch: () => string | null;
+let isAnySecretServiceReachable: () => boolean;
 
 function loadModule() {
   execFileSyncSpy = jasmine.createSpy('execFileSync');
@@ -15,6 +16,7 @@ function loadModule() {
     child_process: { execFileSync: execFileSyncSpy, '@noCallThru': false },
   });
   detectPasswordStoreSwitch = mod.detectPasswordStoreSwitch;
+  isAnySecretServiceReachable = mod.isAnySecretServiceReachable;
 }
 
 function mockProbeSuccess() {
@@ -169,5 +171,58 @@ describe('Linux password store detection', () => {
       }).not.toThrow();
       expect(execFileSyncSpy.calls.length).toBe(3);
     });
+  });
+});
+
+describe('isAnySecretServiceReachable (ungated, diagnostic-only)', () => {
+  const originalPlatform = process.platform;
+  const originalXdgCurrentDesktop = process.env.XDG_CURRENT_DESKTOP;
+  const originalDbusSessionBusAddress = process.env.DBUS_SESSION_BUS_ADDRESS;
+
+  beforeEach(() => {
+    loadModule();
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    if (originalXdgCurrentDesktop === undefined) {
+      delete process.env.XDG_CURRENT_DESKTOP;
+    } else {
+      process.env.XDG_CURRENT_DESKTOP = originalXdgCurrentDesktop;
+    }
+    if (originalDbusSessionBusAddress === undefined) {
+      delete process.env.DBUS_SESSION_BUS_ADDRESS;
+    } else {
+      process.env.DBUS_SESSION_BUS_ADDRESS = originalDbusSessionBusAddress;
+    }
+  });
+
+  it('returns false on a non-Linux platform without shelling out', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    expect(isAnySecretServiceReachable()).toBe(false);
+    expect(execFileSyncSpy.calls.length).toBe(0);
+  });
+
+  it('still probes even when XDG_CURRENT_DESKTOP is set (unlike detectPasswordStoreSwitch)', () => {
+    process.env.XDG_CURRENT_DESKTOP = 'GNOME';
+    process.env.DBUS_SESSION_BUS_ADDRESS = 'unix:path=/run/user/1000/bus';
+    mockProbeSuccess();
+    expect(isAnySecretServiceReachable()).toBe(true);
+    expect(execFileSyncSpy.calls.length).toBe(1);
+  });
+
+  it('still respects Gate 2: returns false when no session bus address is set', () => {
+    process.env.XDG_CURRENT_DESKTOP = 'GNOME';
+    delete process.env.DBUS_SESSION_BUS_ADDRESS;
+    expect(isAnySecretServiceReachable()).toBe(false);
+    expect(execFileSyncSpy.calls.length).toBe(0);
+  });
+
+  it('returns false when no candidate answers', () => {
+    process.env.DBUS_SESSION_BUS_ADDRESS = 'unix:path=/run/user/1000/bus';
+    mockProbeFailure();
+    expect(isAnySecretServiceReachable()).toBe(false);
+    expect(execFileSyncSpy.calls.length).toBe(3);
   });
 });

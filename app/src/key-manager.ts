@@ -12,13 +12,14 @@ const configCredentialsKey = 'credentials';
 /**
  * Builds the Linux-specific hint appended to the "could not store your
  * password securely" error. The two branches must stay distinct: when a
- * secret service was already detected as reachable (see
- * `browser/linux-password-store.js`'s `detectPasswordStoreSwitch()`, which
- * `main.js` uses to fix the exact bug this issue reports before the app
- * ever gets this far), telling the user to install/start a keyring they
- * already have is wrong - this is the residual "something deeper is wrong"
- * case, e.g. the keyring is locked. When no secret service was reachable,
- * the original "please install and run one" guidance still applies.
+ * secret service is actually reachable right now (see
+ * `browser/linux-password-store.js`'s `isAnySecretServiceReachable()` -
+ * deliberately ungated, unlike `detectPasswordStoreSwitch()`, since a
+ * normal desktop session can still reach this failure path for reasons
+ * other than the one that issue fixes, e.g. a locked keyring), telling the
+ * user to install/start a keyring they already have is wrong - this is the
+ * residual "something deeper is wrong" case. When no secret service is
+ * reachable, the original "please install and run one" guidance applies.
  */
 export function buildLinuxPasswordStoreHint(secretServiceReachable: boolean): string {
   return secretServiceReachable
@@ -134,7 +135,7 @@ class KeyManager {
       const platformHint =
         process.platform === 'linux'
           ? buildLinuxPasswordStoreHint(
-              require('./browser/linux-password-store').detectPasswordStoreSwitch() !== null
+              require('./browser/linux-password-store').isAnySecretServiceReachable()
             )
           : '';
       throw new Error(
