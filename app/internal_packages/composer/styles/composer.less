@@ -171,6 +171,25 @@
     color: @component-active-color;
   }
 
+  button.disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  select:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .align-button-group {
+    display: inline-flex;
+    align-items: center;
+
+    button {
+      max-width: 26px;
+    }
+  }
+
   .dropdown {
     z-index: 4;
     position: absolute;
