@@ -366,6 +366,20 @@ export class ComposerEditor extends React.Component<ComposerEditorProps, Compose
 
 // Helpers
 
+export function extensionForClipboardMimeType(mimeType: string): string {
+  return (
+    {
+      'image/png': '.png',
+      'image/jpeg': '.jpeg',
+      'image/jpg': '.jpg', // some Windows clipboard sources still report this
+      'image/gif': '.gif',
+      'image/bmp': '.bmp',
+      'image/webp': '.webp',
+      'image/tiff': '.tiff',
+    }[mimeType] || ''
+  );
+}
+
 export function handleFilePasted(event: ClipboardEvent, onFileReceived: (path: string) => void) {
   if (event.clipboardData.items.length === 0) {
     return false;
@@ -378,12 +392,7 @@ export function handleFilePasted(event: ClipboardEvent, onFileReceived: (path: s
     // file and fire our `onFilePaste` event.
     if (item.kind === 'file') {
       const blob = item.getAsFile();
-      const ext =
-        {
-          'image/png': '.png',
-          'image/jpg': '.jpg',
-          'image/tiff': '.tiff',
-        }[item.type] || '';
+      const ext = extensionForClipboardMimeType(item.type);
 
       const reader = new FileReader();
       reader.addEventListener('loadend', () => {
