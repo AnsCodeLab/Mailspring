@@ -230,17 +230,21 @@ describe('table HTML round-trip rules', () => {
     children: FakeElement[];
     querySelector: (selector: string) => FakeElement | null;
     querySelectorAll: (selector: string) => FakeElement[];
+    getAttribute: (name: string) => string | null;
   };
   type FakeJSON = { object: string; type: string; nodes: FakeJSON[] };
   type FakeReactElement = { type: string; props: { children: unknown } };
 
   // `isSimpleTableElement` (called from the real `<table>` deserialize branch below)
-  // needs `querySelector`/`querySelectorAll`/`children` on whatever it's given -- these
-  // fixtures are plain `{tagName, childNodes}` doubles, not real DOM `Element`s, so add
-  // minimal tag-name-only matching (the only selector shapes `isSimpleTableElement`
-  // actually uses: `'table'` and `'td, th'`) rather than pulling in a real DOM/JSDOM
-  // dependency for a handful of simple fixtures with no nested structure to match.
+  // needs `querySelector`/`querySelectorAll`/`children`/`getAttribute` on whatever
+  // it's given -- these fixtures are plain `{tagName, childNodes}` doubles, not real
+  // DOM `Element`s, so add minimal tag-name-only matching (the only selector shapes
+  // `isSimpleTableElement` actually uses: `'table'`, `'td, th'`, and `'*'`) rather
+  // than pulling in a real DOM/JSDOM dependency for a handful of simple fixtures with
+  // no nested structure to match. None of these fixtures set colspan/rowspan, so
+  // `getAttribute` always returning `null` is correct for them.
   function matchesSelector(el: FakeElement, selector: string): boolean {
+    if (selector === '*') return true;
     return selector.split(',').some((part) => part.trim() === el.tagName);
   }
   function collectMatches(el: FakeElement, selector: string, out: FakeElement[]) {
@@ -265,6 +269,7 @@ describe('table HTML round-trip rules', () => {
         collectMatches(el, selector, matches);
         return matches;
       },
+      getAttribute: () => null,
     };
     return el;
   }
@@ -456,35 +461,53 @@ describe('TABLE_SCHEMA normalization', () => {
 });
 
 describe('excel table paste fixture', () => {
-  it('parses a real Excel-clipboard table and, pasted into an existing cell, does not nest a table inside it', () => {
-    const fixturePath = path.resolve(__dirname, 'fixtures', 'paste', 'excel-paste-in.html');
+  // Independent-review-gate finding (final confirmatory pass): this fixture has a real
+  // `colspan="2"` cell. `isSimpleTableElement` now correctly rejects colspan/rowspan
+  // (merged cells are an explicit non-goal, and this composer's editable model captures
+  // no HTML attributes at all, so a colspan would be silently, permanently dropped on
+  // round-trip if this fixture were treated as editable). This test was rewritten to
+  // assert the corrected classification -- the fixture correctly falls through to the
+  // pre-existing frozen-HTML "uneditable" treatment. The schema's own paste-into-cell
+  // hoisting mechanism (this test's original subject) is independently covered above by
+  // 'hoists a pasted table out to a sibling...', using a synthetic colspan-free table --
+  // that coverage is unaffected by this fixture's reclassification.
+  function readFixtureHTML(name: string): string {
+    const fixturePath = path.resolve(__dirname, 'fixtures', 'paste', name);
     const raw = fs.readFileSync(fixturePath, 'utf8');
     // The fixture file is wrapped in a literal leading/trailing `"` character.
-    const html = raw.slice(1, -1);
+    return raw.slice(1, -1);
+  }
 
-    const pastedValue = convertFromHTML(html);
-    // `convertFromHTML` only deserializes HTML into a `Value` -- it does not run
-    // through a schema-backed `Editor`, so `pastedValue.document` here is the RAW,
-    // not-yet-normalized parse (may still contain stray non-row children from
-    // whitespace/<col> siblings). The real structural guarantee (hoisted, not
-    // nested) is asserted below once this fragment is inserted into a real,
-    // schema-backed `Editor`.
-    const pastedTable = pastedValue.document.nodes.find((n) => n.type === TABLE_TYPE) as Block;
-    expect(pastedTable).toBeTruthy();
-    expect(pastedTable.getTexts().some((t) => t.text.includes('Pros'))).toBe(true);
+  it('has a colspan cell (the real-world condition this test exists to cover)', () => {
+    const html = readFixtureHTML('excel-paste-in.html');
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const table = container.querySelector('table') as HTMLElement;
+    expect(table).toBeTruthy();
+    expect(table.querySelector('[colspan]')).toBeTruthy();
+  });
 
-    const existing: ValueJSON = {
-      document: { object: 'document', nodes: [tableJSON(rowJSON('existing'))] },
-    };
-    const editor = new Editor({ value: Value.fromJSON(existing), plugins: TablePlugins });
-    const existingTable = editor.value.document.nodes.get(0) as Block;
-    const firstRowOfExistingTable = existingTable.nodes.get(0) as Block;
-    const existingCell = firstRowOfExistingTable.nodes.get(0) as Block;
-    editor.moveToStartOfNode(existingCell).focus();
+  it('isSimpleTableElement rejects the fixture because of its colspan cell', () => {
+    const html = readFixtureHTML('excel-paste-in.html');
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const table = container.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(table)).toBe(false);
+  });
 
-    editor.insertFragment(pastedValue.document);
+  it('convertFromHTML keeps the fixture as a single uneditable block, not a TABLE_TYPE tree', () => {
+    const html = readFixtureHTML('excel-paste-in.html');
+    const value = convertFromHTML(html);
 
-    expect(hasNestedTable(editor.value.document)).toBe(false);
+    const containsTableTypeNode = value.document
+      .getBlocksAsArray()
+      .some((n) => n.type === TABLE_TYPE);
+    expect(containsTableTypeNode).toBe(false);
+
+    const containsUneditableNode = value.document
+      .getBlocksAsArray()
+      .some((n) => n.type === 'uneditable');
+    expect(containsUneditableNode).toBe(true);
   });
 });
 
@@ -539,6 +562,28 @@ describe('real-world layout table stays uneditable (not parsed as an editable ta
     el.innerHTML = '<table><tr><td>Plain <b>text</b></td><td>More text</td></tr></table>';
     const outerTable = el.querySelector('table') as HTMLElement;
     expect(isSimpleTableElement(outerTable)).toBe(true);
+  });
+
+  it('isSimpleTableElement rejects a table with a colspan cell (a merged cell -- silently loses the span on round-trip otherwise)', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<table><tr><td colspan="2">Spans two columns</td></tr></table>';
+    const outerTable = el.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(outerTable)).toBe(false);
+  });
+
+  it('isSimpleTableElement rejects a table with a rowspan cell', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<table><tr><td rowspan="2">Spans two rows</td></tr></table>';
+    const outerTable = el.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(outerTable)).toBe(false);
+  });
+
+  it('isSimpleTableElement rejects block content nested inside a transparent inline wrapper (e.g. an <a> "clickable card")', () => {
+    const el = document.createElement('div');
+    el.innerHTML =
+      '<table><tr><td><a href="https://example.com"><h3>Title</h3><p>Body</p></a></td></tr></table>';
+    const outerTable = el.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(outerTable)).toBe(false);
   });
 });
 

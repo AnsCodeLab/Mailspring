@@ -440,8 +440,26 @@ export function isSimpleTableElement(tableEl: HTMLElement): boolean {
   }
   const cells = tableEl.querySelectorAll('td, th');
   for (const cell of Array.from(cells)) {
-    for (const child of Array.from(cell.children)) {
-      if (!INLINE_TABLE_CELL_TAG_NAMES[child.tagName.toLowerCase()]) {
+    // A colspan/rowspan cell represents a merged cell -- "merge cells" is an explicit
+    // non-goal for this minimal editable model (independent-review-gate finding: the
+    // deserialize rule below captures no HTML attributes at all, so a colspan/rowspan
+    // would be silently, permanently dropped on round-trip, misaligning the table's
+    // columns/rows -- confirmed against this repo's own `excel-paste-in.html` fixture,
+    // which has a real `colspan="2"` cell). Reject rather than silently corrupt it; it
+    // falls through to the pre-existing frozen-HTML "uneditable" treatment instead.
+    const colspan = Number(cell.getAttribute('colspan') || '1');
+    const rowspan = Number(cell.getAttribute('rowspan') || '1');
+    if (colspan > 1 || rowspan > 1) {
+      return false;
+    }
+    // Check every descendant element, not just direct children: an inline element
+    // like `<a>` is "transparent" per the HTML5 content model and may legally wrap
+    // block-level content (a routine "clickable card" pattern in marketing/product
+    // emails, e.g. `<td><a href="..."><h3>Title</h3><p>Body</p></a></td>` -- the
+    // cell's only DIRECT child is the allowed `<a>`, so a direct-children-only check
+    // would miss the `<h3>`/`<p>` nested two levels deep).
+    for (const el of Array.from(cell.querySelectorAll('*'))) {
+      if (!INLINE_TABLE_CELL_TAG_NAMES[el.tagName.toLowerCase()]) {
         return false;
       }
     }
