@@ -171,13 +171,15 @@ const TABLE_SCHEMA = {
   },
 };
 ```
-Exact `error.code`/`error.node`/`error.child` field names must be confirmed against this
-repo's actual installed Slate version's schema-violation error shape (`@types/slate`'s
-`SchemaProperties`/normalize-error typing, or by reading `slate-edit-list`'s own usage as
-the ground truth for this exact Slate fork) before implementation — do not assume the field
-names above are exactly right without checking; get them from the type defs or from
-tracing `slate-edit-list`'s own normalize callbacks against its `error` parameter usage,
-since that package runs on this exact same pinned Slate version.
+**Verified, not a guess**: `@types/slate`'s `SlateError` class declares `code: ErrorCode`
+(a union including exactly `'parent_type_invalid'`/`'child_type_invalid'`/
+`'child_object_invalid'`, matching the codes `slate-edit-list`'s own schema uses) plus a
+`[key: string]: any` index signature — and `slate-edit-list/lib/validation/schema.js`'s
+actual normalize callbacks, read directly, confirm the exact runtime field names used off
+that object: `context.node.key` for `parent_type_invalid`, `context.child.key` for
+`child_type_invalid` (the callback's second parameter is literally the `SlateError`/
+`error` object, named `context` at that call site — same object, local naming choice).
+The `TABLE_SCHEMA` pseudocode above uses these exact confirmed field names.
 
 This single addition means: a pasted, cut, drag-dropped, or otherwise-malformed table
 fragment gets auto-repaired by Slate's own engine using the exact same mechanism that
