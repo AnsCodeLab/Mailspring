@@ -398,11 +398,65 @@ function renderNode(props, editor: Editor = null, next = () => {}) {
   }
 }
 
+// Independent code-review finding (verified against real fixtures in this repo,
+// app/spec/fixtures/emails/email_16.html and friends, which contain deeply nested
+// layout tables -- tables-in-<td>s-in-tables -- routine in real-world marketing/
+// newsletter/invoice HTML): a `<table>` whose cells contain block-level content
+// (nested tables, divs, paragraphs, lists, headings) is a layout table, not a data
+// table, and must NOT be parsed into this composer's editable `table_cell`-as-leaf
+// model -- `TABLE_SCHEMA`'s alien-child hoisting would tear such a table apart
+// (scrambling relative content order and silently dropping every table/cell HTML
+// attribute: width, bgcolor, colspan, rowspan, style). Only a "simple" table (every
+// cell's direct element children are inline-level tags, no nested `<table>`
+// anywhere) is safe to treat as editable. `uneditable-plugins.tsx` is the actual
+// gatekeeper today (it runs earlier in `conversion.tsx#plugins` and falls through to
+// this rule only for simple tables) -- this same check is duplicated here, not just
+// there, so correctness does not silently depend on that plugin ordering being
+// preserved forever.
+const INLINE_TABLE_CELL_TAG_NAMES: Record<string, true> = {
+  a: true,
+  b: true,
+  i: true,
+  u: true,
+  em: true,
+  strong: true,
+  span: true,
+  font: true,
+  br: true,
+  img: true,
+  sup: true,
+  sub: true,
+  code: true,
+  small: true,
+  strike: true,
+  s: true,
+  del: true,
+  mark: true,
+};
+
+export function isSimpleTableElement(tableEl: HTMLElement): boolean {
+  if (tableEl.querySelector('table')) {
+    return false;
+  }
+  const cells = tableEl.querySelectorAll('td, th');
+  for (const cell of Array.from(cells)) {
+    for (const child of Array.from(cell.children)) {
+      if (!INLINE_TABLE_CELL_TAG_NAMES[child.tagName.toLowerCase()]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 export const rules: Rule[] = [
   {
     deserialize(el: HTMLElement, next) {
       const tagName = el.tagName ? el.tagName.toLowerCase() : '';
       if (tagName === 'table') {
+        if (!isSimpleTableElement(el)) {
+          return undefined;
+        }
         return { object: 'block', type: TABLE_TYPE, nodes: next(el.childNodes) };
       }
       if (tagName === 'tr') {

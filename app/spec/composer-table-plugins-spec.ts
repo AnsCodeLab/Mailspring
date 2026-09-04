@@ -14,6 +14,7 @@ import TablePlugins, {
   decideTabBackward,
   decideBoundaryRemoval,
   insertTable,
+  isSimpleTableElement,
 } from '../src/components/composer-editor/table-plugins';
 import { convertFromHTML } from '../src/components/composer-editor/conversion';
 
@@ -213,12 +214,49 @@ describe('decideBoundaryRemoval', () => {
 describe('table HTML round-trip rules', () => {
   const [tableRule] = rules;
 
-  type FakeElement = { tagName: string; childNodes: FakeElement[] };
+  type FakeElement = {
+    tagName: string;
+    childNodes: FakeElement[];
+    children: FakeElement[];
+    querySelector: (selector: string) => FakeElement | null;
+    querySelectorAll: (selector: string) => FakeElement[];
+  };
   type FakeJSON = { object: string; type: string; nodes: FakeJSON[] };
   type FakeReactElement = { type: string; props: { children: unknown } };
 
+  // `isSimpleTableElement` (called from the real `<table>` deserialize branch below)
+  // needs `querySelector`/`querySelectorAll`/`children` on whatever it's given -- these
+  // fixtures are plain `{tagName, childNodes}` doubles, not real DOM `Element`s, so add
+  // minimal tag-name-only matching (the only selector shapes `isSimpleTableElement`
+  // actually uses: `'table'` and `'td, th'`) rather than pulling in a real DOM/JSDOM
+  // dependency for a handful of simple fixtures with no nested structure to match.
+  function matchesSelector(el: FakeElement, selector: string): boolean {
+    return selector.split(',').some((part) => part.trim() === el.tagName);
+  }
+  function collectMatches(el: FakeElement, selector: string, out: FakeElement[]) {
+    for (const child of el.childNodes) {
+      if (matchesSelector(child, selector)) out.push(child);
+      collectMatches(child, selector, out);
+    }
+  }
+
   function fakeEl(tagName: string, childNodes: FakeElement[] = []): FakeElement {
-    return { tagName, childNodes };
+    const el: FakeElement = {
+      tagName,
+      childNodes,
+      children: childNodes,
+      querySelector: (selector) => {
+        const matches: FakeElement[] = [];
+        collectMatches(el, selector, matches);
+        return matches[0] || null;
+      },
+      querySelectorAll: (selector) => {
+        const matches: FakeElement[] = [];
+        collectMatches(el, selector, matches);
+        return matches;
+      },
+    };
+    return el;
   }
 
   // `Rule.deserialize`/`serialize` are typed against real DOM `Element`/React-node
@@ -437,6 +475,60 @@ describe('excel table paste fixture', () => {
     editor.insertFragment(pastedValue.document);
 
     expect(hasNestedTable(editor.value.document)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isSimpleTableElement / uneditable-plugins fallthrough: a real-world layout
+// table (nested tables-in-<td>s-in-tables, routine in marketing/newsletter/
+// invoice HTML) must NOT be parsed into the editable table model -- it must
+// keep falling through to the pre-existing "uneditable" frozen-HTML
+// treatment, exactly as it did before this issue. Independent-review-gate
+// finding: an earlier revision of this change removed 'table' from
+// UNEDITABLE_TAGS unconditionally, which would have silently reparsed every
+// layout table in every quoted reply/forward, scrambling structure and
+// dropping every table/cell HTML attribute.
+// ---------------------------------------------------------------------------
+
+describe('real-world layout table stays uneditable (not parsed as an editable table)', () => {
+  it('keeps a deeply-nested layout table (email_16.html fixture) as a single uneditable block, not a TABLE_TYPE tree', () => {
+    const fixturePath = path.resolve(__dirname, 'fixtures', 'emails', 'email_16.html');
+    const html = fs.readFileSync(fixturePath, 'utf8');
+
+    const value = convertFromHTML(html);
+
+    const containsTableTypeNode = value.document
+      .getBlocksAsArray()
+      .some(
+        (n) => n.type === TABLE_TYPE || n.type === TABLE_ROW_TYPE || n.type === TABLE_CELL_TYPE
+      );
+    expect(containsTableTypeNode).toBe(false);
+
+    const containsUneditableNode = value.document
+      .getBlocksAsArray()
+      .some((n) => n.type === 'uneditable');
+    expect(containsUneditableNode).toBe(true);
+  });
+
+  it('isSimpleTableElement rejects a table with a nested <table> inside a <td>', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<table><tr><td><table><tr><td>nested</td></tr></table></td></tr></table>';
+    const outerTable = el.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(outerTable)).toBe(false);
+  });
+
+  it('isSimpleTableElement rejects a table with a block-level element (<div>) inside a <td>', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<table><tr><td><div>layout content</div></td></tr></table>';
+    const outerTable = el.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(outerTable)).toBe(false);
+  });
+
+  it('isSimpleTableElement accepts a plain data table with only inline cell content', () => {
+    const el = document.createElement('div');
+    el.innerHTML = '<table><tr><td>Plain <b>text</b></td><td>More text</td></tr></table>';
+    const outerTable = el.querySelector('table') as HTMLElement;
+    expect(isSimpleTableElement(outerTable)).toBe(true);
   });
 });
 
