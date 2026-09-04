@@ -58,6 +58,8 @@ jobs:
             - Supports any OpenAI-compatible API (local models via Ollama/LM Studio, OpenAI, etc.)
 
             **Composer**
+            - Insert and edit tables (Tab/Shift+Tab between cells, Tab from the last cell adds a row)
+            - Right-click an inline image for quick size presets (Original/Large/Medium/Small)
             - Full rich-text toolbar: undo/redo, paragraph styles (Normal/Heading 1/Heading 2/Quote), text alignment, highlight color, indent/outdent, superscript/subscript, clear formatting, horizontal rule, insert inline image, and text direction (LTR/RTL)
             - Clipboard section (Cut / Copy / Paste / Paste as plain text) + Format Painter
             - Bundled open-source fonts (Roboto, Open Sans, Lato, Montserrat, Poppins, Merriweather, Lora, Source Code Pro)
