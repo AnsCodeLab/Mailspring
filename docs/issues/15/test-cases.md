@@ -97,3 +97,79 @@ attachments
   the new `computeImagePresetSize`/context-menu code path.
 - **Automated coverage**: None needed — no lines in `_resizeStart`/`_resizeImage`/
   `_resizeEnd` were touched by this change; verified by code review/diff.
+
+## Part B
+
+### TC-B1: Bounded Tab/Shift+Tab traversal, including the cross-table bug fix
+
+- **Preconditions**: A document containing two separate tables.
+- **Steps**: Place the cursor in the last cell of the first table; press Tab.
+- **Expected result**: A new row is inserted in the FIRST table (never jumps into the
+  second table). `nextCell`/`previousCell` bound every traversal step to the same table
+  via `tableKeyForCell`; `decideTabForward` reports `insertRow` (not `moveToCell` into an
+  unrelated table) once `nextCell` returns `null`.
+- **Automated coverage**: `nextCell`/`previousCell` "returns null instead of tunneling
+  into a second, unrelated table" (both directions); `decideTabForward` "requests a new
+  row when at the last cell of the last row".
+
+### TC-B2: Insert table (2x2), type, Tab across rows (e2e)
+
+- **Preconditions**: A popout composer window.
+- **Steps**: Click the Insert Table toolbar button. Type into the first cell. Press Tab.
+  Type into the second cell. Press Tab again (crosses into row 2). Type into the third
+  cell.
+- **Expected result**: A `<table>` appears with the three typed strings landing in cells
+  1, 2, and 3 in document order.
+- **Automated coverage**: Playwright `compose.spec.ts` "insert-table toolbar button
+  inserts a table and Tab navigates between cells" — **currently failing**; see
+  `test-results.md`.
+
+### TC-B3: Backspace/Delete at table boundaries
+
+- **Preconditions**: A table with either all-empty cells or some non-empty content.
+- **Steps**: Place the cursor at the very start of the first cell and press Backspace (or
+  the very end of the last cell and press Delete).
+- **Expected result**: If an adjacent cell exists, focus moves there (or a same-table
+  boundary is a no-op) instead of corrupting the tree. If the table is the boundary cell
+  and entirely empty, the whole table is removed and the cursor explicitly lands in the
+  adjacent block (previous for Backspace, next for Delete) — never left stranded. If the
+  table has other content, the keystroke is swallowed with no structural change.
+- **Automated coverage**: `decideBoundaryRemoval` covers all three branches.
+
+### TC-B4: Malformed table fragment (paste/drag-drop/undo) self-repairs via schema
+
+- **Preconditions**: A `table` node whose direct child is a `table_cell` (skipping
+  `table_row`) is loaded into a real, schema-backed `Editor`.
+- **Expected result**: Normalization repairs the tree into `table > table_row >
+  table_cell` with the cell's original text content preserved, with no user action
+  required — the schema runs on every Slate operation (paste, cut, drag-drop, undo),
+  not just keydown-intercepted ones.
+- **Automated coverage**: `TABLE_SCHEMA normalization` "repairs a table_cell that is a
+  direct child of table (skipping table_row)".
+
+### TC-B5: Valid table content is never churned by the schema
+
+- **Expected result**: A well-formed `table > table_row > table_cell` tree produces
+  **zero** normalize operations on load — no spurious undo-history pollution.
+- **Automated coverage**: `TABLE_SCHEMA normalization` "does not modify an already-valid
+  table > table_row > table_cell tree".
+
+### TC-B6: Pasting a table while the cursor is inside another table's cell does not nest
+tables
+
+- **Preconditions**: An existing table; cursor inside one of its cells.
+- **Steps**: Paste (insert a fragment containing) a second, multi-row table.
+- **Expected result**: The pasted table ends up as a sibling of the first table (two
+  separate top-level tables), never nested inside a `table_cell`.
+- **Automated coverage**: `TABLE_SCHEMA normalization` "hoists a pasted table out to a
+  sibling instead of nesting it inside an existing cell"; `excel table paste fixture`
+  "parses a real Excel-clipboard table and, pasted into an existing cell, does not nest a
+  table inside it" (using the real `app/spec/fixtures/paste/excel-paste-in.html`
+  fixture).
+
+### TC-B7: HTML round-trip, including `<th>` and `<tbody>` tolerance
+
+- **Expected result**: `<table>`/`<tr>`/`<td>` deserialize to `table`/`table_row`/
+  `table_cell`; `<th>` also deserializes to `table_cell` (no header-row data loss); a
+  `<tbody>` wrapper is transparently skipped. Serialize emits `<table><tbody>...`.
+- **Automated coverage**: `table HTML round-trip rules` (10 specs).
