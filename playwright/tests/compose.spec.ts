@@ -989,3 +989,36 @@ test('insert-image toolbar button renders and is clickable without throwing', as
 
   await composerPage!.keyboard.press('Meta+Escape');
 });
+
+test('insert-table toolbar button inserts a table and Tab navigates between cells', async () => {
+  await mainWindow.locator('#sheet-container').click();
+  await mainWindow.keyboard.press('c');
+
+  const composerPage = await findComposer(electronApp);
+  expect(composerPage).not.toBeNull();
+
+  const composer = composerPage!.locator('.composer-inner-wrap').first();
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+
+  const bodyEditable = composer.locator('[contenteditable="true"]').first();
+  await bodyEditable.click();
+
+  await composer.locator('.table-section').first().click();
+  await composerPage!.waitForTimeout(300);
+  await expect(bodyEditable.locator('table')).toHaveCount(1);
+
+  await composerPage!.keyboard.type('R1C1');
+  await composerPage!.keyboard.press('Tab');
+  await composerPage!.waitForTimeout(200);
+  await composerPage!.keyboard.type('R1C2');
+  await composerPage!.keyboard.press('Tab');
+  await composerPage!.waitForTimeout(200);
+  await composerPage!.keyboard.type('R2C1');
+
+  const cells = bodyEditable.locator('table td');
+  await expect(cells.nth(0)).toContainText('R1C1');
+  await expect(cells.nth(1)).toContainText('R1C2');
+  await expect(cells.nth(2)).toContainText('R2C1');
+
+  await composerPage!.keyboard.press('Meta+Escape');
+});
