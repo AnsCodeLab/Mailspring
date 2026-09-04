@@ -5,7 +5,7 @@ import { localized, SanitizeTransformer } from 'mailspring-exports';
 import { ComposerEditorPlugin } from './types';
 
 export const UNEDITABLE_TYPE = 'uneditable';
-export const UNEDITABLE_TAGS = ['table', 'img', 'center', 'signature'];
+export const UNEDITABLE_TAGS = ['img', 'center', 'signature'];
 
 function UneditableNode(props) {
   const { attributes, node, editor, targetIsHTML, isFocused, children } = props;
