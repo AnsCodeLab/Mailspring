@@ -157,18 +157,24 @@ export function tableKeyForCell(document: Document, cell: Block): string | null 
 
 export function nextCell(document: Document, cell: Block): Block | null {
   const myTable = tableKeyForCell(document, cell);
-  let next = document.getNextBlock(cell);
+  // `getNextBlock`/`getPreviousBlock` are declared by `@types/slate` as accepting
+  // `string | Node`, but the installed Slate runtime's actual implementation (verified
+  // directly: every internal call site in `slate.js` itself passes `.key`, and passing a
+  // bare Block throws "Paths can only be created from arrays or lists" deep inside
+  // `Document.resolvePath` -- confirmed via live reproduction) only accepts a key/Path.
+  // Always pass `.key`, never the Node itself.
+  let next = document.getNextBlock(cell.key);
   while (next && next.type !== TABLE_CELL_TYPE) {
-    next = document.getNextBlock(next);
+    next = document.getNextBlock(next.key);
   }
   return next && tableKeyForCell(document, next) === myTable ? next : null;
 }
 
 export function previousCell(document: Document, cell: Block): Block | null {
   const myTable = tableKeyForCell(document, cell);
-  let previous = document.getPreviousBlock(cell);
+  let previous = document.getPreviousBlock(cell.key);
   while (previous && previous.type !== TABLE_CELL_TYPE) {
-    previous = document.getPreviousBlock(previous);
+    previous = document.getPreviousBlock(previous.key);
   }
   return previous && tableKeyForCell(document, previous) === myTable ? previous : null;
 }
@@ -271,7 +277,7 @@ function onKeyDown(event: React.KeyboardEvent, editor: Editor, next: () => void)
       // empty-block removal; `deleteBackwardAtRange` does not, relying on ambient
       // selection repair this hand-rolled removal cannot assume it gets for free.
       // Capture the adjacent block BEFORE removing the table and move explicitly.
-      const previousBlock = document.getPreviousBlock(table);
+      const previousBlock = document.getPreviousBlock(table.key);
       editor.removeNodeByKey(table.key);
       if (previousBlock) {
         editor.moveToEndOfNode(previousBlock).focus();
@@ -295,7 +301,7 @@ function onKeyDown(event: React.KeyboardEvent, editor: Editor, next: () => void)
     if (decision.action === 'moveToAdjacentCell') {
       editor.moveToStartOfNode(decision.cell).focus();
     } else if (decision.action === 'removeTable') {
-      const nextBlock = document.getNextBlock(table);
+      const nextBlock = document.getNextBlock(table.key);
       editor.removeNodeByKey(table.key);
       if (nextBlock) {
         editor.moveToStartOfNode(nextBlock).focus();
