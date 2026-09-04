@@ -259,3 +259,42 @@ Verdict: APPROVE WITH CHANGES. Two findings, both addressed:
 Both fixes verified: full table-plugins spec 35/35 passing (up from 31), full project-wide
 Jasmine suite **1791 passing, 0 failing**, `tsc`/`eslint` clean, and the e2e
 insert-table-and-Tab-navigate test re-confirmed still passing after both fixes.
+
+## Final Confirmatory Review Pass (verifying the two fixes above are actually correct)
+
+Verdict: found 2 more real, previously-uncaught gaps in `isSimpleTableElement` itself —
+both silently *corrupting* content on round-trip rather than correctly rejecting it (the
+exact failure mode the function exists to prevent):
+
+1. **Confirmed via this PR's own fixture**: `isSimpleTableElement` never checked
+   `colspan`/`rowspan`. The editable `table_cell` deserialize rule and its render/serialize
+   path capture no HTML attributes at all, so a colspan/rowspan cell would silently,
+   permanently lose its span once round-tripped. Directly demonstrated: this issue's own
+   `excel-paste-in.html` fixture has a real `colspan="2"` cell — before this fix, that exact
+   fixture would have been (wrongly) classified as "simple" and lost its column span on
+   save. Merged cells are an explicit non-goal for this minimal model — fixed by rejecting
+   colspan/rowspan > 1, falling through to the pre-existing frozen-HTML treatment instead.
+2. **Confirmed via the HTML5 content model**: `isSimpleTableElement` only checked a cell's
+   *direct* children against the inline allow-list. `<a>` is HTML5-transparent and may
+   legally wrap block-level content — a routine "clickable card" pattern in marketing/
+   product emails (`<td><a href="..."><h3>Title</h3><p>Body</p></a></td>`) — which a
+   direct-children-only check missed entirely (the cell's only direct child, `<a>`, is
+   allowed; its `<h3>`/`<p>` grandchildren were never inspected). Fixed by checking every
+   descendant element (`querySelectorAll('*')`), not just direct children.
+
+**Rewrote** the "excel table paste fixture" test to assert the corrected classification —
+the fixture's colspan cell now correctly keeps it in the pre-existing uneditable treatment.
+The schema's own paste-into-cell hoisting mechanism (this test's original subject) is
+independently covered above it via a synthetic, colspan-free table
+(`tableJSON`/`rowJSON` helpers), so no test coverage was lost in the rewrite — only the
+real-fixture test's own assertion changed to match the corrected, safer behavior.
+
+Added targeted unit cases for colspan, rowspan, and the transparent-`<a>`-wrapper scenario.
+
+Re-verified after both fixes: table-plugins spec **40/40 passing** (up from 35), full
+project-wide Jasmine suite **1796 passing, 0 failing**, `tsc`/`eslint` clean (one non-null-
+assertion lint warning fixed along the way), and the e2e insert-table-and-Tab-navigate test
+re-confirmed passing when run in isolation (a transient failure when run concurrently with
+the full Jasmine suite was reproduced as pure resource contention — both spin up separate
+Electron instances simultaneously in this sandbox — and resolved by re-running alone; not a
+regression from this fix).
