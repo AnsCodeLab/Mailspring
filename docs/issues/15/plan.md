@@ -143,9 +143,24 @@ const TABLE_SCHEMA = {
   blocks: {
     [TABLE_CELL_TYPE]: {
       parent: [{ type: TABLE_ROW_TYPE }],
+      // A cell is a leaf: it must directly contain only text/inlines, never a nested
+      // table/table_row. Without this, the confirmed bug below (table_row's own
+      // child_type_invalid fixer wrapping an alien pasted TABLE_TYPE into a cell) would
+      // produce a table nested inside a cell -- this entry is defense in depth at the
+      // cell level, catching the case even if content lands directly under a cell by
+      // some other path than the table_row-level insertion the bug was traced through.
+      nodes: [{ match: [{ object: 'text' }, { object: 'inline' }] }],
       normalize: (change, error) => {
         if (error.code === 'parent_type_invalid') {
           change.unwrapBlockByKey(error.node.key, { normalize: false });
+        } else if (error.code === 'child_type_invalid' || error.code === 'child_object_invalid') {
+          // Hoist the alien block child out to be a sibling of the enclosing table
+          // (never wrap it into the cell -- that's exactly the corruption being
+          // prevented). Mirrors the table_row fixer below.
+          const row = change.value.document.getParent(error.node.key);
+          const table = change.value.document.getParent(row.key);
+          const rowIndex = table.nodes.indexOf(row);
+          change.moveNodeByKey(error.child.key, table.key, rowIndex + 1);
         }
       },
     },
@@ -156,7 +171,22 @@ const TABLE_SCHEMA = {
         if (error.code === 'parent_type_invalid') {
           change.unwrapBlockByKey(error.node.key, { normalize: false });
         } else if (error.code === 'child_type_invalid') {
-          change.wrapBlockByKey(error.child.key, TABLE_CELL_TYPE, { normalize: false });
+          // CONFIRMED BUG in the first revision, found by the second plan-review pass:
+          // pasting a table while the cursor is inside an existing cell hits
+          // insertBlockAtRange, which inserts the pasted table as a direct sibling of
+          // cells inside this row's own children -- tripping this exact rule. The
+          // naive fixer (wrap the alien child into a cell) would nest the pasted
+          // table INSIDE a table_cell, breaking the cell "leaf" model. A TABLE_TYPE
+          // alien child must be hoisted out to be a sibling of the enclosing table
+          // instead; anything else (stray text/other blocks) still gets wrapped into
+          // a cell as originally designed.
+          if (error.child.type === TABLE_TYPE) {
+            const table = change.value.document.getParent(error.node.key);
+            const tableIndex = table.nodes.indexOf(error.node);
+            change.moveNodeByKey(error.child.key, table.key, tableIndex + 1);
+          } else {
+            change.wrapBlockByKey(error.child.key, TABLE_CELL_TYPE, { normalize: false });
+          }
         }
       },
     },
@@ -171,6 +201,18 @@ const TABLE_SCHEMA = {
   },
 };
 ```
+**Known TS friction to expect, not a new risk**: `@types/slate` declares
+`unwrapBlockByKey`/`wrapBlockByKey`/`moveNodeByKey` WITHOUT the 3rd `{normalize: false}`
+options parameter that `slate-edit-list`'s actual JS calls them with (and which the
+installed Slate runtime does support — the type package is simply incomplete here,
+matching the exact same category of gap already hit twice this session: Jasmine's
+`andThrow` and `BlockProperties.type`). Do not paper over this with `any`/`as any` — either
+omit the options arg where semantically safe (Slate's own default post-operation
+normalization pass still runs; only omit `{normalize: false}` where NOT chaining multiple
+repair steps in one callback, since that flag's purpose is deferring re-normalization until
+a multi-step repair finishes) or use a minimal named local type augmentation (the same
+`as unknown as {...}` pattern already used successfully in `draft-factory-spec.ts` this
+session), never a bare cast to `any`.
 **Verified, not a guess**: `@types/slate`'s `SlateError` class declares `code: ErrorCode`
 (a union including exactly `'parent_type_invalid'`/`'child_type_invalid'`/
 `'child_object_invalid'`, matching the codes `slate-edit-list`'s own schema uses) plus a
@@ -255,37 +297,61 @@ block's type being `TABLE_CELL_TYPE`):
     `event.preventDefault()`** (the first draft's pseudocode omitted this — the
     plan-review gate correctly flagged it as a real bug: without it, Slate's own
     default-empty-block-removal shortcut in `deleteBackwardAtRange` could run concurrently
-    and interact unpredictably with our own `removeNodeByKey`), then
-    `editor.removeNodeByKey(table.key)`. If the table was the only document content, the
-    existing `getDocumentBrokenReason`/recovery logic in `composer-editor.tsx` already
-    handles the resulting empty-document case — don't duplicate it here.
+    and interact unpredictably with our own `removeNodeByKey`), capture the block
+    immediately before the table (`document.getPreviousBlock(table)`) BEFORE removing it,
+    then `editor.removeNodeByKey(table.key)`, then **explicitly**
+    `editor.moveToEndOfNode(capturedPreviousBlock).focus()` if one exists — the second
+    plan-review pass traced a real asymmetry in Slate's own core (`deleteForwardAtRange`
+    explicitly repositions the cursor after its own empty-block removal;
+    `deleteBackwardAtRange` does not, relying on ambient selection repair that this
+    hand-rolled removal cannot assume it gets for free) — do not assume automatic cursor
+    repair happens; do it explicitly in both branches. If the table was the only document
+    content (no previous block), the existing `getDocumentBrokenReason`/recovery logic in
+    `composer-editor.tsx` already handles the resulting empty-document case — don't
+    duplicate it, just don't crash calling `moveToEndOfNode(null)`.
   - If null but the table has other (non-empty) content: `event.preventDefault()`, no-op.
 - **Delete** (forward-delete) at the end offset of the cell's last text node — **added in
   this revision; the first draft only handled Backspace**, and the plan-review gate traced
-  a matching unconditional empty-block-removal shortcut in Slate's own
+  a matching (but NOT identical — see below) empty-block-removal shortcut in Slate's own
   `deleteForwardAtRange` that Delete would hit unguarded otherwise:
   - If `nextCell()` (bounded to the same table) is non-null: `event.preventDefault()`,
     no-op (or move focus to the start of the next cell).
   - If null (this is the table's last cell) and the whole table is empty: same
-    remove-whole-table handling as Backspace above, with `preventDefault()`.
+    remove-whole-table handling as Backspace above — capture
+    `document.getNextBlock(table)` before removal, `preventDefault()`,
+    `editor.removeNodeByKey(table.key)`, then explicitly
+    `editor.moveToStartOfNode(capturedNextBlock).focus()` if one exists (mirroring, not
+    literally reusing, the Backspace branch — direction differs: look/move forward, not
+    backward).
   - If null but the table has other content: `event.preventDefault()`, no-op.
 
 With the schema in place as the general safety net, these four guards exist purely to make
 Backspace/Delete at a cell boundary feel intentional (not silently swallowed, not
-corrupting anything) — they are not required to catch every possible corruption path
-themselves anymore.
+corrupting anything, and not stranding the cursor) — they are not required to catch every
+possible corruption path themselves anymore.
 
 ### Insert-table toolbar button
 
 New `table-plugins.tsx` plugin, `toolbarComponents: [InsertTableButton]` (plain
 `BuildToggleButton({ isActive: () => false, ... })`, matching the `hr`/`indent`/`clear-
 formatting` one-shot-action pattern already used repeatedly this session — no new factory
-needed). `onToggle` builds a 2×2 table (one `table` block containing 2 `table_row` blocks,
-each containing 2 empty `table_cell` blocks) via `editor.insertBlock(...)` with a nested
-JSON node structure (Slate's `insertBlock` accepts a full `BlockJSON` tree, not just a flat
-type string — same technique already usable for compound inserts), followed by a trailing
-empty `div` (void-block-adjacent cursor-safety pattern, exactly matching `hr-plugins.tsx`'s
-`insertHorizontalRule`), then moves focus into the first cell.
+needed). `onToggle` builds a 2×2 table via `editor.insertBlock(...)` with a nested JSON
+node structure (Slate's `insertBlock` accepts a full `BlockJSON` tree, not just a flat type
+string): one `table` block containing 2 `table_row` blocks, each containing 2
+`table_cell` blocks — **each cell's `nodes` array must explicitly contain one real (even
+empty-string) `TextJSON` node** (`{ object: 'text', leaves: [{ text: '' }] }` or this
+Slate version's equivalent shape — check `hr-plugins.tsx`'s sibling `div` insert and
+existing `TextJSON`-constructing code elsewhere in this file for the exact shape already in
+use), **not an empty `nodes: []` array** — the first draft's "empty `table_cell`" wording
+was ambiguous on this point; the second plan-review pass traced that Slate's own
+core min-1-child rule WOULD insert a bare text node and cascade correctly even from a
+genuinely empty `nodes: []`, but relying on that fallback cascade instead of seeding real
+text nodes up front is needlessly fragile and inconsistent with how every other multi-block
+insert in this codebase already seeds real content (e.g. `hr-plugins.tsx`'s trailing `div`
+is a real, if empty-string, text-bearing block, not a bare empty block). Followed by a
+trailing empty `div` after the whole table (void-block-adjacent cursor-safety pattern,
+exactly matching `hr-plugins.tsx`'s `insertHorizontalRule`), then moves focus into the
+first cell.
 
 ### HTML round-trip
 
@@ -330,6 +396,23 @@ any existing rule, so any position near the other block plugins is safe).
   this, the schema's `normalize` callback bodies are unverified — the pure-logic tests
   above test the OTHER decision functions, not that the schema itself is wired up and
   behaves as designed.
+- **Required, from the second plan-review pass**: a companion test asserting a
+  well-formed, valid `table > table_row > table_cell` tree survives normalization with
+  **zero** operations — i.e. the schema never fires spurious wrap/unwrap churn on ordinary,
+  already-correct content. Without this, a schema that's merely permissive enough to not
+  reject valid content could still be firing unnecessary repair operations on every
+  keystroke, polluting undo history. Both this test and the malformed-fragment test above
+  are required together, not either/or.
+- **Required, from the second plan-review pass — the confirmed nested-table-via-paste
+  bug**: a test that inserts/pastes a `table` fragment while the selection is positioned
+  inside an existing (different) table's cell, and asserts the result is NOT a table
+  nested inside a `table_cell` — the pasted table must end up hoisted to a sibling
+  position, per the corrected `TABLE_ROW_TYPE`/`TABLE_CELL_TYPE` schema `normalize`
+  callbacks above. Reuse the existing, currently-unused fixture files
+  `app/spec/fixtures/paste/excel-paste-in.html`/`excel-paste-out.html` (found by the
+  second plan-review pass via a repo-wide grep — zero existing specs reference them today)
+  for this and/or the general table-paste round-trip case, rather than hand-writing new
+  fixture HTML from scratch.
 - Given the real risk profile here, ALSO add a focused Playwright e2e test in
   `compose.spec.ts` (using the popout-compose path established this session, not
   `openThread`, which this sandbox can't run) that: clicks Insert Table, types into the
@@ -398,3 +481,45 @@ installed `@bengotow/slate-edit-list` package and Slate core source before adopt
    proceeds to implementation only with the corrections above incorporated, and gets its
    own independent code-review-gate scrutiny (in addition to this plan-review pass) before
    merge, given its risk profile.
+
+## Second Plan Review Gate (on the revised, schema-based Part B) — verdict: APPROVE WITH CHANGES
+
+A second, independent pass specifically re-scrutinizing the revision above. All findings
+verified against the actual installed `slate`/`slate-react`/`@bengotow/slate-edit-list`
+source before adopting:
+
+1. **Confirmed correct, no change**: plugin-level `schema` fields (like `TABLE_SCHEMA`
+   above) DO compose with the top-level `schema` prop — traced through
+   `slate-react`'s plugin registration (wraps `props.schema` into a synthetic first plugin)
+   and `slate` core's `registerPlugin` (wraps every plugin's own `.schema` into an
+   independent `SchemaPlugin`, chained via `editor.middleware`/`editor.run`, each plugin
+   validating only its own rules and calling `next()`) — the exact mechanism
+   `EditListPlugin` already exercises today, confirming `table-plugins.tsx` following the
+   identical shape works identically.
+2. **Confirmed correct, no change**: the very-first-insert transient-empty-structure
+   concern is a non-issue as long as cells are seeded with real (even empty-string) text
+   nodes, which the "Insert-table toolbar button" section above now requires explicitly
+   (this fixes the ambiguous wording the gate flagged).
+3. **CONFIRMED REAL BUG, fixed above**: pasting a table while the selection is inside an
+   existing table's cell would, under the first revision's schema, get wrapped INTO that
+   cell by the `TABLE_ROW_TYPE` fixer (traced through Slate's own
+   `insertFragmentAtRange`/`insertBlockAtRange`, which insert a pasted top-level table as a
+   direct sibling of cells within the enclosing row) — producing a table nested inside a
+   `table_cell`, contradicting the cell "leaf" model. Fixed: both `TABLE_CELL_TYPE`'s and
+   `TABLE_ROW_TYPE`'s `normalize` callbacks now special-case a `TABLE_TYPE` alien child and
+   hoist it out to be a sibling of the enclosing table, instead of wrapping it into a cell.
+4. **Confirmed real asymmetry, fixed above**: Slate's own `deleteBackwardAtRange` and
+   `deleteForwardAtRange` have different empty-block-removal shapes — forward explicitly
+   repositions the cursor after removal, backward does not. The Backspace/Delete
+   empty-table-removal branches now explicitly capture and move focus to the
+   previous/next block (respectively) rather than assuming either direction gets ambient
+   cursor repair for free.
+5. **Adopted**: two new required tests — a valid-tree-survives-normalization-with-zero-ops
+   test (catching spurious repair churn, not just catching outright rejection of valid
+   content) and an explicit paste-a-table-into-an-existing-cell test reusing the
+   newly-discovered, currently-unused `app/spec/fixtures/paste/excel-paste-in.html`/
+   `excel-paste-out.html` fixtures instead of hand-writing new ones.
+6. **Overall verdict carried forward**: APPROVE WITH CHANGES — all required fixes are
+   additive corrections to the schema-based design from the first revision, not a further
+   redesign. Part B is now ready for implementation with these fixes incorporated (already
+   reflected in the sections above, not left as follow-up work).
