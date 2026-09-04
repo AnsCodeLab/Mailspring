@@ -145,39 +145,58 @@ npx eslint -c .eslintrc app/src/components/composer-editor/table-plugins.tsx app
 ```
 Result: both clean, zero errors/warnings.
 
-### Playwright e2e — FAILING, flagged for triage
+### Playwright e2e — root-caused and fixed by the orchestrator, now PASSING
 
-Command:
-```
-xvfb-run -a npx playwright test --config playwright/playwright.config.ts tests/compose.spec.ts -g "insert-table toolbar button"
-```
+The implementor's report above ("known_failure" section) was honest and accurate about the
+symptom, but the root cause was findable with live debugging, which the implementor wasn't
+able to complete within budget. Investigated directly:
 
-The table itself inserts correctly and the first cell's typed text lands correctly
-(`cells.nth(0)` contains "R1C1"). The test then fails on the second cell after pressing
-Tab:
-
-```
-Error: expect(locator).toContainText(expected) failed
-Locator: ...locator('table td').nth(1)
-Expected substring: "R1C2"
-Received string:    "﻿"
-```
-
-The second cell stays empty (renders Slate's empty-leaf placeholder character) after
-Tab + typing, in the real browser/DOM environment, even though the exact same
-`nextCell`/`decideTabForward` decision logic driving `onKeyDown`'s Tab branch is
-independently unit-tested and passing (see `decideTabForward` specs above), and adding
-a 200ms wait after each Tab press to rule out a React-commit race did not change the
-result. This means the pure decision logic is verified correct, but something in how
-`onKeyDown`'s `editor.moveToStartOfNode(next).focus()` interacts with slate-react's real
-DOM selection restoration in this environment is not landing focus/typed input in the
-next cell as the unit tests predict. **This is an honest, unresolved failure** — not
-silently dropped or claimed as a pass. It needs further live-browser investigation
-(most likely stepping through slate-react's `focus()`/selection-restoration path with
-the debugger against the real render tree) that I was not able to complete. All other
-required test categories (pure-logic traversal/decisions, HTML round-trip, real-`Editor`
-schema normalization including both confirmed-bug regression tests, and the real Excel
-fixture) pass.
+1. Wrote a throwaway diagnostic Playwright script (not committed) reproducing the exact
+   failing scenario with `page.on('console')`/`page.on('pageerror')` listeners attached to
+   the composer window (Playwright's `page.evaluate` doesn't work in this app —
+   `window.eval` is blocked for security — so DOM state was inspected via
+   `locator.innerHTML()` instead, and console/page-error listeners caught what
+   `evaluate`-based introspection couldn't).
+2. Confirmed the table HTML is **byte-identical** before and after pressing Tab — the
+   `onKeyDown` handler's Tab branch was doing nothing visible at all, not producing a wrong
+   result.
+3. The console/pageerror listeners caught the real cause: an uncaught exception, thrown
+   synchronously inside the Tab handler, aborting the entire pending Slate change before it
+   ever flushed to React/the DOM:
+   ```
+   Error: Paths can only be created from arrays or lists, but you passed: Block { ... "type": "table_cell" }
+       at Document.resolvePath (.../interfaces/node.js:209:5)
+       at nextCell (table-plugins.tsx:91:25)
+       at decideTabForward (table-plugins.tsx:106:18)
+       at onKeyDown (table-plugins.tsx:145:26)
+   ```
+4. Root cause: `nextCell`/`previousCell` called `document.getNextBlock(cell)`/
+   `document.getPreviousBlock(previous)`, passing the `Block` object directly.
+   `@types/slate` declares these methods as accepting `string | Node`, but the **installed
+   Slate runtime does not accept a bare Node** — verified by grepping every internal call
+   site of `getNextBlock`/`getPreviousBlock` inside `slate.js` itself: every single one
+   passes `.key` (a string), never a Node/Block object; the parameter is literally named
+   `path` in the implementation. This is the same category of `@types/slate` inaccuracy
+   already hit twice earlier in this session (`BlockProperties.type`, Jasmine's
+   `andThrow`) — a real, now well-precedented gap in the installed type package, not a
+   logic bug in the plan or a Slate quirk to work around with a different API.
+5. **Fix**: changed all 6 call sites in `table-plugins.tsx`
+   (`nextCell`/`previousCell`'s loop bodies, and the Backspace/Delete empty-table-removal
+   branches' adjacent-block capture) to pass `.key` instead of the Block object.
+   `editor.moveToStartOfNode`/`moveToEndOfNode` were confirmed correct as-is (their actual
+   implementation parameter is literally named `node`, accepting the Node directly — this
+   is the opposite convention from `getNextBlock`/`getPreviousBlock`, which is presumably
+   exactly why the mistake was easy to make in the first place).
+6. Re-ran the existing Jasmine unit tests (they were written robustly enough to accept
+   either a key string or a Node-shaped fake via a `keyOf()` normalizer already present in
+   the spec's test doubles — no test changes needed) — still 31/31 passing.
+7. Re-ran the e2e test twice in a row to confirm it isn't flaky:
+   ```
+   xvfb-run -a npx playwright test --config playwright/playwright.config.ts tests/compose.spec.ts -g "insert-table toolbar button"
+   ✓ 1 playwright/tests/compose.spec.ts:993:5 › insert-table toolbar button inserts a table and Tab navigates between cells (8.8s)
+   1 passed (36.9s)
+   ```
+   (second run: `(7.2s)`, `1 passed (31.2s)` — both green, no flake.)
 
 ### Acceptance criteria verification
 
@@ -185,11 +204,23 @@ fixture) pass.
   types, with the two corrections above (both required for the plan's own mandated
   tests to pass truthfully, not left as literal-but-broken code).
 - Cross-table-bounded Tab/Shift+Tab traversal: proven via `nextCell`/`previousCell`
-  cross-table tests.
+  cross-table tests, AND now genuinely functional in the real running app (root-caused
+  `.key`-vs-Node bug fixed, see above).
 - Backspace/Delete explicit cursor repositioning in both empty-table-removal branches:
   implemented in `onKeyDown`, captured via `document.getPreviousBlock`/`getNextBlock`
-  before `removeNodeByKey`.
+  before `removeNodeByKey` — using the corrected `.key`-based calls.
 - Toolbar button seeds real text nodes (not empty `nodes: []`): verified by the
   `insertTable` spec.
 - HTML round-trip including `<th>`/`<tbody>` tolerance: verified.
-- Insert-table + Tab-across-rows Playwright e2e: **not passing**, see above.
+- Insert-table + Tab-across-rows Playwright e2e: **passing**, confirmed stable across two
+  consecutive runs.
+
+### Final orchestrator-level full verification
+
+- `tsc -p app/tsconfig.json --noEmit` — clean, re-run after the fix.
+- `eslint` on every touched file (`table-plugins.tsx`, `conversion.tsx`,
+  `uneditable-plugins.tsx`, `composer-table-plugins-spec.ts`,
+  `attachment-items.tsx`, `attachment-image-size-spec.ts`) — clean.
+- Full project-wide Jasmine suite: **1787 passing, 0 failing** (up from the 1746-test
+  baseline confirmed clean immediately before this issue's work began — +41 new tests: 31
+  table specs + 10 image-size-preset specs — zero regressions).
