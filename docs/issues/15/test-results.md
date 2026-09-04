@@ -224,3 +224,38 @@ able to complete within budget. Investigated directly:
 - Full project-wide Jasmine suite: **1787 passing, 0 failing** (up from the 1746-test
   baseline confirmed clean immediately before this issue's work began — +41 new tests: 31
   table specs + 10 image-size-preset specs — zero regressions).
+
+## Independent Code Review Gate (on the full diff, cold, no implementer summary)
+
+Verdict: APPROVE WITH CHANGES. Two findings, both addressed:
+
+1. **Severe, priority 1, confirmed via real fixtures**: the implementor's
+   `uneditable-plugins.tsx` fix (removing `'table'` from `UNEDITABLE_TAGS` unconditionally
+   to let the toolbar-inserted table reach `TablePlugins`' deserialize rule) had a much
+   larger blast radius than intended — it would reparse EVERY `<table>` in EVERY incoming
+   HTML source (quoted replies, forwards, paste, signatures) into the new editable model,
+   not just tables the user explicitly inserts. Real-world layout tables (marketing/
+   newsletter/invoice HTML routinely nests tables-in-`<td>`s-in-tables for cross-client
+   layout — confirmed directly against this repo's own `app/spec/fixtures/emails/
+   email_16.html`, 42 `<table>` occurrences with divs/nested tables inside cells) would
+   trip `TABLE_SCHEMA`'s alien-child hoisting, scrambling content order and silently
+   dropping every table/cell HTML attribute (width, bgcolor, colspan, rowspan, style).
+   **Fixed**: added `isSimpleTableElement()` — a table is only treated as editable if
+   every cell's direct children are inline-level tags and no `<table>` is nested anywhere
+   inside it. `uneditable-plugins.tsx` only falls through to `TablePlugins` for simple
+   tables; the same guard is duplicated in `TablePlugins`' own deserialize rule as defense
+   in depth. Regression-tested against the real `email_16.html` fixture (confirms it still
+   becomes a single uneditable block) plus targeted `isSimpleTableElement` unit cases —
+   4 new tests, all passing.
+2. **Lower priority, non-blocking, adopted anyway**: the existing `fakeDocument` test
+   double's `getNextBlock`/`getPreviousBlock`/`getClosest` mocks were more permissive than
+   the real Slate API they guard (accepted either a string key or a Node-shaped object;
+   the real runtime only accepts a string, as the root-cause investigation above already
+   proved). This meant the unit tests alone would not have caught the `.key`-vs-Node
+   regression — only the e2e test would have. **Fixed**: tightened the fakes to require a
+   string, matching the real API exactly, and updated the 3 test call sites that used the
+   fake's convenience API with a Node object to pass `.key` directly.
+
+Both fixes verified: full table-plugins spec 35/35 passing (up from 31), full project-wide
+Jasmine suite **1791 passing, 0 failing**, `tsc`/`eslint` clean, and the e2e
+insert-table-and-Tab-navigate test re-confirmed still passing after both fixes.
