@@ -36,24 +36,34 @@ function fakeDocument(config: {
   tableForKey: Record<string, string>;
 }): Document {
   const build = (key: string) => ({ key, type: config.types[key], object: 'block' });
-  // `getNextBlock`/`getPreviousBlock`/`getClosest` accept either a raw key string or a
-  // node-shaped object; narrow the object case to a named value before reading `.key`.
-  const keyOf = (n: unknown): string => {
-    if (typeof n === 'string') return n;
-    const nodeWithKey = n as { key: string };
-    return nodeWithKey.key;
+  // Independent-review-gate finding: the real Slate `getNextBlock`/`getPreviousBlock`
+  // throw when given anything other than a string key (verified directly against
+  // `slate.js`, and against a live reproduction of the exact bug this strictness now
+  // guards against -- an earlier revision of `nextCell`/`previousCell` passed a Block
+  // object instead of `.key`, which compiled cleanly against `@types/slate`'s
+  // (incorrect) `string | Node` signature but threw at runtime). A fake that silently
+  // accepted both shapes would never have caught that regression at the unit-test
+  // level; require a string here too, so a future reintroduction of the same mistake
+  // fails these tests immediately instead of only surfacing in the browser/e2e layer.
+  const requireStringKey = (n: unknown): string => {
+    if (typeof n !== 'string') {
+      throw new Error(
+        `fakeDocument's getNextBlock/getPreviousBlock/getClosest require a string key, matching the real Slate API -- got: ${JSON.stringify(n)}`
+      );
+    }
+    return n;
   };
   const doc = {
     getNextBlock: (n: unknown) => {
-      const nextKey = (config.next || {})[keyOf(n)];
+      const nextKey = (config.next || {})[requireStringKey(n)];
       return nextKey ? build(nextKey) : null;
     },
     getPreviousBlock: (n: unknown) => {
-      const previousKey = (config.previous || {})[keyOf(n)];
+      const previousKey = (config.previous || {})[requireStringKey(n)];
       return previousKey ? build(previousKey) : null;
     },
     getClosest: (key: unknown) => {
-      const tableKey = config.tableForKey[keyOf(key)];
+      const tableKey = config.tableForKey[requireStringKey(key)];
       return tableKey ? { key: tableKey, type: TABLE_TYPE, object: 'block' } : null;
     },
   };
@@ -98,7 +108,7 @@ describe('nextCell', () => {
       tableForKey: { c1: 't1', c2: 't1', c3: 't2' },
     });
     // The raw, unbounded traversal WOULD find c3 -- proving the underlying bug is real.
-    expect(doc.getNextBlock(fakeCell('c2'))).not.toBeNull();
+    expect(doc.getNextBlock('c2')).not.toBeNull();
     // The bounded implementation must reject it: c3 belongs to a different table.
     expect(nextCell(doc, fakeCell('c2'))).toBeNull();
   });
@@ -147,7 +157,7 @@ describe('decideTabForward', () => {
     });
     expect(decideTabForward(doc, fakeCell('c1'))).toEqual({
       action: 'moveToCell',
-      cell: doc.getNextBlock(fakeCell('c1')),
+      cell: doc.getNextBlock('c1'),
     });
   });
 
@@ -166,7 +176,7 @@ describe('decideTabBackward', () => {
     });
     expect(decideTabBackward(doc, fakeCell('c2'))).toEqual({
       action: 'moveToCell',
-      cell: doc.getPreviousBlock(fakeCell('c2')),
+      cell: doc.getPreviousBlock('c2'),
     });
   });
 
