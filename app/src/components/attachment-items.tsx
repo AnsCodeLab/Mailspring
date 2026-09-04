@@ -16,11 +16,36 @@ const defaultProps = {
 
 const SPACE = ' ';
 
+export type ImageSizePreset = 'original' | 'large' | 'medium' | 'small';
+
+const IMAGE_SIZE_PRESET_MAX_WIDTH: { [preset in Exclude<ImageSizePreset, 'original'>]: number } = {
+  large: 600,
+  medium: 320,
+  small: 160,
+};
+
+// Pure size-computation logic, kept free of DOM/React so it's directly unit-testable.
+// `naturalWidth`/`naturalHeight` in, target `{width, height}` out (or `undefined` for
+// 'original', which clears `imgProps` and falls back to the image's natural size).
+export function computeImagePresetSize(
+  preset: ImageSizePreset,
+  naturalWidth: number,
+  naturalHeight: number
+): { width: number; height: number } | undefined {
+  if (preset === 'original') {
+    return undefined;
+  }
+  const width = Math.min(naturalWidth, IMAGE_SIZE_PRESET_MAX_WIDTH[preset]);
+  const height = naturalWidth > 0 ? (width * naturalHeight) / naturalWidth : naturalHeight;
+  return { width, height };
+}
+
 function buildContextMenu(fns: {
   onOpenAttachment?: () => void;
   onPreviewAttachment?: () => void;
   onRemoveAttachment?: () => void;
   onSaveAttachment?: () => void;
+  sizePresets?: { label: string; active: boolean; onClick: () => void }[];
 }) {
   const template: Electron.MenuItemConstructorOptions[] = [];
   if (fns.onOpenAttachment) {
@@ -45,6 +70,17 @@ function buildContextMenu(fns: {
     template.push({
       click: () => fns.onSaveAttachment(),
       label: localized('Save Into...'),
+    });
+  }
+  if (fns.sizePresets) {
+    template.push({
+      label: localized('Size'),
+      submenu: fns.sizePresets.map((preset) => ({
+        click: () => preset.onClick(),
+        checked: preset.active,
+        label: preset.label,
+        type: 'radio',
+      })),
     });
   }
   require('@electron/remote').Menu.buildFromTemplate(template).popup({});
@@ -344,7 +380,7 @@ export class ImageAttachmentItem extends Component<ImageAttachmentItemProps> {
           <div
             className="file-preview"
             onDoubleClick={onOpenAttachment}
-            onContextMenu={() => buildContextMenu({ onOpenAttachment, onSaveAttachment })}
+            onContextMenu={this._onImageContextMenu}
           >
             <div className="file-name-container">
               <div className="file-name" title={displayName}>
@@ -361,6 +397,33 @@ export class ImageAttachmentItem extends Component<ImageAttachmentItemProps> {
     );
   }
 
+  private _onImageContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    const { onOpenAttachment, onSaveAttachment, onResized, imgProps } = this.props;
+    const img = event.currentTarget.querySelector('img');
+    const naturalWidth = img ? img.naturalWidth || img.width : 0;
+    const naturalHeight = img ? img.naturalHeight || img.height : 0;
+
+    const presetLabels: { preset: ImageSizePreset; label: string }[] = [
+      { preset: 'original', label: localized('Original') },
+      { preset: 'large', label: localized('Large') },
+      { preset: 'medium', label: localized('Medium') },
+      { preset: 'small', label: localized('Small') },
+    ];
+
+    const sizePresets =
+      naturalWidth > 0 && naturalHeight > 0
+        ? presetLabels.map(({ preset, label }) => {
+            const target = computeImagePresetSize(preset, naturalWidth, naturalHeight);
+            return {
+              label,
+              active: target ? imgProps?.width === target.width : !imgProps?.width,
+              onClick: () => onResized(target?.width, target?.height),
+            };
+          })
+        : undefined;
+
+    buildContextMenu({ onOpenAttachment, onSaveAttachment, sizePresets });
+  };
   private _pData = { x: 0, y: 0, eH: 0 };
   private _shiftData = {
     held: false,

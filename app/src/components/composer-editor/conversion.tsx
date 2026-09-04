@@ -25,6 +25,7 @@ import GrammarCheckPlugins from './grammar-check-plugins';
 import ClipboardPlugins from './clipboard-plugins';
 import HistoryPlugins from './history-plugins';
 import HrPlugins, { HR_TYPE } from './hr-plugins';
+import TablePlugins from './table-plugins';
 import { Rule, ComposerEditorPlugin } from './types';
 
 import './patch-chrome-ime';
@@ -68,6 +69,7 @@ export const plugins: ComposerEditorPlugin[] = [
   ...GrammarCheckPlugins,
   ...LinkPlugins,
   ...BaseBlockPlugins,
+  ...TablePlugins,
   ...HrPlugins,
   ...MarkdownPlugins,
 ];
