@@ -25,7 +25,9 @@ let openExternalSpy: jasmine.Spy;
 let openPathSpy: jasmine.Spy;
 let downloadFileSpy: jasmine.Spy;
 let appQuitSpy: jasmine.Spy;
+let appExitSpy: jasmine.Spy;
 let appOnceSpy: jasmine.Spy;
+let preventDefaultSpy: jasmine.Spy;
 let AutoupdateImplWin32: new (currentVersion: string) => AutoupdateImpl;
 
 function jsonResponse(status: number, body: unknown) {
@@ -44,12 +46,23 @@ function loadModule() {
   openPathSpy = jasmine.createSpy('openPath').andReturn(Promise.resolve(''));
   downloadFileSpy = jasmine.createSpy('downloadFile').andReturn(Promise.resolve());
   appQuitSpy = jasmine.createSpy('quit');
-  appOnceSpy = jasmine.createSpy('once').andCallFake((_event: string, cb: () => void) => cb());
+  appExitSpy = jasmine.createSpy('exit');
+  preventDefaultSpy = jasmine.createSpy('preventDefault');
+  // The real `will-quit` handler receives an Electron `Event` and must call
+  // `event.preventDefault()` to hold quitting open until `shell.openPath()`
+  // settles (see autoupdate-impl-win32.ts's quitAndInstall comment) - the
+  // mock invokes the callback synchronously with that same shape so the
+  // implementation's real call to `event.preventDefault()` doesn't throw.
+  appOnceSpy = jasmine
+    .createSpy('once')
+    .andCallFake((_event: string, cb: (event: { preventDefault: () => void }) => void) =>
+      cb({ preventDefault: preventDefaultSpy })
+    );
 
   const mod = proxyquire('../src/browser/autoupdate-impl-win32', {
     electron: {
       shell: { openExternal: openExternalSpy, openPath: openPathSpy },
-      app: { quit: appQuitSpy, once: appOnceSpy },
+      app: { quit: appQuitSpy, once: appOnceSpy, exit: appExitSpy },
       '@noCallThru': false,
     },
     './download-file': { downloadFile: downloadFileSpy, '@noCallThru': false },
@@ -145,6 +158,11 @@ describe('AutoupdateImplWin32', () => {
         expect(appOnceSpy).toHaveBeenCalled();
         const [eventName] = appOnceSpy.mostRecentCall.args;
         expect(eventName).toEqual('will-quit');
+        // The required fix this test guards: the handler must call
+        // event.preventDefault() to hold quitting open rather than relying
+        // on shell.openPath() merely being *called* before Electron's
+        // default (synchronous) quit-now teardown proceeds.
+        expect(preventDefaultSpy).toHaveBeenCalled();
         expect(appQuitSpy).toHaveBeenCalled();
         // The mocked `once` implementation invokes its callback
         // synchronously, so `openPath` only having been called at all here

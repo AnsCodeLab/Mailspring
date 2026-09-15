@@ -27,12 +27,20 @@ export default class AutoupdateImplWin32 extends AutoupdateImplBase {
    * the newly installed exe with no confirmation dialog when it finishes -
    * doing that while this process is still alive and holding
    * app.requestSingleInstanceLock() reproduces a bug this codebase has
-   * already hit and fixed once (see windows-updater.js's restartMailspring,
-   * which calls app.quit() before spawning the next instance for exactly
-   * this reason): the newly auto-launched process would hit the lock and
-   * immediately exit, silently leaving the old version running. Mirror that
-   * fix - only launch the installer from a `will-quit` handler, once
-   * app.quit() has begun releasing the lock. */
+   * already hit and fixed once (see windows-updater.js's restartMailspring).
+   *
+   * restartMailspring's fix isn't just "do it in a will-quit handler" -
+   * it specifically uses a synchronous, detached, stdio-ignored spawn
+   * (spawnDetached), because that file's own comment documents that
+   * async/piped operations started during `will-quit` can be cut off
+   * mid-flight when the event loop tears down; Electron does not wait for
+   * a `will-quit` listener's returned promise before proceeding to exit.
+   * `shell.openPath()` is async and Promise-returning, so the same risk
+   * applies here unless quitting is explicitly held open: call
+   * `event.preventDefault()` inside the handler to cancel the default
+   * quit-now behavior, launch the installer, and only force-terminate via
+   * `app.exit()` once that promise has actually settled - never relying on
+   * `shell.openPath()` merely being *called* before teardown completes. */
   async quitAndInstall() {
     const downloadUrl = safeHttpUrl(this.lastSelectedAsset?.browser_download_url);
     if (!this.lastSelectedAsset || !downloadUrl) {
@@ -49,11 +57,12 @@ export default class AutoupdateImplWin32 extends AutoupdateImplBase {
       return;
     }
 
-    app.once('will-quit', () => {
-      // The app is already tearing down at this point - there's no
-      // meaningful way to surface a rejection back to the user, but avoid
-      // leaving a dangling unhandled promise rejection during shutdown.
-      shell.openPath(destPath).catch(() => {});
+    app.once('will-quit', (event) => {
+      event.preventDefault();
+      shell
+        .openPath(destPath)
+        .catch(() => {})
+        .finally(() => app.exit());
     });
     app.quit();
   }
