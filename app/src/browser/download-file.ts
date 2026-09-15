@@ -32,20 +32,34 @@ export async function downloadFile(url: string, destPath: string): Promise<void>
   }
 
   const fileStream = fs.createWriteStream(destPath);
+  // A write-stream-level 'error' (disk full, permission denied, tmpdir
+  // race) can fire asynchronously outside of an individual `write()`
+  // callback. An EventEmitter 'error' with no listener throws as an
+  // uncaught exception by design — attach one here and race it against
+  // the read/write loop so a stream failure rejects this function's
+  // promise (and is caught by the fallback-to-shell.openExternal path in
+  // every caller) instead of crashing the main process.
+  const streamError = new Promise<never>((_resolve, reject) => {
+    fileStream.on('error', reject);
+  });
   const reader = response.body.getReader();
 
-  try {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        await writeChunk(fileStream, value);
+  const readAndWrite = (async () => {
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          await writeChunk(fileStream, value);
+        }
       }
+    } finally {
+      fileStream.end();
     }
-  } finally {
-    fileStream.end();
-  }
+  })();
+
+  await Promise.race([readAndWrite, streamError]);
 }
 
 function writeChunk(fileStream: fs.WriteStream, chunk: Uint8Array): Promise<void> {
