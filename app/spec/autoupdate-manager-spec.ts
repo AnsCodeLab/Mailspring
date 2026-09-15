@@ -68,4 +68,37 @@ describe('AutoUpdateManager', function () {
       m.updateFeedURL();
       expect(m.feedURL.includes(this.mailspringIdentityId)).toEqual(true);
     }));
+
+  describe('setupAutoUpdater', () =>
+    it("sets the state to unsupported and never reaches the update-check/interval code, since this fork points at upstream Foundry376/Mailspring's own update feed (#18)", function () {
+      const m = new AutoUpdateManager('3.222.1', this.config, this.specMode);
+      const realSetupAutoUpdater = m.setupAutoUpdater.bind(m);
+      spyOn(m, 'setupAutoUpdater'); // block the constructor's deferred setTimeout(0) auto-invoke
+      spyOn(m, 'check');
+
+      realSetupAutoUpdater();
+
+      expect(m.getState()).toEqual('unsupported');
+      expect(m.check).not.toHaveBeenCalled();
+    }));
+
+  describe('check', () =>
+    it('does not throw once the platform updater has been disabled', function () {
+      const m = new AutoUpdateManager('3.222.1', this.config, this.specMode);
+      const realSetupAutoUpdater = m.setupAutoUpdater.bind(m);
+      spyOn(m, 'setupAutoUpdater');
+      realSetupAutoUpdater();
+
+      expect(() => m.check({ hidePopups: true })).not.toThrow();
+    }));
+
+  describe('install', () =>
+    it('does not throw once the platform updater has been disabled', function () {
+      const m = new AutoUpdateManager('3.222.1', this.config, this.specMode);
+      const realSetupAutoUpdater = m.setupAutoUpdater.bind(m);
+      spyOn(m, 'setupAutoUpdater');
+      realSetupAutoUpdater();
+
+      expect(() => m.install()).not.toThrow();
+    }));
 });

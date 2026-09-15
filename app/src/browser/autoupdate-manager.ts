@@ -6,7 +6,7 @@ import os from 'os';
 import fs from 'fs';
 import { localized } from '../intl';
 
-let autoUpdater = null;
+const autoUpdater = null;
 
 const IdleState = 'idle';
 const CheckingState = 'checking';
@@ -71,65 +71,18 @@ export default class AutoUpdateManager extends EventEmitter {
   };
 
   setupAutoUpdater() {
-    if (process.platform === 'win32') {
-      const Impl = require('./autoupdate-impl-win32').default;
-      autoUpdater = new Impl();
-    } else if (process.platform === 'linux') {
-      const Impl = require('./autoupdate-impl-base').default;
-      autoUpdater = new Impl();
-    } else {
-      autoUpdater = require('electron').autoUpdater;
-    }
-
-    autoUpdater.on('error', (error) => {
-      if (this.specMode) return;
-      console.error(`Error Downloading Update: ${error.message}`);
-      this.setState(ErrorState);
-    });
-
-    autoUpdater.setFeedURL(this.feedURL);
-
-    autoUpdater.on('checking-for-update', () => {
-      this.setState(CheckingState);
-    });
-
-    autoUpdater.on('update-not-available', () => {
-      this.setState(NoUpdateAvailableState);
-    });
-
-    autoUpdater.on('update-available', () => {
-      this.setState(DownloadingState);
-    });
-
-    autoUpdater.on(
-      'update-downloaded',
-      (_event: Electron.Event, releaseNotes: string, releaseVersion: string) => {
-        this.releaseNotes = releaseNotes;
-        this.releaseVersion = releaseVersion;
-        this.setState(UpdateAvailableState);
-        this.emitUpdateAvailableEvent();
-      }
-    );
-
-    if (autoUpdater.supportsUpdates && !autoUpdater.supportsUpdates()) {
-      this.setState(UnsupportedState);
-      return;
-    }
-
-    //check immediately at startup
-    this.check({ hidePopups: true });
-
-    //check every 30 minutes
-    setInterval(
-      () => {
-        if ([UpdateAvailableState, UnsupportedState].includes(this.state)) {
-          console.log('Skipping update check... update ready to install, or updater unavailable.');
-          return;
-        }
-        this.check({ hidePopups: true });
-      },
-      1000 * 60 * 30
-    );
+    // Disabled per #18: this fork's build still points updateFeedURL() at
+    // upstream Foundry376/Mailspring's own production update server
+    // (updates.getmailspring.com), which has no knowledge of this fork's
+    // releases. Now that upstream has fixed the 500 that previously made
+    // every feed check fail, leaving this enabled risks the feed check
+    // succeeding and offering users a real upstream Mailspring build that
+    // silently replaces this fork's AI-enabled build with no warning. Bail
+    // out before any platform-specific updater is even constructed so
+    // `autoUpdater` stays null and no request is ever made. #14 will
+    // replace this whole mechanism with a feed pointed at this fork's own
+    // GitHub Releases; remove this guard as part of that change.
+    this.setState(UnsupportedState);
   }
 
   emitUpdateAvailableEvent() {
@@ -164,6 +117,10 @@ export default class AutoUpdateManager extends EventEmitter {
 
   check({ hidePopups }: { hidePopups?: boolean } = {}) {
     this.updateFeedURL();
+    if (!autoUpdater) {
+      console.error('AutoUpdateManager.check called with no autoUpdater configured.');
+      return;
+    }
     if (!hidePopups) {
       autoUpdater.once('update-not-available', this.onUpdateNotAvailable);
       autoUpdater.once('error', this.onUpdateError);
@@ -172,6 +129,10 @@ export default class AutoUpdateManager extends EventEmitter {
   }
 
   install() {
+    if (!autoUpdater) {
+      console.error('AutoUpdateManager.install called with no autoUpdater configured.');
+      return;
+    }
     autoUpdater.quitAndInstall();
   }
 
