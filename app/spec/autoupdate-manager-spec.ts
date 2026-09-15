@@ -70,7 +70,7 @@ describe('AutoUpdateManager', function () {
     }));
 
   describe('setupAutoUpdater', () =>
-    it('sets the state to unsupported and never reaches the update-check/interval code, since this fork points at upstream Foundry376/Mailspring\'s own update feed (#18)', function () {
+    it("sets the state to unsupported and never reaches the update-check/interval code, since this fork points at upstream Foundry376/Mailspring's own update feed (#18)", function () {
       const m = new AutoUpdateManager('3.222.1', this.config, this.specMode);
       const realSetupAutoUpdater = m.setupAutoUpdater.bind(m);
       spyOn(m, 'setupAutoUpdater'); // block the constructor's deferred setTimeout(0) auto-invoke

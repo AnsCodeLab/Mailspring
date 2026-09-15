@@ -83,7 +83,6 @@ export default class AutoUpdateManager extends EventEmitter {
     // replace this whole mechanism with a feed pointed at this fork's own
     // GitHub Releases; remove this guard as part of that change.
     this.setState(UnsupportedState);
-    return;
   }
 
   emitUpdateAvailableEvent() {
