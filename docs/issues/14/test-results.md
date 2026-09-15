@@ -144,6 +144,72 @@ the shared `Notification` component.
   `npm run lint`'s glob, per the #18 precedent): clean, exit 0.
 - `npx tsc --noEmit -p app`: clean, exit 0.
 
-## Independent code review
+## Independent code review (cold, no implementor summary shown)
 
-(appended below after the cold review gate)
+**Verdict: APPROVE WITH CHANGES.**
+
+- Darwin gate confirmed airtight (grep-verified: the only two platform-impl
+  instantiation sites in `setupAutoUpdater()` are gated behind the darwin check).
+  Linux `pkexec` fallback chain confirmed to never run a privileged command without a
+  visible polkit prompt. The GitHub-Releases feed is hardcoded to
+  `AnsCodeLab/Mailspring` consistently across every file, so lifting #18's guard for
+  win32/linux does not reintroduce the upstream-feed risk #18 existed to prevent.
+- **Required fix 1 (applied):** `AutoupdateImplWin32.quitAndInstall()` copied the
+  *shape* of `windows-updater.js`'s `restartMailspring()` (a `will-quit` handler +
+  `app.quit()`) but not its *substance* — `restartMailspring()` uses a synchronous,
+  detached, stdio-ignored spawn specifically because that file's own comment documents
+  that async/piped operations started during `will-quit` can be cut off mid-teardown;
+  Electron does not wait for a `will-quit` listener's returned promise before
+  proceeding to quit. Calling the async `shell.openPath()` inside `will-quit` with no
+  `event.preventDefault()` risked the installer silently never launching. Fixed:
+  `event.preventDefault()` now holds quitting open, and `app.exit()` is only called
+  after `shell.openPath()`'s promise has actually settled — never relying on it merely
+  having been *called* before teardown completes. Commit `59ae22512`; spec updated to
+  mock the `event` argument and assert `preventDefault()` was called (the timing of
+  `app.exit()` itself is not asserted in the spec — verified analytically instead,
+  since asserting it directly would depend on microtask-ordering assumptions between
+  the detached `openPath().finally()` chain and `quitAndInstall()`'s own promise
+  resolution, which would make the test itself fragile/order-dependent rather than a
+  reliable regression guard).
+- **Required fix 2 (applied):** `download-file.ts`'s `downloadFile()` never attached
+  `fileStream.on('error', ...)` to the write stream. A stream-level failure (disk full,
+  permission denied, tmpdir race) would have surfaced as an unheard `'error'` event —
+  which Node throws as an uncaught exception by default — bypassing the `try`/`catch`
+  in both `autoupdate-impl-base.ts` and `autoupdate-impl-win32.ts` that exists
+  specifically to catch download failures and fall back to
+  `shell.openExternal(RELEASES_PAGE_URL)`. Fixed: `fileStream.on('error', reject)` is
+  now raced against the read/write loop via `Promise.race`. Commit `413d9186c`.
+- **Recommended fix (applied):** `autoupdate-manager-spec.ts`'s `check` describe block
+  used `spyOn(m, 'check').andCallThrough()`, which — now that #18's guard is lifted for
+  non-darwin platforms — caused a genuine, unmocked outbound HTTPS call to
+  `api.github.com` on every test run (both from `setupAutoUpdater()`'s own startup
+  check and the test's explicit `check()` call), landing a live-network dependency
+  permanently in the Jasmine suite (flaky/slow CI, consumes GitHub's shared
+  unauthenticated rate limit) — the plan had explicitly scoped live-network
+  verification as a separate, temporary interactive script, not a permanent spec.
+  Fixed: `global.fetch` is now mocked in this test, matching the pattern already used
+  correctly in `autoupdate-impl-base-spec.ts`. Commit `2101d2ee8`.
+- Non-blocking notes (no action taken, all reviewed and accepted as-is):
+  `RELEASES_PAGE_URL` is independently redeclared with an identical literal in both the
+  main-process `autoupdate-impl-base.ts` and the renderer-process
+  `update-notification.tsx` — two sources of truth that could drift, but unavoidable
+  given Electron process separation. `UpdateNotification._onUpdate`'s
+  `Promise.withResolvers<void>().promise` intentionally never settles, pinning the
+  "Installing…" state for the component's mounted lifetime — deliberate, low severity
+  for a once-per-session click. `AutoupdateImplWin32.selectAsset` matches the first
+  asset ending in `.exe` — fine given `release.yaml` publishes exactly one today.
+  `notification.tsx`'s `children` prop addition confirmed justified, not scope creep —
+  the minimal extension required by the issue's own "inline preview" acceptance
+  criterion, placed generically rather than leaking update-specific logic into the
+  shared component.
+
+## Post-review re-verification
+
+- `npm run lint` (repo-wide): clean, no diff.
+- `npx eslint -c .eslintrc` on all touched/new spec files: clean, exit 0.
+- `npx tsc --noEmit -p app`: clean, exit 0.
+- Re-ran the full spec suite (same 7-file pattern as above) after both required fixes:
+  **58 passing, 0 failing.** No unmocked "Manual update check ... returned 200" line
+  from a live call inside the `check` test's run this time (fetch now mocked there);
+  the app-boot-time real call (TC1/TC12, exercising the real production path) is still
+  present and still succeeds, matching the earlier run.
