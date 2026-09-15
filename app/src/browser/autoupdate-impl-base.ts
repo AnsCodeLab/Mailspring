@@ -1,11 +1,32 @@
 import { EventEmitter } from 'events';
-import https from 'https';
+import os from 'os';
+import path from 'path';
 import { shell } from 'electron';
-import url from 'url';
+import { downloadFile } from './download-file';
+import { compareVersions } from './version-compare';
+import {
+  detectPackageFormat,
+  installPackage,
+  selectAssetForFormat,
+} from './linux-package-installer';
 
-const FALLBACK_DOWNLOAD_URL = 'https://getmailspring.com/download';
+// GitHub 403s API requests with no `User-Agent` header at all.
+const USER_AGENT = 'Mailspring-AnsCodeLab-Fork';
 
-function safeHttpUrl(value: unknown): string | null {
+export const RELEASES_PAGE_URL = 'https://github.com/AnsCodeLab/Mailspring/releases/latest';
+
+export interface GitHubReleaseAsset {
+  name: string;
+  browser_download_url: string;
+}
+
+export interface GitHubRelease {
+  tag_name: string;
+  body: string;
+  assets: GitHubReleaseAsset[];
+}
+
+export function safeHttpUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   try {
     const parsed = new URL(value);
@@ -18,7 +39,15 @@ function safeHttpUrl(value: unknown): string | null {
 
 export default class AutoupdateImplBase extends EventEmitter {
   feedURL: string;
-  lastRetrievedUpdateURL?: string;
+  currentVersion: string;
+  lastReleaseNotes = '';
+  lastReleaseVersion: string | null = null;
+  protected lastSelectedAsset: GitHubReleaseAsset | null = null;
+
+  constructor(currentVersion: string) {
+    super();
+    this.currentVersion = currentVersion;
+  }
 
   supportsUpdates() {
     // If we're packaged into a Snapcraft distribution, we don't need
@@ -30,12 +59,11 @@ export default class AutoupdateImplBase extends EventEmitter {
   }
 
   /* Public: Set the feed URL where we retrieve update information. */
-  setFeedURL(feedURL) {
+  setFeedURL(feedURL: string) {
     this.feedURL = feedURL;
-    this.lastRetrievedUpdateURL = null;
   }
 
-  emitError = (error) => {
+  protected emitError = (error: Error) => {
     if (this.listenerCount('error') > 0) {
       this.emit('error', error);
     } else {
@@ -43,54 +71,47 @@ export default class AutoupdateImplBase extends EventEmitter {
     }
   };
 
-  manuallyQueryUpdateServer(successCallback) {
-    const feedHost = url.parse(this.feedURL).hostname;
-    const feedPath = this.feedURL.split(feedHost).pop();
+  /**
+   * Picks the release asset to offer for this platform. Base/Linux
+   * implementation detects the installed package format (`deb`/`rpm`) and
+   * picks the matching asset; returns `null` (no one-click install
+   * available — callers fall back to `shell.openExternal` to the releases
+   * page) when no package format could be detected, e.g. on an
+   * AppImage-only/immutable distro. Overridden by `AutoupdateImplWin32` to
+   * pick the `.exe` asset instead.
+   */
+  protected selectAsset(assets: GitHubReleaseAsset[]): GitHubReleaseAsset | null {
+    const format = detectPackageFormat();
+    if (!format) return null;
+    return selectAssetForFormat(assets, format);
+  }
 
-    // Hit the feed URL ourselves and see if an update is available.
-    // On linux we can't autoupdate, but we can still show the "update available" bar.
-    https
-      .get({ host: feedHost, path: feedPath }, (res) => {
-        console.log(`Manual update check (${feedHost}${feedPath}) returned ${res.statusCode}`);
+  /* Hits the GitHub Releases API directly and reports the parsed release
+   * (or `false` for "no update available") to `successCallback`. */
+  manuallyQueryUpdateServer(successCallback: (release: GitHubRelease | false) => void) {
+    fetch(this.feedURL, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/vnd.github+json' },
+    })
+      .then(async (res) => {
+        console.log(`Manual update check (${this.feedURL}) returned ${res.status}`);
 
-        if (res.statusCode === 204) {
+        if (res.status === 404) {
+          // A fresh fork/repo state where no release has ever been
+          // published yet (or the `latest` tag was removed) - this is a
+          // normal "no update available" case, not an error.
           successCallback(false);
           return;
         }
 
-        if (res.statusCode !== 200) {
-          this.emitError(new Error(`Autoupdater server returned status ${res.statusCode}`));
-          res.resume(); // drain the response so the socket can be freed
+        if (!res.ok) {
+          this.emitError(new Error(`Autoupdater server returned status ${res.status}`));
           return;
         }
 
-        let data = '';
-        res.on('error', this.emitError);
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            if (!json.url) {
-              this.emitError(new Error(`Autoupdater response did not include URL: ${data}`));
-              return;
-            }
-            const safeUrl = safeHttpUrl(json.url);
-            if (!safeUrl) {
-              this.emitError(
-                new Error(`Autoupdater response URL has disallowed scheme: ${json.url}`)
-              );
-              return;
-            }
-            json.url = safeUrl;
-            successCallback(json);
-          } catch (err) {
-            this.emitError(err);
-          }
-        });
+        const json = (await res.json()) as GitHubRelease;
+        successCallback(json);
       })
-      .on('error', this.emitError);
+      .catch(this.emitError);
   }
 
   /* Public: Check for updates and emit events if an update is available. */
@@ -101,18 +122,56 @@ export default class AutoupdateImplBase extends EventEmitter {
 
     this.emit('checking-for-update');
 
-    this.manuallyQueryUpdateServer((json) => {
-      if (!json) {
+    this.manuallyQueryUpdateServer((release) => {
+      if (!release) {
         this.emit('update-not-available');
         return;
       }
-      this.lastRetrievedUpdateURL = json.url;
-      this.emit('update-downloaded', null, 'manual-download', json.version);
+
+      const latestVersion = (release.tag_name || '').replace(/^v/, '');
+      if (!latestVersion || compareVersions(latestVersion, this.currentVersion) <= 0) {
+        this.emit('update-not-available');
+        return;
+      }
+
+      this.lastReleaseNotes = release.body || '';
+      this.lastReleaseVersion = latestVersion;
+      this.lastSelectedAsset = this.selectAsset(release.assets || []);
+
+      this.emit('update-downloaded', null, this.lastReleaseNotes, latestVersion);
     });
   }
 
-  /* Public: Install the update. */
-  quitAndInstall() {
-    shell.openExternal(safeHttpUrl(this.lastRetrievedUpdateURL) ?? FALLBACK_DOWNLOAD_URL);
+  /* Public: Download the selected release asset and hand off to the
+   * platform-appropriate installer. Falls back to opening the releases page
+   * in a browser when no asset could be selected (unsupported package
+   * format) or the download itself fails. */
+  async quitAndInstall() {
+    const format = detectPackageFormat();
+    const downloadUrl = safeHttpUrl(this.lastSelectedAsset?.browser_download_url);
+
+    if (!this.lastSelectedAsset || !format || !downloadUrl) {
+      shell.openExternal(RELEASES_PAGE_URL);
+      return;
+    }
+
+    const destPath = path.join(os.tmpdir(), this.lastSelectedAsset.name);
+    try {
+      await downloadFile(downloadUrl, destPath);
+    } catch (err) {
+      this.emitError(err as Error);
+      shell.openExternal(RELEASES_PAGE_URL);
+      return;
+    }
+
+    try {
+      await installPackage(destPath, format);
+    } catch (err) {
+      // `pkexec` always shows a visible auth prompt regardless of outcome
+      // (see linux-package-installer.ts), so a rejection here means the
+      // user saw and dismissed/failed that prompt - surface it as an
+      // 'error' event rather than an unhandled promise rejection.
+      this.emitError(err as Error);
+    }
   }
 }
