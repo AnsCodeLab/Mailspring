@@ -2,11 +2,11 @@
 import { dialog, nativeImage } from 'electron';
 import { EventEmitter } from 'events';
 import path from 'path';
-import os from 'os';
 import fs from 'fs';
 import { localized } from '../intl';
+import type Config from '../config';
 
-const autoUpdater = null;
+let autoUpdater = null;
 
 const IdleState = 'idle';
 const CheckingState = 'checking';
@@ -15,25 +15,32 @@ const UpdateAvailableState = 'update-available';
 const NoUpdateAvailableState = 'no-update-available';
 const UnsupportedState = 'unsupported';
 const ErrorState = 'error';
-const preferredChannel = 'stable';
+
+// This fork's own GitHub Releases, not upstream Foundry376/Mailspring's
+// production update server. A public, unauthenticated, IP-rate-limited (60
+// req/hr) REST endpoint - plenty for a 30-minute poll interval. Always
+// returns 200 for the latest published release (or 404 if none has ever
+// been published); "is there a newer version" is determined client-side by
+// comparing `tag_name` against the running app's version, not by a
+// server-side 204/200 status contract like the old feed used.
+const GITHUB_RELEASES_FEED_URL =
+  'https://api.github.com/repos/AnsCodeLab/Mailspring/releases/latest';
 
 export default class AutoUpdateManager extends EventEmitter {
   state = IdleState;
   version: string;
-  config: import('../config').default;
+  config: Config;
   specMode: boolean;
-  preferredChannel: string;
   feedURL: string;
   releaseNotes: string;
   releaseVersion: string;
 
-  constructor(version: string, config: import('../config').default, specMode: boolean) {
+  constructor(version: string, config: Config, specMode: boolean) {
     super();
 
     this.version = version;
     this.config = config;
     this.specMode = specMode;
-    this.preferredChannel = preferredChannel;
 
     this.updateFeedURL();
     this.config.onDidChange('identity.id', this.updateFeedURL);
@@ -42,47 +49,90 @@ export default class AutoUpdateManager extends EventEmitter {
   }
 
   updateFeedURL = () => {
-    const params = {
-      platform: process.platform,
-      arch: process.arch,
-      version: this.version,
-      id: this.config.get('identity.id') || 'anonymous',
-      channel: this.preferredChannel,
-    };
-
-    // If we're on the x64 Mac build, but the machine has an Apple-branded
-    // processor, switch the user to the arm64 build.
-    if (params.platform === 'darwin' && process.arch === 'x64') {
-      const cpus = os.cpus();
-      if (cpus.length && cpus[0].model.startsWith('Apple ')) {
-        params.arch = 'arm64';
-      }
-    }
-
-    let host = `updates.getmailspring.com`;
-    if (this.config.get('env') === 'staging') {
-      host = `updates-staging.getmailspring.com`;
-    }
-
-    this.feedURL = `https://${host}/check/${params.platform}/${params.arch}/${params.version}/${params.id}/${params.channel}`;
+    // The GitHub Releases API takes no platform/arch/version/id/channel
+    // query params - it's a single static endpoint that always returns the
+    // latest published release. Kept as an arrow field re-invoked from
+    // `config.onDidChange('identity.id', ...)` (rather than also ripping
+    // out that listener wiring) even though the resulting URL no longer
+    // varies with `identity.id` - simpler than touching that wiring for a
+    // single-issue fix.
+    this.feedURL = GITHUB_RELEASES_FEED_URL;
     if (autoUpdater) {
       autoUpdater.setFeedURL(this.feedURL);
     }
   };
 
   setupAutoUpdater() {
-    // Disabled per #18: this fork's build still points updateFeedURL() at
-    // upstream Foundry376/Mailspring's own production update server
-    // (updates.getmailspring.com), which has no knowledge of this fork's
-    // releases. Now that upstream has fixed the 500 that previously made
-    // every feed check fail, leaving this enabled risks the feed check
-    // succeeding and offering users a real upstream Mailspring build that
-    // silently replaces this fork's AI-enabled build with no warning. Bail
-    // out before any platform-specific updater is even constructed so
-    // `autoUpdater` stays null and no request is ever made. #14 will
-    // replace this whole mechanism with a feed pointed at this fork's own
-    // GitHub Releases; remove this guard as part of that change.
-    this.setState(UnsupportedState);
+    // No macOS release channel exists for this fork (no `build-macos` job
+    // in release.yaml, per this issue's own Non-goals) and the pre-#18
+    // darwin branch below wires up Electron's built-in Squirrel.Mac
+    // `autoUpdater`, which expects the old feed's `204`/`200 + {url, name,
+    // notes, pub_date}` response shape - not the GitHub Releases JSON
+    // `updateFeedURL()` now points at. Bail out before ever reaching that
+    // branch so darwin stays on #18's protection while win32/linux get the
+    // real fix.
+    if (process.platform === 'darwin') {
+      this.setState(UnsupportedState);
+      return;
+    }
+
+    if (process.platform === 'win32') {
+      const Impl = require('./autoupdate-impl-win32').default;
+      autoUpdater = new Impl(this.version);
+    } else {
+      const Impl = require('./autoupdate-impl-base').default;
+      autoUpdater = new Impl(this.version);
+    }
+
+    autoUpdater.on('error', (error) => {
+      if (this.specMode) return;
+      console.error(`Error Downloading Update: ${error.message}`);
+      this.setState(ErrorState);
+    });
+
+    autoUpdater.setFeedURL(this.feedURL);
+
+    autoUpdater.on('checking-for-update', () => {
+      this.setState(CheckingState);
+    });
+
+    autoUpdater.on('update-not-available', () => {
+      this.setState(NoUpdateAvailableState);
+    });
+
+    autoUpdater.on('update-available', () => {
+      this.setState(DownloadingState);
+    });
+
+    autoUpdater.on(
+      'update-downloaded',
+      (_event: Electron.Event, releaseNotes: string, releaseVersion: string) => {
+        this.releaseNotes = releaseNotes;
+        this.releaseVersion = releaseVersion;
+        this.setState(UpdateAvailableState);
+        this.emitUpdateAvailableEvent();
+      }
+    );
+
+    if (autoUpdater.supportsUpdates && !autoUpdater.supportsUpdates()) {
+      this.setState(UnsupportedState);
+      return;
+    }
+
+    //check immediately at startup
+    this.check({ hidePopups: true });
+
+    //check every 30 minutes
+    setInterval(
+      () => {
+        if ([UpdateAvailableState, UnsupportedState].includes(this.state)) {
+          console.log('Skipping update check... update ready to install, or updater unavailable.');
+          return;
+        }
+        this.check({ hidePopups: true });
+      },
+      1000 * 60 * 30
+    );
   }
 
   emitUpdateAvailableEvent() {
