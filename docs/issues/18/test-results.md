@@ -62,8 +62,49 @@ xvfb-run -a node_modules/.bin/electron ./app --enable-logging \
 | TC6 — no feed-URL regression | PASS | 4/4 pre-existing tests unchanged and passing in both red and green runs |
 | TC7 — no Snap/Squirrel regression | PASS (structural) | `setupAutoUpdater()` now returns before any `require('./autoupdate-impl-*')` call — those modules' own `supportsUpdates()` are never reached, made moot rather than broken |
 
-## Verification not yet run (orchestrator to complete before push)
+## Repo-wide lint / typecheck
 
-- `npm run lint` (repo-wide)
-- `npm run tsc-watch` (single pass)
-- Independent code review gate
+- `npm run lint` (eslint --fix over `app/src/**`, `app/internal_packages/**`): clean, no
+  errors (auto-fixed `let` → `const` for the now-never-reassigned `autoUpdater`).
+- `npx tsc --noEmit -p app`: exit 0, no errors.
+
+## Independent code review (cold, no implementor summary shown)
+
+**Verdict: APPROVE WITH CHANGES.**
+
+- Confirmed core fix is correct and durable: `autoUpdater` is a `const`-null never
+  assigned, `setupAutoUpdater()` short-circuits before requiring any platform impl,
+  `check()`/`install()` null-guard. Verified via `tsc --noEmit` (0 errors), a repo-wide
+  grep confirming no other call site bypasses `AutoUpdateManager`, and a trace of
+  `application-menu.ts` confirming update menu items stay hidden for `'unsupported'`.
+- **Blocking finding (fixed):** `npm run lint`'s eslint glob (`app/src/**`,
+  `app/internal_packages/**`) does not cover `app/spec/**`, so a prettier violation in
+  the new spec's escaped-apostrophe string slipped past the earlier "lint clean" check.
+  Confirmed directly: `npx eslint -c .eslintrc app/spec/autoupdate-manager-spec.ts`
+  failed before the fix, passes after. Fixed by switching that string to double quotes
+  (commit `413ff03ae`).
+- **Non-blocking, deferred to #14** (both explicitly scoped out, not actioned here to
+  avoid scope creep on a disable-only issue):
+  - `onUpdateNotAvailable`/`onUpdateError` still call `autoUpdater.removeListener(...)`
+    unguarded — unreachable today (only wired inside `check()`'s now-dead
+    `!hidePopups` branch), latent if ever re-wired.
+  - `application:check-for-update`/`install-update` IPC hooks remain wired in
+    `application.ts`; unreachable via the hidden menu, but a direct trigger (e.g. an
+    accelerator) now silently no-ops with only a `console.error`, no user feedback.
+- **Cosmetic finding (fixed):** redundant trailing `return;` after
+  `this.setState(UnsupportedState)` as the last statement — removed (commit
+  `413ff03ae`).
+- Test quality assessed as genuine regression guards, not tautological: the
+  `setupAutoUpdater` spec asserts both the state transition and that `check` is never
+  invoked; the `check`/`install` specs assert `not.toThrow()`, meaningful because the
+  pre-fix code (or a broken guard) would throw `TypeError` on a null `autoUpdater`.
+- Scope confirmed: only `autoupdate-manager.ts` and its spec touched — no scope creep.
+
+## Post-review re-verification
+
+- `npx eslint -c .eslintrc "app/src/browser/autoupdate-manager.ts" "app/spec/autoupdate-manager-spec.ts"` → exit 0.
+- `npx tsc --noEmit -p app` → exit 0.
+- Re-ran the real spec file after the review fixes:
+  `xvfb-run -a node_modules/.bin/electron ./app --enable-logging --test --spec-file-pattern=autoupdate-manager-spec.ts --disable-gpu --no-sandbox`
+  → **7 passing, 0 failing.** No `updates.getmailspring.com` request in the log; the
+  two expected `console.error` lines from the null-`autoUpdater` guards are present.
