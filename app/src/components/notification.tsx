@@ -14,6 +14,7 @@ type NotificationProps = {
   isError?: boolean;
   isDismissable?: boolean;
   isPermanentlyDismissable?: boolean;
+  children?: React.ReactNode;
 };
 type NotificationState = {
   loadingActions: any[];
@@ -158,6 +159,7 @@ export default class Notification extends React.Component<NotificationProps, Not
             {subtitle}
           </span>
         </div>
+        {this.props.children}
         {actionElems.length > 0 ? <div className="actions-wrapper">{actionElems}</div> : null}
       </div>
     );
