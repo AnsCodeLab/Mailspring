@@ -79,6 +79,20 @@ describe('AutoUpdateManager', function () {
 
   describe('check', () => {
     it('does not throw when called after setup on the current platform', function () {
+      // realSetupAutoUpdater()/check() below exercise the REAL platform
+      // impl (not a spy) all the way down to manuallyQueryUpdateServer's
+      // fetch() call - mock global.fetch rather than letting this
+      // permanent spec make a real, unmocked outbound HTTPS call to
+      // api.github.com on every run (flaky/slow CI, consumes GitHub's
+      // shared unauthenticated rate limit). Matches the fetch-mocking
+      // pattern already used in autoupdate-impl-base-spec.ts.
+      const fetchSpy = spyOn(global, 'fetch').andReturn(
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ tag_name: 'v0.0.1', body: '', assets: [] }),
+        } as Response)
+      );
       const m = new AutoUpdateManager('3.222.1', this.config, this.specMode);
       const realSetupAutoUpdater = m.setupAutoUpdater.bind(m);
       spyOn(m, 'setupAutoUpdater');
@@ -86,6 +100,7 @@ describe('AutoUpdateManager', function () {
       realSetupAutoUpdater();
 
       expect(() => m.check({ hidePopups: true })).not.toThrow();
+      expect(fetchSpy).toHaveBeenCalled();
     });
   });
 
