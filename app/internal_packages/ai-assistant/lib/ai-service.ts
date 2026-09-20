@@ -4,6 +4,7 @@ import { parseSSEChunk, extractDelta } from './sse';
 import { ClaudeCliService } from './claude-cli-service';
 import { CursorCliService } from './cursor-cli-service';
 import { GeminiCliService } from './gemini-cli-service';
+import { AntigravityCliService } from './antigravity-cli-service';
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -23,7 +24,12 @@ export class AIError extends Error {
 export function isCliProvider(
   provider: ReturnType<typeof AIConfig.getProvider> = AIConfig.getProvider()
 ): boolean {
-  return provider === 'claude-cli' || provider === 'cursor-cli' || provider === 'gemini-cli';
+  return (
+    provider === 'claude-cli' ||
+    provider === 'cursor-cli' ||
+    provider === 'gemini-cli' ||
+    provider === 'antigravity-cli'
+  );
 }
 
 const CLI_SKILLS_UNSUPPORTED =
@@ -32,6 +38,7 @@ const CLI_SKILLS_UNSUPPORTED =
 
 function cliChatService() {
   const provider = AIConfig.getProvider();
+  if (provider === 'antigravity-cli') return AntigravityCliService;
   if (provider === 'gemini-cli') return GeminiCliService;
   if (provider === 'cursor-cli') return CursorCliService;
   return ClaudeCliService;
