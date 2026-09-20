@@ -96,7 +96,19 @@ export function spawnOptions(cwd: string): { cwd: string; windowsHide: boolean }
   return { cwd, windowsHide: true };
 }
 
-function spawnCli(args: string[], prompt: string, signal?: AbortSignal) {
+function cleanupWorkdir(cwd: string) {
+  try {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
+
+function spawnCli(
+  args: string[],
+  prompt: string,
+  signal?: AbortSignal
+): { child: ReturnType<typeof spawn>; cwd: string } {
   const bin = AIConfig.getGeminiCliPath();
   const cwd = prepareWorkdir();
   const child = spawn(bin, args, spawnOptions(cwd));
@@ -110,7 +122,7 @@ function spawnCli(args: string[], prompt: string, signal?: AbortSignal) {
     signal.addEventListener('abort', onAbort, { once: true });
     child.once('close', () => signal.removeEventListener('abort', onAbort));
   }
-  return child;
+  return { child, cwd };
 }
 
 export function notFoundError(): GeminiCliError {
@@ -193,6 +205,29 @@ export function parseJsonResponse(stdout: string): string {
   throw new GeminiCliError('error', 'Gemini CLI JSON response missing "response" field.');
 }
 
+
+// Prefer stderr (where Gemini prints auth/Antigravity failures) when stdout is empty or unusable.
+export function failureFromCliOutput(stdout: string, stderr: string, code?: number | null): GeminiCliError {
+  if (!stdout.trim()) {
+    return resultError(
+      stderr.trim() || (code ? `Gemini CLI exited with code ${code}.` : 'Gemini CLI returned no output.')
+    );
+  }
+  try {
+    // If stdout parses as a JSON error payload, parseJsonResponse throws already-rewritten errors.
+    parseJsonResponse(stdout);
+    // Unexpected success path — treat as generic.
+    return resultError(stderr.trim() || 'Gemini CLI failed.');
+  } catch (err) {
+    if (stderr.trim()) return resultError(stderr.trim());
+    if (err instanceof GeminiCliError) return err;
+    return new GeminiCliError(
+      'error',
+      code ? `Gemini CLI exited with code ${code}.` : 'Gemini CLI returned no output.'
+    );
+  }
+}
+
 export const GeminiCliService = {
   async chat({
     messages,
@@ -205,8 +240,9 @@ export const GeminiCliService = {
     const args = baseArgs('json');
     return new Promise((resolve, reject) => {
       let child;
+      let cwd = '';
       try {
-        child = spawnCli(args, prompt, signal);
+        ({ child, cwd } = spawnCli(args, prompt, signal));
       } catch (err: any) {
         reject(new GeminiCliError('not-found', `Could not launch Gemini CLI: ${err.message}`));
         return;
@@ -216,9 +252,11 @@ export const GeminiCliService = {
       child.stdout.on('data', (d) => (stdout += d.toString()));
       child.stderr.on('data', (d) => (stderr += d.toString()));
       child.on('error', (err: any) => {
+        cleanupWorkdir(cwd);
         reject(err.code === 'ENOENT' ? notFoundError() : new GeminiCliError('error', err.message));
       });
       child.on('close', (code) => {
+        cleanupWorkdir(cwd);
         if (signal?.aborted) {
           const abortErr: any = new Error('Aborted');
           abortErr.name = 'AbortError';
@@ -227,17 +265,8 @@ export const GeminiCliService = {
         }
         try {
           resolve(parseJsonResponse(stdout));
-        } catch (err) {
-          if (err instanceof GeminiCliError) {
-            reject(err);
-            return;
-          }
-          reject(
-            new GeminiCliError(
-              'error',
-              stderr.trim() || (code ? `Gemini CLI exited with code ${code}.` : 'Gemini CLI returned no output.')
-            )
-          );
+        } catch {
+          reject(failureFromCliOutput(stdout, stderr, code));
         }
       });
     });
@@ -253,8 +282,9 @@ export const GeminiCliService = {
     const { prompt } = buildTranscript(messages);
     const args = baseArgs('stream-json');
     let child;
+    let cwd = '';
     try {
-      child = spawnCli(args, prompt, signal);
+      ({ child, cwd } = spawnCli(args, prompt, signal));
     } catch (err: any) {
       throw new GeminiCliError('not-found', `Could not launch Gemini CLI: ${err.message}`);
     }
@@ -299,6 +329,7 @@ export const GeminiCliService = {
     });
     child.stderr.on('data', (d) => (stderr += d.toString()));
     child.on('error', (err: any) => {
+      cleanupWorkdir(cwd);
       error = err.code === 'ENOENT' ? notFoundError() : new GeminiCliError('error', err.message);
       wake();
     });
@@ -318,6 +349,7 @@ export const GeminiCliService = {
       } else if (!error && code && code !== 0 && queue.length === 0) {
         error = resultError(stderr.trim() || `Gemini CLI exited with code ${code}.`);
       }
+      cleanupWorkdir(cwd);
       done = true;
       wake();
     });

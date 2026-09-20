@@ -15,6 +15,7 @@ import {
   GEMINI_PROMPT_INSTRUCTION,
   EXCLUDED_GEMINI_TOOLS,
   GeminiCliService,
+  failureFromCliOutput,
 } from '../lib/gemini-cli-service';
 import { AIConfig } from '../lib/config';
 
@@ -181,6 +182,13 @@ describe('gemini-cli-service', () => {
       expect(err.message).toContain('/opt/gemini');
       expect(err.message).toContain('Preferences');
       expect(err.message).toContain('AI Assistant');
+    });
+  });
+
+  describe('failureFromCliOutput', () => {
+    it('rewrites Antigravity errors from stderr when stdout is empty', () => {
+      const err = failureFromCliOutput('', 'IneligibleTierError: migrate to Antigravity', 1);
+      expect(err.message).toMatch(/GEMINI_API_KEY|Antigravity|Code Assist/i);
     });
   });
 
