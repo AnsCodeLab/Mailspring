@@ -470,20 +470,6 @@ export function clipboardHasRichText(clipboardData: DataTransfer) {
   return !!doc.querySelector('table') || doc.body.textContent.trim().length > 0;
 }
 
-export function extensionForClipboardMimeType(mimeType: string): string {
-  return (
-    {
-      'image/png': '.png',
-      'image/jpeg': '.jpeg',
-      'image/jpg': '.jpg', // some Windows clipboard sources still report this
-      'image/gif': '.gif',
-      'image/bmp': '.bmp',
-      'image/webp': '.webp',
-      'image/tiff': '.tiff',
-    }[mimeType] || ''
-  );
-}
-
 // Only arbitrate between file and HTML when the clipboard actually carries a file item;
 // string-only pastes skip the extra parse entirely.
 export function shouldAttachPastedFile(clipboardData: DataTransfer) {
