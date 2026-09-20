@@ -2,6 +2,7 @@ import { KeyManager } from 'mailspring-exports';
 import { AIConfig, KEY_API } from './config';
 import { parseSSEChunk, extractDelta } from './sse';
 import { ClaudeCliService } from './claude-cli-service';
+import { CursorCliService } from './cursor-cli-service';
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -16,6 +17,20 @@ export class AIError extends Error {
     super(message);
     this.kind = kind;
   }
+}
+
+export function isCliProvider(
+  provider: ReturnType<typeof AIConfig.getProvider> = AIConfig.getProvider()
+): boolean {
+  return provider === 'claude-cli' || provider === 'cursor-cli';
+}
+
+const CLI_SKILLS_UNSUPPORTED =
+  'CLI mode does not support agent skills (tool calling). Switch the provider to ' +
+  '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.';
+
+function cliChatService() {
+  return AIConfig.getProvider() === 'cursor-cli' ? CursorCliService : ClaudeCliService;
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -55,16 +70,12 @@ export const AIService = {
     signal?: AbortSignal;
     tools?: any[];
   }): AsyncIterable<string> {
-    if (AIConfig.getProvider() === 'claude-cli') {
+    if (isCliProvider()) {
       if (tools && tools.length) {
-        throw new AIError(
-          'missing-config',
-          'Claude CLI mode does not support agent skills (tool calling). Switch the provider to ' +
-            '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.'
-        );
+        throw new AIError('missing-config', CLI_SKILLS_UNSUPPORTED);
       }
       try {
-        yield* ClaudeCliService.chatStream({ messages, signal });
+        yield* cliChatService().chatStream({ messages, signal });
       } catch (err: any) {
         if (err?.name === 'AbortError') throw err;
         throw new AIError(
@@ -130,12 +141,8 @@ export const AIService = {
     content?: string;
     tool_calls?: Array<{ id: string; name: string; arguments: any }>;
   }> {
-    if (AIConfig.getProvider() === 'claude-cli') {
-      throw new AIError(
-        'missing-config',
-        'Claude CLI mode does not support agent skills (tool calling). Switch the provider to ' +
-          '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.'
-      );
+    if (isCliProvider()) {
+      throw new AIError('missing-config', CLI_SKILLS_UNSUPPORTED);
     }
     const endpoint = AIConfig.getEndpoint();
     const body: any = { model: AIConfig.getModel(), messages, stream: false };
@@ -184,12 +191,8 @@ export const AIService = {
     content?: string;
     tool_calls?: Array<{ id: string; name: string; arguments: any }>;
   }> {
-    if (AIConfig.getProvider() === 'claude-cli') {
-      throw new AIError(
-        'missing-config',
-        'Claude CLI mode does not support agent skills (tool calling). Switch the provider to ' +
-          '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.'
-      );
+    if (isCliProvider()) {
+      throw new AIError('missing-config', CLI_SKILLS_UNSUPPORTED);
     }
     const endpoint = AIConfig.getEndpoint();
     const body: any = { model: AIConfig.getModel(), messages, stream: true };
@@ -273,7 +276,7 @@ export const AIService = {
   },
 
   async listModels(): Promise<string[]> {
-    if (AIConfig.getProvider() === 'claude-cli') return ClaudeCliService.listModels();
+    if (isCliProvider()) return cliChatService().listModels();
     try {
       const res = await fetch(`${AIConfig.getEndpoint()}/models`, {
         headers: await authHeaders(),
@@ -288,8 +291,8 @@ export const AIService = {
   },
 
   async testConnection(): Promise<{ ok: boolean; error?: string }> {
-    if (AIConfig.getProvider() === 'claude-cli') {
-      return ClaudeCliService.testConnection();
+    if (isCliProvider()) {
+      return cliChatService().testConnection();
     }
     // Use GET /models — instant health check that works even before a model is warm.
     try {
@@ -298,14 +301,5 @@ export const AIService = {
         signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      const json = await res.json();
-      const models: string[] = (json.data ?? []).map((m: any) => m.id);
-      const label = models.length
-        ? `${models.length} model${models.length > 1 ? 's' : ''} available`
-        : 'Connected';
-      return { ok: true, error: label };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || String(err) };
-    }
-  },
-};
+
+[Showing lines 1-300 of 312. Use :301 to continue]
