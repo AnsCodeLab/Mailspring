@@ -301,5 +301,14 @@ export const AIService = {
         signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-
-[Showing lines 1-300 of 312. Use :301 to continue]
+      const json = await res.json();
+      const models: string[] = (json.data ?? []).map((m: any) => m.id);
+      const label = models.length
+        ? `${models.length} model${models.length > 1 ? 's' : ''} available`
+        : 'Connected';
+      return { ok: true, error: label };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  },
+};
