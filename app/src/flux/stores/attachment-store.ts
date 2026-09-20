@@ -1,13 +1,18 @@
 import os from 'os';
 import _fs from 'fs';
 import path from 'path';
-import { shell } from 'electron';
+import { shell, nativeImage } from 'electron';
 import MailspringStore from 'mailspring-store';
 import DraftStore from './draft-store';
 import * as Actions from '../actions';
 import { File } from '../models/file';
 import * as Utils from '../models/utils';
 import { localized } from '../../intl';
+import {
+  ImageCompressionLevel,
+  IMAGE_COMPRESSION_SETTINGS,
+  computeCompressedImageDimensions,
+} from '../models/image-compression';
 import {
   generatePreview,
   canPossiblyPreviewExtension,
@@ -48,6 +53,7 @@ class AttachmentStore extends MailspringStore {
     this.listenTo(Actions.addAttachment, this._onAddAttachment);
     this.listenTo(Actions.selectAttachment, this._onSelectAttachment);
     this.listenTo(Actions.removeAttachment, this._onRemoveAttachment);
+    this.listenTo(Actions.compressAttachment, this._onCompressAttachment);
 
     fs.mkdirSync(this._filesDirectory, { recursive: true });
   }
@@ -517,6 +523,90 @@ class AttachmentStore extends MailspringStore {
 
     try {
       await this._deleteFile(fileToRemove);
+    } catch (err) {
+      AppEnv.showErrorDialog(err.message);
+    }
+  };
+
+  _onCompressAttachment = async ({
+    headerMessageId,
+    file,
+    level = 'medium',
+  }: {
+    headerMessageId: string;
+    file: File;
+    level?: ImageCompressionLevel;
+  }) => {
+    this._assertIdPresent(headerMessageId);
+
+    try {
+      if (!file) {
+        return;
+      }
+      if (file.displayExtension() === 'gif') {
+        throw new Error(
+          localized(
+            `%@ can't be compressed because it would lose its animation.`,
+            file.displayName()
+          )
+        );
+      }
+
+      const originalPath = this.pathForFile(file);
+      const originalStats = await this._getFileStats(originalPath);
+
+      const image = nativeImage.createFromPath(originalPath);
+      if (image.isEmpty()) {
+        throw new Error(
+          localized(
+            `%@ couldn't be compressed because it's not a supported image format.`,
+            file.displayName()
+          )
+        );
+      }
+
+      const { width, height } = image.getSize();
+      const target = computeCompressedImageDimensions(level, width, height);
+      const resized =
+        target.width !== width || target.height !== height
+          ? image.resize({ width: target.width, height: target.height, quality: 'best' })
+          : image;
+
+      const buffer = resized.toJPEG(IMAGE_COMPRESSION_SETTINGS[level].jpegQuality);
+      if (buffer.length >= originalStats.size) {
+        throw new Error(
+          localized(
+            `%@ is already well compressed; compressing it further would not save space.`,
+            file.displayName()
+          )
+        );
+      }
+
+      const ext = path.extname(file.filename || '');
+      const base = ext ? file.filename.slice(0, -ext.length) : file.filename || file.displayName();
+      const newFile = new File({
+        id: file.id,
+        filename: `${base}.jpg`,
+        size: buffer.length,
+        contentType: 'image/jpeg',
+        messageId: file.messageId,
+        contentId: file.contentId,
+      });
+
+      const newPath = this.pathForFile(newFile);
+      await _fs.promises.mkdir(path.dirname(newPath), { recursive: true });
+      await _fs.promises.writeFile(newPath, buffer);
+      if (newPath !== originalPath && (await fileAccessibleAtPath(originalPath))) {
+        await fs.unlinkAsync(originalPath);
+      }
+      if (await fileAccessibleAtPath(`${originalPath}.png`)) {
+        await fs.unlinkAsync(`${originalPath}.png`);
+      }
+      delete this._filePreviewPaths[file.id];
+
+      await this._applySessionChanges(headerMessageId, (files) =>
+        files.map((f) => (f.id === file.id ? newFile : f))
+      );
     } catch (err) {
       AppEnv.showErrorDialog(err.message);
     }

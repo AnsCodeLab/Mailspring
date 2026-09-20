@@ -481,6 +481,7 @@ export const setCollapsedSidebarItem = create('setCollapsedSidebarItem', ActionS
 export const addAttachment = create('addAttachment', ActionScopeWindow);
 export const selectAttachment = create('selectAttachment', ActionScopeWindow);
 export const removeAttachment = create('removeAttachment', ActionScopeWindow);
+export const compressAttachment = create('compressAttachment', ActionScopeWindow);
 
 export const fetchBodies = create('fetchBodies', ActionScopeMainWindow);
 export const fetchAndOpenFile = create('fetchAndOpenFile', ActionScopeWindow);

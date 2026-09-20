@@ -59,6 +59,9 @@ function ImageNode(props) {
 
         e.setNodeByKey(n.key, newN);
       }}
+      onCompressImage={(level) => {
+        Actions.compressAttachment({ headerMessageId: draft.headerMessageId, file, level });
+      }}
     />
   );
 }

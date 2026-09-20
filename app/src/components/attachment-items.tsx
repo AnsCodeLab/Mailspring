@@ -9,6 +9,7 @@ import { RetinaImg } from './retina-img';
 import { Flexbox } from './flexbox';
 import { Spinner } from './spinner';
 import { localized } from '../intl';
+import { ImageCompressionLevel } from '../flux/models/image-compression';
 
 const defaultProps = {
   draggable: true,
@@ -46,6 +47,7 @@ function buildContextMenu(fns: {
   onRemoveAttachment?: () => void;
   onSaveAttachment?: () => void;
   sizePresets?: { label: string; active: boolean; onClick: () => void }[];
+  compressOptions?: { label: string; onClick: () => void }[];
 }) {
   const template: Electron.MenuItemConstructorOptions[] = [];
   if (fns.onOpenAttachment) {
@@ -80,6 +82,15 @@ function buildContextMenu(fns: {
         checked: preset.active,
         label: preset.label,
         type: 'radio',
+      })),
+    });
+  }
+  if (fns.compressOptions) {
+    template.push({
+      label: localized('Compress Image'),
+      submenu: fns.compressOptions.map((option) => ({
+        click: () => option.onClick(),
+        label: option.label,
       })),
     });
   }
@@ -303,6 +314,7 @@ export class AttachmentItem extends Component<AttachmentItemProps> {
 interface ImageAttachmentItemProps extends AttachmentItemProps {
   onResized: (width: number, height: number) => void;
   imgProps?: { width: number; height: number };
+  onCompressImage?: (level: ImageCompressionLevel) => void;
 }
 
 export class ImageAttachmentItem extends Component<ImageAttachmentItemProps> {
@@ -398,7 +410,8 @@ export class ImageAttachmentItem extends Component<ImageAttachmentItemProps> {
   }
 
   private _onImageContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
-    const { onOpenAttachment, onSaveAttachment, onResized, imgProps } = this.props;
+    const { onOpenAttachment, onSaveAttachment, onResized, onCompressImage, imgProps, filePath } =
+      this.props;
     const img = event.currentTarget.querySelector('img');
     const naturalWidth = img ? img.naturalWidth || img.width : 0;
     const naturalHeight = img ? img.naturalHeight || img.height : 0;
@@ -422,7 +435,18 @@ export class ImageAttachmentItem extends Component<ImageAttachmentItemProps> {
           })
         : undefined;
 
-    buildContextMenu({ onOpenAttachment, onSaveAttachment, sizePresets });
+    // Compressing an animated GIF would flatten it to a single JPEG frame, so the
+    // option is hidden entirely rather than silently destroying the animation.
+    const compressOptions =
+      onCompressImage && path.extname(filePath || '').toLowerCase() !== '.gif'
+        ? [
+            { level: 'high' as ImageCompressionLevel, label: localized('High Quality') },
+            { level: 'medium' as ImageCompressionLevel, label: localized('Balanced') },
+            { level: 'low' as ImageCompressionLevel, label: localized('Maximum Compression') },
+          ].map(({ level, label }) => ({ label, onClick: () => onCompressImage(level) }))
+        : undefined;
+
+    buildContextMenu({ onOpenAttachment, onSaveAttachment, sizePresets, compressOptions });
   };
   private _pData = { x: 0, y: 0, eH: 0 };
   private _shiftData = {
