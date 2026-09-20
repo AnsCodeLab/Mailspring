@@ -26,6 +26,10 @@ describe('AIConfig defaults', () => {
     expect(AIConfig.getClaudeCliPath()).toBe('claude'));
   it('claude CLI model override defaults to empty', () =>
     expect(AIConfig.getClaudeCliModel()).toBe(''));
+  it('cursor CLI path defaults to "agent"', () =>
+    expect(AIConfig.getCursorCliPath()).toBe('agent'));
+  it('cursor CLI model override defaults to empty', () =>
+    expect(AIConfig.getCursorCliModel()).toBe(''));
   it('minScore defaults to 0.25', () => expect(AIConfig.getMinScore()).toBe(0.25));
 });
 
