@@ -34,6 +34,10 @@ describe('AIConfig defaults', () => {
     expect(AIConfig.getGeminiCliPath()).toBe('gemini'));
   it('gemini CLI model override defaults to empty', () =>
     expect(AIConfig.getGeminiCliModel()).toBe(''));
+  it('antigravity CLI path defaults to "agy"', () =>
+    expect(AIConfig.getAntigravityCliPath()).toBe('agy'));
+  it('antigravity CLI model override defaults to empty', () =>
+    expect(AIConfig.getAntigravityCliModel()).toBe(''));
   it('minScore defaults to 0.25', () => expect(AIConfig.getMinScore()).toBe(0.25));
 });
 

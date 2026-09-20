@@ -437,6 +437,7 @@ export default class AIPreferences extends React.Component<
               <option value="api">{localized('OpenAI-compatible API')}</option>
               <option value="claude-cli">{localized('Claude CLI (subscription, local)')}</option>
               <option value="cursor-cli">{localized('Cursor CLI (subscription, local)')}</option>
+              <option value="antigravity-cli">{localized('Antigravity CLI (local)')}</option>
               <option value="gemini-cli">{localized('Gemini CLI (local)')}</option>
             </select>
           </label>
@@ -577,15 +578,83 @@ export default class AIPreferences extends React.Component<
                 )}
               </label>
             </>
+          ) : AIConfig.getProvider() === 'antigravity-cli' ? (
+            <>
+              <div
+                style={{ fontSize: 12, color: 'var(--text-color-subtle)', margin: '4px 0 10px' }}
+              >
+                {localized(
+                  'Uses your local Google Antigravity CLI (agy). Sign in once with "agy", then chat ' +
+                    'and composer assist work without an API key. Agent skills are not available in this mode. ' +
+                    'Getting started: https://antigravity.google/docs/getting-started'
+                )}
+              </div>
+              <label>
+                {localized('Antigravity CLI path')}
+                <input
+                  type="text"
+                  defaultValue={AIConfig.getAntigravityCliPath()}
+                  onBlur={(e) => this._set(K.antigravityCliPath, e.target.value)}
+                  placeholder="agy"
+                />
+              </label>
+              <label>
+                {localized('Model')}
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {availableModels.length > 0 ? (
+                    <select
+                      value={
+                        availableModels.includes(AIConfig.getAntigravityCliModel())
+                          ? AIConfig.getAntigravityCliModel()
+                          : ''
+                      }
+                      onChange={(e) => this._set(K.antigravityCliModel, e.target.value)}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">{localized('CLI default')}</option>
+                      {availableModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      defaultValue={AIConfig.getAntigravityCliModel()}
+                      onBlur={(e) => this._set(K.antigravityCliModel, e.target.value)}
+                      style={{ flex: 1 }}
+                      placeholder={localized(
+                        'Blank for CLI default, or e.g. gemini-3.6-flash-medium'
+                      )}
+                    />
+                  )}
+                  <button
+                    className="btn"
+                    onClick={this._fetchModels}
+                    disabled={loadingModels}
+                    title={localized('Reload models from agy models')}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {loadingModels ? '…' : '↺'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
+                  {localized(
+                    'Install Antigravity CLI from https://antigravity.google/docs/getting-started then run "agy" to sign in.'
+                  )}
+                </div>
+              </label>
+            </>
           ) : AIConfig.getProvider() === 'gemini-cli' ? (
             <>
               <div
                 style={{ fontSize: 12, color: 'var(--text-color-subtle)', margin: '4px 0 10px' }}
               >
                 {localized(
-                  'Uses your local Gemini CLI (npm i -g @google/gemini-cli). Sign in with Google, ' +
-                    'or set GEMINI_API_KEY / Vertex credentials. Agent skills (Send Email, Search Mailbox, etc.) ' +
-                    'are not available in this mode - use it for chat and composer assist only.'
+                  'Uses your local Gemini CLI (npm i -g @google/gemini-cli) with GEMINI_API_KEY, Vertex, or ' +
+                    'Code Assist Standard/Enterprise. Free Google login was replaced by Antigravity CLI — prefer ' +
+                    'that transport for subscription/login. Agent skills are not available in this mode.'
                 )}
               </div>
               <label>
@@ -638,7 +707,7 @@ export default class AIPreferences extends React.Component<
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
                   {localized(
-                    'Install with npm i -g @google/gemini-cli. Free Code Assist OAuth may require Antigravity; API key / Vertex still work.'
+                    'Install with npm i -g @google/gemini-cli. For free Google login use Antigravity CLI instead; API key / Vertex / Standard+Enterprise still work here.'
                   )}
                 </div>
               </label>

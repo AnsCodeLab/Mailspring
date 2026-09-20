@@ -10,6 +10,8 @@ const K = {
   cursorCliModel: 'ai-assistant.cursorCli.model',
   geminiCliPath: 'ai-assistant.geminiCli.path',
   geminiCliModel: 'ai-assistant.geminiCli.model',
+  antigravityCliPath: 'ai-assistant.antigravityCli.path',
+  antigravityCliModel: 'ai-assistant.antigravityCli.model',
   kbEnabled: 'ai-assistant.knowledgeBase.enabled',
   embedBackend: 'ai-assistant.embeddings.backend',
   embedInAppModel: 'ai-assistant.embeddings.inAppModel',
@@ -73,7 +75,8 @@ export const AIConfig = {
   keys: K,
   isEnabled: () => get<boolean>(K.enabled, false) === true,
   isKnowledgeBaseEnabled: () => get<boolean>(K.kbEnabled, false) === true,
-  getProvider: () => get<'api' | 'claude-cli' | 'cursor-cli' | 'gemini-cli'>(K.provider, 'api'),
+  getProvider: () =>
+    get<'api' | 'claude-cli' | 'cursor-cli' | 'gemini-cli' | 'antigravity-cli'>(K.provider, 'api'),
   getEndpoint: () => String(get(K.endpoint, 'https://api.openai.com/v1')).replace(/\/+$/, ''),
   getModel: () => get(K.model, 'gpt-4o-mini'),
   getClaudeCliPath: () => String(get(K.claudeCliPath, 'claude')).trim() || 'claude',
@@ -82,6 +85,8 @@ export const AIConfig = {
   getCursorCliModel: () => String(get(K.cursorCliModel, '')).trim(),
   getGeminiCliPath: () => String(get(K.geminiCliPath, 'gemini')).trim() || 'gemini',
   getGeminiCliModel: () => String(get(K.geminiCliModel, '')).trim(),
+  getAntigravityCliPath: () => String(get(K.antigravityCliPath, 'agy')).trim() || 'agy',
+  getAntigravityCliModel: () => String(get(K.antigravityCliModel, '')).trim(),
   getEmbeddingBackend: () => get<'in-app' | 'server'>(K.embedBackend, 'in-app'),
   getEmbeddingInAppModel: () => get(K.embedInAppModel, 'Xenova/all-MiniLM-L6-v2'),
   getEmbeddingServerUrl: () =>

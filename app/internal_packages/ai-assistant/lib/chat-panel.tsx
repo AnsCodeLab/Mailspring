@@ -1131,9 +1131,11 @@ export default class AIChatPanel extends React.Component<
         ? AIConfig.getClaudeCliModel() || localized('Claude CLI (default)')
         : provider === 'cursor-cli'
           ? AIConfig.getCursorCliModel() || localized('Cursor CLI (default)')
-          : provider === 'gemini-cli'
-            ? AIConfig.getGeminiCliModel() || localized('Gemini CLI (default)')
-            : AIConfig.getModel();
+          : provider === 'antigravity-cli'
+            ? AIConfig.getAntigravityCliModel() || localized('Antigravity CLI (default)')
+            : provider === 'gemini-cli'
+              ? AIConfig.getGeminiCliModel() || localized('Gemini CLI (default)')
+              : AIConfig.getModel();
 
     return (
       <div className="ai-float-panel" style={{ width }}>
