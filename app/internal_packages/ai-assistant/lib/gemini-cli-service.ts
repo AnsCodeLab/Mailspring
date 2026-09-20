@@ -205,12 +205,16 @@ export function parseJsonResponse(stdout: string): string {
   throw new GeminiCliError('error', 'Gemini CLI JSON response missing "response" field.');
 }
 
-
 // Prefer stderr (where Gemini prints auth/Antigravity failures) when stdout is empty or unusable.
-export function failureFromCliOutput(stdout: string, stderr: string, code?: number | null): GeminiCliError {
+export function failureFromCliOutput(
+  stdout: string,
+  stderr: string,
+  code?: number | null
+): GeminiCliError {
   if (!stdout.trim()) {
     return resultError(
-      stderr.trim() || (code ? `Gemini CLI exited with code ${code}.` : 'Gemini CLI returned no output.')
+      stderr.trim() ||
+        (code ? `Gemini CLI exited with code ${code}.` : 'Gemini CLI returned no output.')
     );
   }
   try {
@@ -356,7 +360,8 @@ export const GeminiCliService = {
 
     while (!done || queue.length) {
       if (queue.length) {
-        yield queue.shift()!;
+        const next = queue.shift();
+        if (next !== undefined) yield next;
         continue;
       }
       if (error) throw error;
