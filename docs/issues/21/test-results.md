@@ -71,5 +71,5 @@ Specs added (to be executed by orchestrator / package Jasmine):
 
 ```
 npm test -- --spec-directory=app/internal_packages/ai-assistant/specs --spec-file-pattern='(cursor-cli-service|config)-spec'
-→ 37 passing (before parseListModelsOutput specs; re-run after review fix)
+→ 39 passing (includes parseListModelsOutput hyphenated-id specs)
 ```
