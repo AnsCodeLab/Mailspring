@@ -3,6 +3,7 @@ import { AIConfig, KEY_API } from './config';
 import { parseSSEChunk, extractDelta } from './sse';
 import { ClaudeCliService } from './claude-cli-service';
 import { CursorCliService } from './cursor-cli-service';
+import { GeminiCliService } from './gemini-cli-service';
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -22,7 +23,7 @@ export class AIError extends Error {
 export function isCliProvider(
   provider: ReturnType<typeof AIConfig.getProvider> = AIConfig.getProvider()
 ): boolean {
-  return provider === 'claude-cli' || provider === 'cursor-cli';
+  return provider === 'claude-cli' || provider === 'cursor-cli' || provider === 'gemini-cli';
 }
 
 const CLI_SKILLS_UNSUPPORTED =
@@ -30,7 +31,10 @@ const CLI_SKILLS_UNSUPPORTED =
   '"OpenAI-compatible API" in Preferences > AI Assistant to use Send Email, Search Mailbox, etc.';
 
 function cliChatService() {
-  return AIConfig.getProvider() === 'cursor-cli' ? CursorCliService : ClaudeCliService;
+  const provider = AIConfig.getProvider();
+  if (provider === 'gemini-cli') return GeminiCliService;
+  if (provider === 'cursor-cli') return CursorCliService;
+  return ClaudeCliService;
 }
 
 async function authHeaders(): Promise<Record<string, string>> {

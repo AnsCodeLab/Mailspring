@@ -437,6 +437,7 @@ export default class AIPreferences extends React.Component<
               <option value="api">{localized('OpenAI-compatible API')}</option>
               <option value="claude-cli">{localized('Claude CLI (subscription, local)')}</option>
               <option value="cursor-cli">{localized('Cursor CLI (subscription, local)')}</option>
+              <option value="gemini-cli">{localized('Gemini CLI (local)')}</option>
             </select>
           </label>
 
@@ -574,6 +575,72 @@ export default class AIPreferences extends React.Component<
                     )}
                   </div>
                 )}
+              </label>
+            </>
+          ) : AIConfig.getProvider() === 'gemini-cli' ? (
+            <>
+              <div
+                style={{ fontSize: 12, color: 'var(--text-color-subtle)', margin: '4px 0 10px' }}
+              >
+                {localized(
+                  'Uses your local Gemini CLI (npm i -g @google/gemini-cli). Sign in with Google, ' +
+                    'or set GEMINI_API_KEY / Vertex credentials. Agent skills (Send Email, Search Mailbox, etc.) ' +
+                    'are not available in this mode - use it for chat and composer assist only.'
+                )}
+              </div>
+              <label>
+                {localized('Gemini CLI path')}
+                <input
+                  type="text"
+                  defaultValue={AIConfig.getGeminiCliPath()}
+                  onBlur={(e) => this._set(K.geminiCliPath, e.target.value)}
+                  placeholder="gemini"
+                />
+              </label>
+              <label>
+                {localized('Model')}
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {availableModels.length > 0 ? (
+                    <select
+                      value={
+                        availableModels.includes(AIConfig.getGeminiCliModel())
+                          ? AIConfig.getGeminiCliModel()
+                          : ''
+                      }
+                      onChange={(e) => this._set(K.geminiCliModel, e.target.value)}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">{localized('CLI default')}</option>
+                      {availableModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      defaultValue={AIConfig.getGeminiCliModel()}
+                      onBlur={(e) => this._set(K.geminiCliModel, e.target.value)}
+                      style={{ flex: 1 }}
+                      placeholder={localized('Blank for CLI default, or e.g. gemini-2.5-flash')}
+                    />
+                  )}
+                  <button
+                    className="btn"
+                    onClick={this._fetchModels}
+                    disabled={loadingModels}
+                    title={localized('Reload curated Gemini model list')}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {loadingModels ? '…' : '↺'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginTop: 3 }}>
+                  {localized(
+                    'Install with npm i -g @google/gemini-cli. Free Code Assist OAuth may require Antigravity; API key / Vertex still work.'
+                  )}
+                </div>
               </label>
             </>
           ) : (
