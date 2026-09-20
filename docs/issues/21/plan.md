@@ -92,9 +92,16 @@ Prefer a small helper `isCliProvider()` over copy-pasting three `=== 'claude-cli
 New `specs/cursor-cli-service-spec.ts` patterned on `claude-cli-service-spec.ts`:
 
 - `buildTranscript` folds system into prompt; labels turns.
-- `baseArgs` always includes `-p`, `--mode ask`, `--trust`; never force/yolo; streaming flag only for stream-json; model only when set.
-- `parseAssistantDelta` / exported stream-line helper (extract pure parse function so we don’t need to spawn): timestamped assistant → text; non-timestamped → null; result error → error.
+- `baseArgs` always includes `-p`, `--mode ask`, `--trust`; streaming flag only for stream-json; model only when set.
+- **Negative safety assertions on `baseArgs`:** never include `-f`, `--force`, `--yolo`, or `--sandbox disabled` (and never omit `--mode ask`).
+- **Spawn options:** export a pure `spawnOptions()` (or equivalent) and assert `cwd === os.tmpdir()` and `windowsHide === true` — the tmp cwd is part of the security boundary and must be pinned by a failing-then-green unit test, not only by reading the implementation.
+- `parseStreamLine` / exported NDJSON helper with **golden fixtures**:
+  - timestamped `assistant` delta → yield text
+  - non-timestamped final `assistant` → ignore (`null`)
+  - `result` with `is_error: true` → error path
+  - `thinking` / `system` → ignore
 - `resultError` rewrites not-logged-in / authentication messaging to mention `agent login`.
+- `notFoundError` (or the message from ENOENT handling) mentions the configured path and Preferences → AI Assistant (aligns with acceptance).
 
 Update `config-spec.ts` for path/model defaults and provider type.
 
@@ -118,12 +125,15 @@ This plan, then `test-cases.md` + `test-results.md` after implementation (workfl
 | `docs/issues/21/plan.md` | this plan |
 | `docs/issues/21/test-cases.md` / `test-results.md` | post-impl |
 
+**Composer / next-line:** no file edits expected. `composer-assist.tsx` and `next-line.ts` already call `AIService.chat` / stream helpers with **no** provider-specific gates; once `ai-service.ts` routes `cursor-cli`, composer assist and next-line inherit it. Implementation must **audit** those call sites (confirm no leftover `=== 'claude-cli'` branches) and record that audit in `test-results.md`; only edit them if the audit finds a gap.
+
 ## Open questions / decisions locked here
 
-1. **Binary name:** default `agent` (what `which agent` resolves to after Cursor Agent install). Path field lets users set `cursor` only if their install wraps that way — but `cursor` alone is the IDE launcher and errors; document placeholder `agent`.
+1. **Binary name:** default `agent` (what `which agent` resolves to after Cursor Agent install). Path field lets users set an absolute path; placeholder text should be `agent` (not bare `cursor`, which launches the IDE and errors for agent use).
 2. **`--trust`:** required for non-interactive runs when workspace trust would otherwise block; safe because cwd is tmp and mode is ask.
 3. **No shared abstract `CliService` base class** in this PR — duplication with Claude is intentional and reviewable; extract later if a third CLI appears.
 4. **Provider-specific skill error strings:** use a shared “CLI mode does not support…” message that names switching to OpenAI-compatible API (avoid maintaining three near-identical strings).
+5. **Composer coverage:** satisfied by AIService routing + call-site audit (see Files touched); not a separate Cursor-specific composer implementation.
 
 ## Acceptance mapping
 
@@ -131,15 +141,26 @@ This plan, then `test-cases.md` + `test-results.md` after implementation (workfl
 |---|---|
 | Transport option in Preferences | preferences.tsx |
 | Path + model + skills note | preferences.tsx |
-| Chat/composer stream via agent when logged in | cursor-cli-service + ai-service |
-| `--mode ask`, `--trust`, tmp cwd | baseArgs + spawn tests / code |
-| Actionable missing-bin / auth errors | resultError + notFoundError |
-| Unit specs | cursor-cli-service-spec + config-spec |
+| Chat/composer via agent when logged in | cursor-cli-service + ai-service (+ composer/next-line audit) |
+| `--mode ask`, `--trust`, tmp cwd | `baseArgs` specs + `spawnOptions()` cwd spec |
+| Actionable missing-bin / auth errors | `notFoundError` + `resultError` specs |
+| Unit specs | cursor-cli-service-spec (incl. NDJSON fixtures) + config-spec |
 | Skills disabled in CLI mode | ai-service + chat-panel |
 
 ## Implementation order
 
-1. Failing specs (cursor-cli-service-spec + config defaults).
+1. Failing specs (cursor-cli-service-spec + config defaults), including spawn cwd + NDJSON fixtures + notFoundError.
 2. `cursor-cli-service.ts` until green.
-3. config → ai-service → preferences → chat-panel.
+3. config → ai-service → preferences → chat-panel; audit composer/next-line.
 4. Run package specs / lint; write test-cases + test-results.
+
+## Plan review
+
+**Verdict:** REQUEST_CHANGES → addressed in-plan (this revision).
+
+Reviewer findings incorporated:
+1. Pin `spawn`/`spawnOptions` `cwd: os.tmpdir()` in TDD (priority 1).
+2. Explicit composer/next-line inheritance + audit decision (priority 1).
+3. Golden NDJSON fixtures for stream parser (priority 2).
+4. Align `notFoundError` in TDD with acceptance (priority 2).
+5. Broaden negative `baseArgs` assertions (`-f`/`--force`/`--yolo`/`--sandbox disabled`) (priority 3).
