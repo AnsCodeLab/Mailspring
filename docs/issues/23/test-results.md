@@ -100,3 +100,10 @@ Unit tests pin argv (`--approval-mode plan`, no yolo), workspace `.gemini/settin
 
 - `app/internal_packages/ai-assistant/specs/gemini-cli-service-spec.ts`
 - `app/internal_packages/ai-assistant/specs/config-spec.ts` (Gemini defaults)
+
+## Jasmine
+
+```
+npm test -- --spec-directory=…/ai-assistant/specs --spec-file-pattern='(gemini-cli-service|config)-spec'
+→ 37 passing
+```
