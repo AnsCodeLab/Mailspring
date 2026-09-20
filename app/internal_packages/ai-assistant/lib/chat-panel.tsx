@@ -12,7 +12,7 @@ import {
   SanitizeTransformer,
   localized,
 } from 'mailspring-exports';
-import { AIService, ChatMessage } from './ai-service';
+import { AIService, ChatMessage, isCliProvider } from './ai-service';
 import { buildChatPrompt, RetrievedSource, SenderIdentity } from './prompts';
 import { loadThreadMessages } from './thread-context';
 import { ensurePrivacyNoticeAccepted } from './privacy-notice';
@@ -840,7 +840,7 @@ export default class AIChatPanel extends React.Component<
       const { runAgent } = require('./agent');
       this.setState({ sendPhase: 'waiting' });
 
-      if (Skills.list().length > 0 && AIConfig.getProvider() !== 'claude-cli') {
+      if (Skills.list().length > 0 && !isCliProvider()) {
         const agentOut = await runAgent({
           messages: prompt,
           registry: Skills,
@@ -1125,10 +1125,13 @@ export default class AIChatPanel extends React.Component<
       !busy && turns.length > 0 && turns[turns.length - 1].role === 'assistant'
         ? getFollowUpSuggestions(turns, !!thread)
         : [];
+    const provider = AIConfig.getProvider();
     const modelName =
-      AIConfig.getProvider() === 'claude-cli'
+      provider === 'claude-cli'
         ? AIConfig.getClaudeCliModel() || localized('Claude CLI (default)')
-        : AIConfig.getModel();
+        : provider === 'cursor-cli'
+          ? AIConfig.getCursorCliModel() || localized('Cursor CLI (default)')
+          : AIConfig.getModel();
 
     return (
       <div className="ai-float-panel" style={{ width }}>
