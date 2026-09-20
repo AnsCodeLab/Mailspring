@@ -12,7 +12,8 @@ const fsPlus = require('fs-plus');
 const glob = require('glob');
 const _ = require('underscore');
 const TypeScript = require('typescript');
-const packager = require('@electron/packager');
+// @electron/packager v18+ uses named exports and object-style hooks.
+const { packager, serialHooks } = require('@electron/packager');
 
 const platform = process.platform;
 const rootDir = path.resolve(__dirname, '..', '..');
@@ -76,28 +77,26 @@ function resolveRealSymlinkPaths() {
   });
 }
 
-function runCopyPlatformSpecificResources(buildPath, electronVersion, plat, arch, callback) {
+async function runCopyPlatformSpecificResources({ buildPath, platform: plat }) {
   const winResourcesSource = path.resolve(appDir, 'build', 'resources', 'win');
   const winResourcesTarget = path.resolve(buildPath, '..');
   if (plat === 'win32') {
     fsPlus.copySync(winResourcesSource, winResourcesTarget);
   }
-  callback();
 }
 
-function runWriteCommitHashIntoPackage(buildPath, electronVersion, plat, arch, callback) {
+async function runWriteCommitHashIntoPackage({ buildPath }) {
   const commit = execSync('git rev-parse HEAD').toString();
   const jsonPath = path.resolve(buildPath, 'package.json');
   let jsonString = fs.readFileSync(jsonPath).toString();
   jsonString = jsonString.replace('COMMIT_INSERTED_DURING_PACKAGING', commit.substr(0, 8));
   fs.writeFileSync(jsonPath, jsonString);
-  callback();
 }
 
 // For Electron versions that support the setuid sandbox on Linux, the
 // chrome-sandbox helper executable must have the setuid (`+s` / `0o4000`) bit.
 // See: https://github.com/electron/electron/pull/17269#issuecomment-470671914
-function runUpdateSandboxHelperPermissions(buildPath, electronVersion, plat, arch, callback) {
+async function runUpdateSandboxHelperPermissions({ buildPath }) {
   const helperPath = path.resolve(buildPath, '..', '..', 'chrome-sandbox');
   if (fs.existsSync(helperPath)) {
     console.log('---> Changing chrome-sandbox permissions');
@@ -105,10 +104,9 @@ function runUpdateSandboxHelperPermissions(buildPath, electronVersion, plat, arc
   } else {
     console.log('---> Could not find chrome-sandbox to change permissions');
   }
-  callback();
 }
 
-function runCopySymlinkedPackages(buildPath, electronVersion, plat, arch, callback) {
+async function runCopySymlinkedPackages({ buildPath }) {
   console.log('---> Moving symlinked node modules / internal packages into build folder.');
   symlinkedPackages.forEach(({ realPackagePath, relativePackageDir }) => {
     const packagePath = path.join(buildPath, relativePackageDir);
@@ -116,7 +114,6 @@ function runCopySymlinkedPackages(buildPath, electronVersion, plat, arch, callba
     fsPlus.removeSync(packagePath);
     fsPlus.copySync(realPackagePath, packagePath);
   });
-  callback();
 }
 
 function writeFileEnsureDir(filePath, contents) {
@@ -124,7 +121,7 @@ function writeFileEnsureDir(filePath, contents) {
   fs.writeFileSync(filePath, contents);
 }
 
-function runTranspilers(buildPath, electronVersion, plat, arch, callback) {
+async function runTranspilers({ buildPath }) {
   console.log('---> Running TypeScript Compiler');
   sourceGlobs.forEach(pattern => {
     glob.sync(pattern, { cwd: buildPath }).forEach(relPath => {
@@ -142,10 +139,9 @@ function runTranspilers(buildPath, electronVersion, plat, arch, callback) {
       fs.unlinkSync(tsPath);
     });
   });
-  callback();
 }
 
-async function runUploadSourceMapsToSentry(buildPath, electronVersion, plat, arch, callback) {
+async function runUploadSourceMapsToSentry({ buildPath }) {
   const { SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT } = process.env;
   const mapFiles = glob.sync('**/*.js.map', { cwd: buildPath });
 
@@ -159,7 +155,6 @@ async function runUploadSourceMapsToSentry(buildPath, electronVersion, plat, arc
       '---> Skipping Sentry source map upload (set SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT to enable)'
     );
     cleanup();
-    callback();
     return;
   }
 
@@ -169,7 +164,6 @@ async function runUploadSourceMapsToSentry(buildPath, electronVersion, plat, arc
   } catch (e) {
     console.log('---> @sentry/cli not found, skipping source map upload');
     cleanup();
-    callback();
     return;
   }
 
@@ -195,7 +189,6 @@ async function runUploadSourceMapsToSentry(buildPath, electronVersion, plat, arc
     console.error(`---> Sentry source map upload failed: ${err.message}`);
   } finally {
     cleanup();
-    callback();
   }
 }
 
@@ -334,14 +327,14 @@ function buildPackagerOptions() {
     // See https://github.com/electron-userland/electron-packager/blob/master/mac.js#L50
     extendInfo: path.resolve(appDir, 'build', 'resources', 'mac', 'extra.plist'),
     appBundleId: 'com.mailspring.mailspring',
-    afterCopy: [
+    afterCopy: serialHooks([
       runCopyPlatformSpecificResources,
       runWriteCommitHashIntoPackage,
       runUpdateSandboxHelperPermissions,
       runCopySymlinkedPackages,
       runTranspilers,
       runUploadSourceMapsToSentry,
-    ],
+    ]),
   };
 }
 
