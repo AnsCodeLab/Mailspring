@@ -120,12 +120,12 @@ describe('gemini-cli-service', () => {
       expect(parseStreamLine(JSON.stringify({ type: 'init', model: 'x' }))).toBeNull();
       expect(parseStreamLine(JSON.stringify({ type: 'tool_use', tool_name: 'x' }))).toBeNull();
       expect(
-        parseStreamLine(JSON.stringify({ type: 'message', role: 'user', content: 'q', delta: true }))
+        parseStreamLine(
+          JSON.stringify({ type: 'message', role: 'user', content: 'q', delta: true })
+        )
       ).toBeNull();
       expect(
-        parseStreamLine(
-          JSON.stringify({ type: 'error', severity: 'warning', message: 'slow' })
-        )
+        parseStreamLine(JSON.stringify({ type: 'error', severity: 'warning', message: 'slow' }))
       ).toBeNull();
     });
 
