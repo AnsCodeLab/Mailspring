@@ -146,9 +146,14 @@ describe('gemini-cli-service', () => {
     });
 
     it('surfaces error.message via resultError', () => {
-      expect(() =>
-        parseJsonResponse(JSON.stringify({ error: { message: 'Not logged in' } }))
-      ).toThrowError(/GEMINI_API_KEY|sign in/i);
+      let err: any;
+      try {
+        parseJsonResponse(JSON.stringify({ error: { message: 'Not logged in' } }));
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeTruthy();
+      expect(String(err.message)).toMatch(/GEMINI_API_KEY|sign in/i);
     });
   });
 
