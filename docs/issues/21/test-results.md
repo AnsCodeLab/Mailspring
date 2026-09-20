@@ -63,4 +63,13 @@ Specs added (to be executed by orchestrator / package Jasmine):
 2. `feat(ai-assistant): add CursorCliService (#21)`
 3. `feat(ai-assistant): wire cursor-cli provider through config and AIService (#21)`
 4. `feat(ai-assistant): add Cursor CLI preferences and chat panel gates (#21)`
-5. `docs(ai-assistant): add test cases and results for #21` (this docs commit)
+5. `docs(ai-assistant): add test cases and results for #21`
+6. `fix(ai-assistant): restore truncated ai-service.ts ending (#21)` — repaired accidental tool-output paste that truncated `testConnection`.
+7. Follow-up: fix `parseListModelsOutput` to accept hyphenated model IDs + unit coverage (code-review finding).
+
+## Jasmine (orchestrator)
+
+```
+npm test -- --spec-directory=app/internal_packages/ai-assistant/specs --spec-file-pattern='(cursor-cli-service|config)-spec'
+→ 37 passing (before parseListModelsOutput specs; re-run after review fix)
+```

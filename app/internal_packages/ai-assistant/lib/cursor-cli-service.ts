@@ -117,12 +117,13 @@ export function parseStreamLine(line: string): string | null {
 }
 
 // Parse `agent --list-models` text lines shaped like `id - Label`.
+// IDs may contain hyphens (e.g. gpt-5.3-codex-low); split on the first " - ".
 export function parseListModelsOutput(text: string): string[] {
   const ids: string[] = [];
   for (const raw of text.split('\n')) {
     const line = raw.trim();
     if (!line) continue;
-    const m = line.match(/^([^\s-]+)\s+-\s+/);
+    const m = line.match(/^(\S+)\s+-\s+/);
     if (m) ids.push(m[1]);
   }
   return ids;

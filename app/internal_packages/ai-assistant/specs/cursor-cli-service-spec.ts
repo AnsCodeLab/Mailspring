@@ -6,6 +6,7 @@ import {
   notFoundError,
   spawnOptions,
   parseStreamLine,
+  parseListModelsOutput,
 } from '../lib/cursor-cli-service';
 import { AIConfig } from '../lib/config';
 
@@ -183,6 +184,29 @@ describe('cursor-cli-service', () => {
       expect(err.message).toContain('/opt/agent');
       expect(err.message).toContain('Preferences');
       expect(err.message).toContain('AI Assistant');
+    });
+  });
+
+  describe('parseListModelsOutput', () => {
+    it('parses hyphenated model ids from real CLI-shaped lines', () => {
+      const text = [
+        'Available models',
+        '',
+        'auto - Auto (current, default)',
+        'gpt-5.3-codex-low - Codex 5.3 Low',
+        'composer-2.5 - Composer 2.5',
+        'claude-sonnet-5-thinking-high - Claude Sonnet 5 1M Thinking',
+      ].join('\n');
+      expect(parseListModelsOutput(text)).toEqual([
+        'auto',
+        'gpt-5.3-codex-low',
+        'composer-2.5',
+        'claude-sonnet-5-thinking-high',
+      ]);
+    });
+
+    it('skips header noise and blank lines', () => {
+      expect(parseListModelsOutput('Available models\n\n')).toEqual([]);
     });
   });
 });
