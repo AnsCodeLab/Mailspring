@@ -30,6 +30,10 @@ describe('AIConfig defaults', () => {
     expect(AIConfig.getCursorCliPath()).toBe('agent'));
   it('cursor CLI model override defaults to empty', () =>
     expect(AIConfig.getCursorCliModel()).toBe(''));
+  it('gemini CLI path defaults to "gemini"', () =>
+    expect(AIConfig.getGeminiCliPath()).toBe('gemini'));
+  it('gemini CLI model override defaults to empty', () =>
+    expect(AIConfig.getGeminiCliModel()).toBe(''));
   it('minScore defaults to 0.25', () => expect(AIConfig.getMinScore()).toBe(0.25));
 });
 
