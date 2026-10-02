@@ -72,6 +72,8 @@ jobs:
             - Toolbar reorder: hamburger left, window controls right (minimize, maximize, close)
             - Subscription tab hidden from Preferences
             - Export emails/threads to Markdown with embedded images
+            - "Move to Trash" in a message's reply-caret menu trashes only that message, not the whole conversation
+            - Fixed the left sidebar (accounts and folders) failing to load in packaged builds
 
             **Linux**
             - Fixed "could not store your password securely" error appearing even when a working secret service (GNOME Keyring/KWallet) is reachable, on launchers that don't propagate `XDG_CURRENT_DESKTOP`/`DESKTOP_SESSION` (systemd user units, some window managers, process supervisors)
