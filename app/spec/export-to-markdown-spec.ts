@@ -197,4 +197,46 @@ describe('MessageControls "Export as Markdown" dropdown item', () => {
     expect(DatabaseStore.find).toHaveBeenCalledWith(Message, 'msg-2');
     expect(ExportUtils.buildSingleMessageMarkdown).toHaveBeenCalledWith(loadedMessage);
   });
+
+  describe('"Move to Trash" item', () => {
+    const { CategoryStore, Actions, ChangeFolderTask, Folder } = require('mailspring-exports');
+    const trash = { id: 'trash-id', role: 'trash', accountId: 'a1' };
+
+    function trashableMessage(overrides = {}) {
+      return {
+        ...makeMessage({ id: 'only-me' }),
+        accountId: 'a1',
+        draft: false,
+        folder: { id: 'inbox-id', role: 'inbox' },
+        canReplyAll: () => true,
+        ...overrides,
+      };
+    }
+
+    it('queues a folder move for only the open message, not the thread', () => {
+      spyOn(CategoryStore, 'getTrashCategory').andReturn(Object.assign(new Folder(), trash));
+      spyOn(Actions, 'queueTask');
+
+      const items = makeControls({ message: trashableMessage() })._items();
+      items.find((i) => i.name === 'Move to Trash').select();
+
+      const task = Actions.queueTask.calls[0].args[0];
+      expect(task instanceof ChangeFolderTask).toBe(true);
+      expect(task.messageIds).toEqual(['only-me']);
+      expect(task.threadIds).toEqual([]);
+    });
+
+    it('is omitted for messages already in Trash', () => {
+      spyOn(CategoryStore, 'getTrashCategory').andReturn(trash);
+      const message = trashableMessage({ folder: { id: 'trash-id', role: 'trash' } });
+      const names = makeControls({ message })._items().map((i) => i.name);
+      expect(names).not.toContain('Move to Trash');
+    });
+
+    it('is omitted when the account has no trash folder', () => {
+      spyOn(CategoryStore, 'getTrashCategory').andReturn(null);
+      const names = makeControls({ message: trashableMessage() })._items().map((i) => i.name);
+      expect(names).not.toContain('Move to Trash');
+    });
+  });
 });

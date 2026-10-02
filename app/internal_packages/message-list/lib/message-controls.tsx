@@ -11,6 +11,9 @@ import {
   Message,
   DatabaseStore,
   ComponentRegistry,
+  CategoryStore,
+  ChangeFolderTask,
+  Folder,
 } from 'mailspring-exports';
 import { RetinaImg, ButtonDropdown, Menu } from 'mailspring-component-kit';
 import {
@@ -55,14 +58,40 @@ export default class MessageControls extends React.Component<MessageControlsProp
       select: this._onExportMarkdown,
     };
 
+    const trashMessage = {
+      name: localized('Move to Trash'),
+      image: 'toolbar-trash.png',
+      select: this._onTrashMessage,
+    };
+
+    const tail = this._canTrashMessage()
+      ? [showOriginal, exportMarkdown, trashMessage]
+      : [showOriginal, exportMarkdown];
+
     if (!this.props.message.canReplyAll()) {
-      return [reply, forward, showOriginal, exportMarkdown];
+      return [reply, forward, ...tail];
     }
     const defaultReplyType = AppEnv.config.get('core.sending.defaultReplyType');
     return defaultReplyType === 'reply-all'
-      ? [replyAll, reply, forward, showOriginal, exportMarkdown]
-      : [reply, replyAll, forward, showOriginal, exportMarkdown];
+      ? [replyAll, reply, forward, ...tail]
+      : [reply, replyAll, forward, ...tail];
   }
+
+  _canTrashMessage() {
+    const { message } = this.props;
+    if (message.draft || message.folder?.role === 'trash') return false;
+    return !!CategoryStore.getTrashCategory(message.accountId);
+  }
+
+  // Moves only this message; the rest of the thread stays where it is.
+  _onTrashMessage = () => {
+    const { message } = this.props;
+    const folder = CategoryStore.getTrashCategory(message.accountId) as Folder;
+    if (!folder) return;
+    Actions.queueTask(
+      new ChangeFolderTask({ folder, messages: [message], source: 'Message Controls' })
+    );
+  };
 
   _dropdownMenu(items: Array<{ name: string; image: string; select: () => void }>) {
     const itemContent = (item: { name: string; image: string; select: () => void }) => (
