@@ -1,6 +1,5 @@
 import React from 'react';
 import { Editor, Value, Range } from 'slate';
-import { clipboard as ElectronClipboard } from 'electron';
 import { localized, InlineStyleTransformer, SanitizeTransformer } from 'mailspring-exports';
 import { ComposerEditorPlugin, ComposerEditorPluginToolbarComponentProps } from './types';
 import { safeActiveMarks, applyValueForMark } from './toolbar-component-factories';
@@ -25,14 +24,16 @@ function getConversionFns() {
   };
 }
 
-type ClipboardLike = Pick<
-  typeof ElectronClipboard,
-  'writeText' | 'write' | 'readText' | 'readHTML'
->;
+// Electron 44 removed `clipboard` from the renderer, so the toolbar uses the W3C
+// async Clipboard API, which Chromium allows here without a permission prompt.
+type ClipboardLike = Pick<Clipboard, 'write' | 'read' | 'readText'>;
 
 // --- Slate orchestration (tested with a fake editor/clipboard) ---
 
-export function copySelectionToClipboard(editor: Editor, clipboard: ClipboardLike): boolean {
+export async function copySelectionToClipboard(
+  editor: Editor,
+  clipboard: ClipboardLike
+): Promise<boolean> {
   if (editor.value.selection.isCollapsed) {
     return false;
   }
@@ -44,13 +45,27 @@ export function copySelectionToClipboard(editor: Editor, clipboard: ClipboardLik
   if (!text) {
     return false;
   }
-  clipboard.write({ text, html: convertToHTML(value) });
+  await clipboard.write([
+    new ClipboardItem({
+      'text/plain': new Blob([text], { type: 'text/plain' }),
+      'text/html': new Blob([convertToHTML(value)], { type: 'text/html' }),
+    }),
+  ]);
   return true;
 }
 
-export function pasteFromClipboard(editor: Editor, clipboard: ClipboardLike) {
+async function readClipboardHTML(clipboard: ClipboardLike): Promise<string> {
+  for (const item of await clipboard.read()) {
+    if (item.types.includes('text/html')) {
+      return (await item.getType('text/html')).text();
+    }
+  }
+  return '';
+}
+
+export async function pasteFromClipboard(editor: Editor, clipboard: ClipboardLike) {
   const { convertFromHTML } = getConversionFns();
-  let html = clipboard.readHTML();
+  let html = await readClipboardHTML(clipboard);
   if (html) {
     html = SanitizeTransformer.runSync(html);
     try {
@@ -64,14 +79,11 @@ export function pasteFromClipboard(editor: Editor, clipboard: ClipboardLike) {
       return;
     }
   }
-  const text = clipboard.readText();
-  if (text) {
-    editor.insertText(text);
-  }
+  await pastePlainFromClipboard(editor, clipboard);
 }
 
-export function pastePlainFromClipboard(editor: Editor, clipboard: ClipboardLike) {
-  const text = clipboard.readText();
+export async function pastePlainFromClipboard(editor: Editor, clipboard: ClipboardLike) {
+  const text = await clipboard.readText();
   if (text) {
     editor.insertText(text);
   }
@@ -137,8 +149,8 @@ const CutButton = (props: ComposerEditorPluginToolbarComponentProps) => (
     icon="fa fa-scissors"
     title={localized('Cut')}
     disabled={!canCopyOrCut(props.value.selection.isCollapsed)}
-    onMouseDown={() => {
-      if (copySelectionToClipboard(props.editor, ElectronClipboard)) {
+    onMouseDown={async () => {
+      if (await copySelectionToClipboard(props.editor, navigator.clipboard)) {
         props.editor.delete();
       }
     }}
@@ -151,7 +163,7 @@ const CopyButton = (props: ComposerEditorPluginToolbarComponentProps) => (
     icon="fa fa-copy"
     title={localized('Copy')}
     disabled={!canCopyOrCut(props.value.selection.isCollapsed)}
-    onMouseDown={() => copySelectionToClipboard(props.editor, ElectronClipboard)}
+    onMouseDown={() => copySelectionToClipboard(props.editor, navigator.clipboard)}
   />
 );
 
@@ -160,7 +172,7 @@ const PasteButton = (props: ComposerEditorPluginToolbarComponentProps) => (
     className={props.className}
     icon="fa fa-clipboard"
     title={localized('Paste')}
-    onMouseDown={() => pasteFromClipboard(props.editor, ElectronClipboard)}
+    onMouseDown={() => pasteFromClipboard(props.editor, navigator.clipboard)}
   />
 );
 
@@ -169,7 +181,7 @@ const PastePlainButton = (props: ComposerEditorPluginToolbarComponentProps) => (
     className={props.className}
     icon="fa fa-clipboard"
     title={localized('Paste as plain text')}
-    onMouseDown={() => pastePlainFromClipboard(props.editor, ElectronClipboard)}
+    onMouseDown={() => pastePlainFromClipboard(props.editor, navigator.clipboard)}
   />
 );
 

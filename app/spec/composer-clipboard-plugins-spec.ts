@@ -1,3 +1,4 @@
+import { Editor } from 'slate';
 import {
   copySelectionToClipboard,
   applyCapturedMarks,
@@ -8,22 +9,24 @@ function fakeMark(type: string, value?: any) {
 }
 
 function makeClipboard() {
-  const store: Record<string, string> = {};
+  const written: ClipboardItem[][] = [];
   return {
-    writeText: (t: string) => (store['text'] = t),
-    write: (obj: { text?: string; html?: string }) => Object.assign(store, obj),
-    readText: () => store['text'] || '',
-    readHTML: () => store['html'] || '',
-    _store: store,
+    write: async (items: ClipboardItem[]) => {
+      written.push(items);
+    },
+    read: async () => written[written.length - 1] || [],
+    readText: async () => '',
+    written,
   };
 }
 
 describe('copySelectionToClipboard', () => {
-  it('returns false and writes nothing when the selection is collapsed', () => {
+  it('returns false and writes nothing when the selection is collapsed', async () => {
     const clip = makeClipboard();
-    const editor = { value: { selection: { isCollapsed: true } } } as any;
-    expect(copySelectionToClipboard(editor, clip)).toBe(false);
-    expect(clip._store['text']).toBeUndefined();
+    // Only `value.selection.isCollapsed` is read before the early return.
+    const editor = { value: { selection: { isCollapsed: true } } } as unknown as Editor;
+    expect(await copySelectionToClipboard(editor, clip)).toBe(false);
+    expect(clip.written.length).toBe(0);
   });
 });
 
