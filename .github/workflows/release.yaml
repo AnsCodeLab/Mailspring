@@ -6,11 +6,20 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Each platform builds into an artifact; `publish` creates the GitHub Release only
+# after every build succeeds, so a single failing platform blocks the release
+# instead of shipping a partial one.
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
-    permissions:
-      contents: write
+
+    # Electron 43+ V8 headers use `class [[deprecated(...)]] __attribute__(...)`
+    # ordering that GCC < 13 rejects, so better-sqlite3 fails with 22.04's GCC 11.
+    # Clang 15 accepts it while keeping the 22.04 glibc/libstdc++ baseline.
+    # Mirrors build-linux.yaml (upstream d491f71ba).
+    env:
+      CC: clang-15
+      CXX: clang++-15
 
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +31,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             software-properties-common \
-            autoconf automake build-essential clang cmake fakeroot git \
+            autoconf automake build-essential clang clang-15 cmake fakeroot git \
             libc-ares-dev libctemplate-dev libcurl4-openssl-dev libglib2.0-dev \
             libicu-dev libsasl2-dev libsasl2-modules libsasl2-modules-gssapi-mit \
             libsecret-1-dev libssl-dev libnss3 libnss3-dev libtidy-dev libtool \
@@ -40,6 +49,111 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            app/dist/*.deb
+            app/dist/*.rpm
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache NodeJS modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./node_modules
+            ./app/node_modules
+          key: windows-2022-deps-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/package-lock.json') }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          DEBUG: electron-packager
+
+      - name: Create Windows installer
+        run: node app/build/create-signed-windows-installer.js
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: app/dist/MailspringSetup.exe
+          if-no-files-found: error
+
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - os: macos-26
+            arch: arm64
+            zip: Mailspring-AppleSilicon.zip
+          - os: macos-26-intel
+            arch: x64
+            zip: Mailspring.zip
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          DEBUG: electron-packager
+
+      # No Apple Developer ID in this fork, so the build is unsigned. Packaging
+      # rewrites Info.plist and invalidates Electron's signature, and Apple Silicon
+      # refuses to run arm64 code without one; an ad-hoc signature satisfies that.
+      # Users still have to clear Gatekeeper quarantine on first launch.
+      - name: Ad-hoc sign and zip
+        working-directory: app/dist/Mailspring-darwin-${{ matrix.arch }}
+        run: |
+          codesign --force --deep --sign - Mailspring.app
+          codesign --verify --deep --strict Mailspring.app
+          rm -f ../Mailspring.zip
+          ditto -c -k --sequesterRsrc --keepParent Mailspring.app "../${{ matrix.zip }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-${{ matrix.arch }}
+          path: app/dist/${{ matrix.zip }}
+          if-no-files-found: error
+
+  publish:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -77,49 +191,6 @@ jobs:
 
             **Linux**
             - Fixed "could not store your password securely" error appearing even when a working secret service (GNOME Keyring/KWallet) is reachable, on launchers that don't propagate `XDG_CURRENT_DESKTOP`/`DESKTOP_SESSION` (systemd user units, some window managers, process supervisors)
-          files: |
-            app/dist/*.deb
-            app/dist/*.rpm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-windows:
-    runs-on: windows-2022
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache NodeJS modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ./node_modules
-            ./app/node_modules
-          key: windows-2022-deps-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/package-lock.json') }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-        env:
-          DEBUG: electron-packager
-
-      - name: Create Windows installer
-        run: node app/build/create-signed-windows-installer.js
-
-      - name: Upload Windows installer to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: app/dist/MailspringSetup.exe
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
