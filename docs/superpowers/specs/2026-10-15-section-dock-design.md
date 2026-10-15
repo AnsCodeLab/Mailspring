@@ -14,7 +14,7 @@ A dock is pinned to the bottom of the main window's left column. It holds **Mail
 | Separate windows | Kept; reachable from the dock context menu and the Window menu |
 | Section shortcuts | `mod+1` Mail, `mod+2` Calendar, `mod+3` Contacts |
 | Account selection | Moves from `mod+1..9` to `mod+alt+1..9` |
-| Calendar views | Day/Week/Month/Agenda move from `mod+1..4` to `mod+shift+1..4` |
+| Calendar views | Day/Week/Month/Agenda move from `mod+1..4` to `mod+shift+1..4`; `ctrl+cmd+1..4` on macOS, where `cmd+shift+3/4` take screenshots |
 | Startup | Always Mail; the active section is not persisted |
 
 ## Current constraints (why this is not just a button)
@@ -47,7 +47,7 @@ flowchart LR
 ### 1. `SectionStore` (`app/src/flux/stores/section-store.ts`)
 
 - State: `current: SectionId` (`'mail' | 'calendar' | 'contacts'` plus registered overflow ids), and `mailRootSheet`, the mail root sheet to restore on return.
-- `registerSection({ id, title, icon, rootSheet, menu?, hiddenMenuIds?, onEnter?, overflow? })` returns a disposable. Mail is registered by core; calendar and contacts register from their packages in the main window.
+- `registerSection({ id, title, icon, order, rootSheet, menu?, hiddenMenuIds?, onEnter?, overflow? })` returns a disposable. Mail is registered by core; calendar and contacts register from their packages in the main window. `sections()` is sorted by `order` (Mail 0, Calendar 10, Contacts 20), overflow sections last, so the dock order does not depend on package activation order.
 - `Actions.selectSection(id)`:
   1. If the target is the current section, do nothing.
   2. On leaving Mail, record `WorkspaceStore.rootSheet()`.
@@ -102,7 +102,7 @@ flowchart LR
   - `navigation:section-calendar` → `mod+2`
   - `navigation:section-contacts` → `mod+3`
 - `window:select-account-0..8` move to `mod+alt+1..9` (`keymaps/base.json`, `account-commands.ts` menu accelerators).
-- `calendar:view-day/week/month/agenda` move to `mod+shift+1..4` (`main-calendar/keymaps/calendar.json`). The calendar menu labels update with them.
+- `calendar:view-day/week/month/agenda` move to `mod+shift+1..4` on Linux and Windows and `ctrl+cmd+1..4` on macOS (`main-calendar/keymaps/calendar-<platform>.json`; package keymaps named `<name>-<platform>.json` load only on that platform). The calendar menu labels update with them.
 - `navigation:go-to-contacts` (`g c`, currently a TODO no-op) becomes `selectSection('contacts')`.
 - Audit `mod+shift+r`, `mod+t`, `mod+left/right` and the plain arrow keys in `calendar.json` against `base.json` and every template. Any conflicting key is moved, or scoped through `KeyCommandsRegion` local handlers.
 - Inactive sections are unmounted, so their `BindGlobalCommands` handlers detach and the shared `core:*` commands reach only the visible section.
@@ -154,5 +154,12 @@ Smoke test (manual, all three layout modes, Linux; Windows/macOS through the rel
 ## Changelog notes
 
 - Account selection shortcuts change from `Ctrl/Cmd+1..9` to `Ctrl/Cmd+Alt+1..9`.
-- Calendar view shortcuts change to `Ctrl/Cmd+Shift+1..4`.
+- Calendar view shortcuts change to `Ctrl+Shift+1..4` (Linux, Windows) and `Ctrl+Cmd+1..4` (macOS).
 - Calendar and Contacts open inside the main window. Separate windows remain available through "Open in New Window".
+
+## Implementation notes
+
+- Menus: `SectionStore` stashes only the active section's hidden top-level menus and restores them on leaving it, rather than restoring a template snapshot, because `account-commands` rewrites the Window submenu at runtime.
+- Contacts has no sync trigger on entry: the sync engine has no contacts sync message, so it syncs contacts on its own schedule. Entering Contacts starts the contact queries instead.
+
+See the plan's [Deviations from the spec](../plans/2026-10-15-section-dock.md#deviations-from-the-spec-found-while-planning).
