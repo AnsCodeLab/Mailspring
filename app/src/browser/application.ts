@@ -441,7 +441,10 @@ export default class Application extends EventEmitter {
       }
     });
 
-    this.on('application:show-calendar', () => {
+    this.on('application:show-calendar', () => this.showSection('calendar'));
+    this.on('application:show-contacts', () => this.showSection('contacts'));
+
+    this.on('application:show-calendar-window', () => {
       this.windowManager.ensureWindow(WindowManager.CALENDAR_WINDOW, {});
       this.sendCalendarSync();
     });
@@ -452,12 +455,8 @@ export default class Application extends EventEmitter {
       this.sendCalendarSync(accountId);
     });
 
-    this.on('application:show-contacts', () => {
+    this.on('application:show-contacts-window', () => {
       this.windowManager.ensureWindow(WindowManager.CONTACTS_WINDOW, {});
-      const main = this.windowManager.get(WindowManager.MAIN_WINDOW);
-      if (main) {
-        main.sendMessage('run-contact-sync');
-      }
     });
 
     this.on('application:view-help', () => {
@@ -904,6 +903,15 @@ export default class Application extends EventEmitter {
 
     registerQuickpreviewIPCHandlers(ipcMain);
     registerNotificationIPCHandlers(ipcMain);
+  }
+
+  showSection(id: 'calendar' | 'contacts') {
+    const main = this.windowManager.get(WindowManager.MAIN_WINDOW);
+    if (main) {
+      main.show();
+      main.focus();
+      main.sendMessage('select-section', id);
+    }
   }
 
   sendCalendarSync(accountId?: string) {
