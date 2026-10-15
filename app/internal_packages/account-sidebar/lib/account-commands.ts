@@ -40,7 +40,7 @@ export function menuItem(
   if (clickHandlers) {
     const accounts = account instanceof Array ? account : [account];
     item.click = _focusAccounts.bind(null, accounts);
-    item.accelerator = `CmdOrCtrl+${idx + 1}`;
+    item.accelerator = `CmdOrCtrl+Alt+${idx + 1}`;
   }
   return item;
 }
