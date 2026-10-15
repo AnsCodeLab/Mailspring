@@ -116,6 +116,10 @@ export default class Package {
     return path.join(this.directory, 'styles');
   }
 
+  /**
+   * Loads every `keymaps/*.json`. Like the core `base-<platform>.json`, a file named
+   * `<name>-darwin.json`, `<name>-linux.json` or `<name>-win32.json` loads only on that platform.
+   */
   loadKeymaps() {
     let keymapPaths = [];
     const keymapsRoot = path.join(this.directory, 'keymaps');
@@ -123,6 +127,10 @@ export default class Package {
       keymapPaths = fs
         .readdirSync(keymapsRoot)
         .filter((fn) => fn.endsWith('.json'))
+        .filter((fn) => {
+          const platform = /-(darwin|linux|win32)\.json$/.exec(fn);
+          return !platform || platform[1] === process.platform;
+        })
         .map((fn) => path.join(keymapsRoot, fn));
     } catch (err) {
       // no menus

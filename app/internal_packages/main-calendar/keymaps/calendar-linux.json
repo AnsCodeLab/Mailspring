@@ -1,0 +1,6 @@
+{
+  "calendar:view-day": "mod+shift+1",
+  "calendar:view-week": "mod+shift+2",
+  "calendar:view-month": "mod+shift+3",
+  "calendar:view-agenda": "mod+shift+4"
+}

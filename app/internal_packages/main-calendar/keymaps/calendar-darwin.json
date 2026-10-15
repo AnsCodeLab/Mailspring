@@ -1,0 +1,6 @@
+{
+  "calendar:view-day": "ctrl+command+1",
+  "calendar:view-week": "ctrl+command+2",
+  "calendar:view-month": "ctrl+command+3",
+  "calendar:view-agenda": "ctrl+command+4"
+}

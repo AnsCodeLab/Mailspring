@@ -5,7 +5,7 @@
 Features:
 
 - **Section dock:** Mail, Calendar and Contacts now switch in place from a dock at the bottom of the left sidebar (also Window menu, Ctrl/Cmd+1/2/3). Right-click a dock icon to open Calendar or Contacts in a separate window.
-- **Shortcut changes:** account selection moved from Ctrl/Cmd+1…9 to Ctrl/Cmd+Alt+1…9; calendar Day/Week/Month/Agenda moved to Ctrl/Cmd+Shift+1…4.
+- **Shortcut changes:** account selection moved from Ctrl/Cmd+1…9 to Ctrl/Cmd+Alt+1…9; calendar Day/Week/Month/Agenda moved to Ctrl+Shift+1…4 (Ctrl+Cmd+1…4 on macOS).
 
 ## 1.24.1 (9/14/2026)
 
