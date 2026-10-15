@@ -101,6 +101,7 @@ function activateInContactsWindow() {
   template.splice(template.findIndex((item) => item.id === 'Edit') + 1, 0, contactMenu());
   AppEnv.menu.template = template;
   AppEnv.menu.update();
+  Store.start();
   Actions.selectRootSheet(WorkspaceStore.Sheet.Contacts);
   registerContactsComponents({ location: WorkspaceStore.Location.ContactsSidebar });
   ComponentRegistry.register(AddContactToolbar, {
@@ -129,9 +130,11 @@ function activateInMainWindow() {
     id: 'contacts',
     title: localized('Contacts'),
     icon: ContactsIcon,
+    order: 20,
     rootSheet: () => WorkspaceStore.Sheet.Contacts,
     menu: contactMenu(),
     hiddenMenuIds: HIDDEN_MENUS,
+    onEnter: () => Store.start(),
     openInNewWindowCommand: 'application:show-contacts-window',
   });
 }

@@ -11,6 +11,7 @@ import { AccountStore } from '../../src/flux/stores/account-store';
 import FocusedPerspectiveStore from '../../src/flux/stores/focused-perspective-store';
 import SectionStore from '../../src/flux/stores/section-store';
 import * as Actions from '../../src/flux/actions';
+import { _focusAccounts } from '../../internal_packages/account-sidebar/lib/account-commands';
 
 describe('FocusedPerspectiveStore', function () {
   beforeEach(function () {
@@ -211,6 +212,54 @@ describe('FocusedPerspectiveStore', function () {
       FocusedPerspectiveStore._setPerspective(this.userPerspective);
       expect(Actions.selectRootSheet).not.toHaveBeenCalled();
       expect(Actions.popToRootSheet).not.toHaveBeenCalled();
+    });
+
+    it('records the perspective sheet as the sheet Mail returns to', function () {
+      spyOn(SectionStore, 'current').andReturn('calendar');
+      const sheet = { id: 'SpecSheet' };
+      spyOn(this.userPerspective, 'sheet').andReturn(sheet);
+      spyOn(SectionStore, 'setMailRootSheet');
+      FocusedPerspectiveStore._setPerspective(this.userPerspective);
+      expect(SectionStore.setMailRootSheet).toHaveBeenCalledWith(sheet);
+    });
+  });
+
+  describe('mail-directed actions while another section is active', function () {
+    let section: { dispose(): void };
+
+    beforeEach(function () {
+      spyOn(Actions, 'selectRootSheet');
+      spyOn(Actions, 'popToRootSheet');
+      spyOn(AppEnv, 'isVisible').andReturn(true);
+      SectionStore._resetForSpecs();
+      section = SectionStore.registerSection({
+        id: 'calendar',
+        title: 'Calendar',
+        icon: () => null,
+        order: 10,
+        rootSheet: () => null,
+      });
+      SectionStore._onSelectSection('calendar');
+    });
+
+    afterEach(function () {
+      section.dispose();
+      SectionStore._resetForSpecs();
+    });
+
+    it('navigation:go-to-inbox returns to mail', function () {
+      AppEnv.commands.dispatch('navigation:go-to-inbox');
+      expect(SectionStore.current()).toBe('mail');
+    });
+
+    it('ensureCategoryIsFocused returns to mail', function () {
+      Actions.ensureCategoryIsFocused('inbox', [this.account.id]);
+      expect(SectionStore.current()).toBe('mail');
+    });
+
+    it('focusing an account returns to mail', function () {
+      _focusAccounts([this.account]);
+      expect(SectionStore.current()).toBe('mail');
     });
   });
 });

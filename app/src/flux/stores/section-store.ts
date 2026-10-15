@@ -13,6 +13,8 @@ export interface SectionDeclaration {
   id: SectionId;
   title: string;
   icon: React.ComponentType;
+  /** Dock position; mail is 0, calendar 10, contacts 20. */
+  order: number;
   rootSheet: () => SheetDeclaration;
   menu?: IMenuItem;
   hiddenMenuIds?: string[];
@@ -29,10 +31,11 @@ interface StashedMenu {
 /**
  * Owns which top-level section the main window shows. Mail is always registered and is the
  * section at startup; calendar and contacts register themselves when their packages activate
- * in the main window.
+ * in the main window. `sections()` is sorted by `order`, overflow sections last.
  *
- * Menus are stashed rather than rebuilt from a snapshot because account-commands rewrites the
- * Window submenu at runtime; only the section's own hidden menus are removed and restored.
+ * Only the active section's hidden menus are stashed and restored on leaving it, because
+ * account-commands rewrites the Window submenu at runtime and a whole-template restore would
+ * undo that.
  */
 class SectionStore extends MailspringStore {
   private _sections: SectionDeclaration[] = [];
@@ -65,7 +68,13 @@ class SectionStore extends MailspringStore {
   }
 
   registerSection(decl: SectionDeclaration) {
-    this._sections = [...this._sections.filter((s) => s.id !== decl.id), decl];
+    const replaced = this._sections.some((s) => s.id === decl.id);
+    const sections = replaced
+      ? this._sections.map((s) => (s.id === decl.id ? decl : s))
+      : [...this._sections, decl];
+    this._sections = sections.sort(
+      (a, b) => Number(!!a.overflow) - Number(!!b.overflow) || a.order - b.order
+    );
     this.trigger();
     return {
       dispose: () => {
@@ -83,6 +92,7 @@ class SectionStore extends MailspringStore {
       id: 'mail',
       title: 'Mail',
       icon: () => null,
+      order: 0,
       rootSheet: () => this._mailRootSheet || WorkspaceStore.Sheet.Threads,
     };
   }
@@ -91,6 +101,20 @@ class SectionStore extends MailspringStore {
   setMailPresentation(title: string, icon: React.ComponentType) {
     this._sections = this._sections.map((s) => (s.id === 'mail' ? { ...s, title, icon } : s));
     this.trigger();
+  }
+
+  restoreMailPresentation() {
+    this._sections = this._sections.map((s) => (s.id === 'mail' ? this._mailSection() : s));
+    this.trigger();
+  }
+
+  /**
+   * Records the sheet Mail returns to. FocusedPerspectiveStore calls this for perspective
+   * changes made while another section is showing, so returning to Mail shows the sheet of
+   * the current perspective rather than the one active when Mail was left.
+   */
+  setMailRootSheet(sheet: SheetDeclaration) {
+    this._mailRootSheet = sheet;
   }
 
   _onSelectSection = (id: SectionId) => {
@@ -104,6 +128,12 @@ class SectionStore extends MailspringStore {
     }
 
     if (this._current === 'mail') {
+      // In list layout a focused thread sits on its own sheet; clearing focus pops it so a
+      // later thread-list change cannot push it back over the next section.
+      const threadSheet = WorkspaceStore.Sheet.Thread;
+      if (threadSheet && WorkspaceStore.topSheet() === threadSheet) {
+        Actions.setFocus({ collection: 'thread', item: null });
+      }
       this._mailRootSheet = WorkspaceStore.rootSheet();
     }
 

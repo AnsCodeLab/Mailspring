@@ -50,6 +50,7 @@ describe('SectionStore', function () {
       id: 'calendar',
       title: 'Calendar',
       icon: () => null,
+      order: 10,
       rootSheet: () => calendarSheet,
       menu: { id: 'Calendar', label: 'Calendar', submenu: [] },
       hiddenMenuIds: ['Thread', 'View'],
@@ -120,6 +121,7 @@ describe('SectionStore', function () {
         id: 'contacts',
         title: 'Contacts',
         icon: () => null,
+        order: 20,
         rootSheet: () => calendarSheet,
         menu: { id: 'Contact', label: 'Contact', submenu: [] },
         hiddenMenuIds: ['Thread', 'View'],
@@ -138,5 +140,94 @@ describe('SectionStore', function () {
     disposables.pop().dispose();
     expect(SectionStore.current()).toBe('mail');
     expect(SectionStore.sections().map((s) => s.id)).not.toContain(decl.id);
+  });
+
+  it('orders sections by declared order regardless of registration order', function () {
+    disposables.push(
+      SectionStore.registerSection({
+        id: 'contacts',
+        title: 'Contacts',
+        icon: () => null,
+        order: 20,
+        rootSheet: () => calendarSheet,
+      })
+    );
+    registerCalendar();
+    expect(SectionStore.sections().map((s) => s.id)).toEqual(['mail', 'calendar', 'contacts']);
+  });
+
+  it('puts overflow sections after the dock sections', function () {
+    disposables.push(
+      SectionStore.registerSection({
+        id: 'notes',
+        title: 'Notes',
+        icon: () => null,
+        order: 1,
+        overflow: true,
+        rootSheet: () => calendarSheet,
+      })
+    );
+    registerCalendar();
+    expect(SectionStore.sections().map((s) => s.id)).toEqual(['mail', 'calendar', 'notes']);
+  });
+
+  it('replaces a re-registered section in place', function () {
+    registerCalendar();
+    disposables.push(
+      SectionStore.registerSection({
+        id: 'contacts',
+        title: 'Contacts',
+        icon: () => null,
+        order: 20,
+        rootSheet: () => calendarSheet,
+      })
+    );
+    const replacement = registerCalendar({ title: 'Agenda' });
+    expect(SectionStore.sections().map((s) => s.id)).toEqual(['mail', 'calendar', 'contacts']);
+    expect(SectionStore.sections()[1]).toBe(replacement);
+  });
+
+  it('returns to the mail root sheet recorded while away', function () {
+    registerCalendar();
+    WorkspaceStore.defineSheet(
+      'SectionSpecDrafts',
+      { root: true, silent: true } as Partial<SheetDeclaration>,
+      {
+        list: ['RootSidebar'],
+      }
+    );
+    SectionStore._onSelectSection('calendar');
+    SectionStore.setMailRootSheet(WorkspaceStore.Sheet.SectionSpecDrafts);
+    SectionStore._onSelectSection('mail');
+    expect(WorkspaceStore.rootSheet()).toBe(WorkspaceStore.Sheet.SectionSpecDrafts);
+    WorkspaceStore.undefineSheet('SectionSpecDrafts');
+  });
+
+  it('clears the focused thread when leaving mail from the Thread sheet', function () {
+    registerCalendar();
+    WorkspaceStore.defineSheet('Thread', { silent: true } as Partial<SheetDeclaration>, {
+      list: ['MessageList'],
+    });
+    WorkspaceStore.pushSheet(WorkspaceStore.Sheet.Thread);
+    spyOn(Actions, 'setFocus');
+    SectionStore._onSelectSection('calendar');
+    expect(Actions.setFocus).toHaveBeenCalledWith({ collection: 'thread', item: null });
+    WorkspaceStore.undefineSheet('Thread');
+  });
+
+  it('does not touch thread focus when leaving mail from the thread list', function () {
+    registerCalendar();
+    spyOn(Actions, 'setFocus');
+    SectionStore._onSelectSection('calendar');
+    expect(Actions.setFocus).not.toHaveBeenCalled();
+  });
+
+  it('restores the placeholder mail presentation', function () {
+    const icon = () => null;
+    SectionStore.setMailPresentation('Post', icon);
+    SectionStore.restoreMailPresentation();
+    const mail = SectionStore.sections().find((s) => s.id === 'mail');
+    expect(mail.title).toBe('Mail');
+    expect(mail.icon).not.toBe(icon);
   });
 });

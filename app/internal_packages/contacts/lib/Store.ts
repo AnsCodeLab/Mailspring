@@ -14,43 +14,44 @@ class ContactsWindowStore extends MailspringStore {
   _listSource = new ListTabular.DataSource.DumbArrayDataSource<Contact>();
 
   _contacts: Contact[] = [];
-  _contactsSubscription: MutableQuerySubscription<Contact>;
+  _contactsSubscription: MutableQuerySubscription<Contact> | null = null;
   _groups: ContactGroup[] = [];
   _books: ContactBook[] = [];
   _search = '';
   _filtered: Contact[] | null = null;
   _editing: string | 'new' | false = false;
 
-  constructor() {
-    super();
+  /**
+   * Subscribes to contacts, groups and books. Deferred until Contacts is first shown so the
+   * main window does not run these queries at startup; safe to call repeatedly.
+   */
+  start() {
+    if (this._contactsSubscription) {
+      return;
+    }
+    const contacts = DatabaseStore.findAll<Contact>(Contact)
+      .where(Contact.attributes.refs.greaterThan(0))
+      .where(Contact.attributes.hidden.equal(false));
+    this._contactsSubscription = new MutableQuerySubscription<Contact>(contacts);
 
-    window.requestAnimationFrame(() => {
-      const contacts = DatabaseStore.findAll<Contact>(Contact)
-        .where(Contact.attributes.refs.greaterThan(0))
-        .where(Contact.attributes.hidden.equal(false));
-      this._contactsSubscription = new MutableQuerySubscription<Contact>(contacts);
+    Rx.Observable.fromNamedQuerySubscription('contacts', this._contactsSubscription).subscribe(
+      (contacts) => {
+        this._contacts = contacts as Contact[];
+        this._filtered = null;
+        this.repopulate();
+      }
+    );
 
-      Rx.Observable.fromNamedQuerySubscription('contacts', this._contactsSubscription).subscribe(
-        (contacts) => {
-          this._contacts = contacts as Contact[];
-          this._filtered = null;
-          this.repopulate();
-        }
-      );
+    Rx.Observable.fromQuery(DatabaseStore.findAll<ContactGroup>(ContactGroup)).subscribe(
+      (groups) => {
+        this._groups = groups;
+        this.trigger();
+      }
+    );
 
-      Rx.Observable.fromQuery(DatabaseStore.findAll<ContactGroup>(ContactGroup)).subscribe(
-        (groups) => {
-          this._groups = groups;
-          this.trigger();
-        }
-      );
-
-      Rx.Observable.fromQuery(DatabaseStore.findAll<ContactBook>(ContactBook)).subscribe(
-        (books) => {
-          this._books = books;
-          this.trigger();
-        }
-      );
+    Rx.Observable.fromQuery(DatabaseStore.findAll<ContactBook>(ContactBook)).subscribe((books) => {
+      this._books = books;
+      this.trigger();
     });
   }
 
@@ -84,6 +85,7 @@ class ContactsWindowStore extends MailspringStore {
   }
 
   setPerspective(perspective: ContactsPerspective) {
+    this.start();
     const q = DatabaseStore.findAll<Contact>(Contact)
       .where(Contact.attributes.refs.greaterThan(0))
       .where(Contact.attributes.hidden.equal(false));

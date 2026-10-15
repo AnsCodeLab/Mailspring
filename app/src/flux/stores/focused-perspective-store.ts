@@ -151,6 +151,8 @@ class FocusedPerspectiveStore extends MailspringStore {
   };
 
   _onEnsureCategoryIsFocused = (categoryName: string, accountIds: string[] = []) => {
+    // Callers (notification clicks, Activity) go on to focus a thread, so Mail must be showing.
+    Actions.selectSection('mail');
     const ids = accountIds instanceof Array ? accountIds : [accountIds];
     const categories = ids.map((id) => CategoryStore.getCategoryByRole(id, categoryName));
     const perspective = MailboxPerspective.forCategories(categories);
@@ -192,12 +194,15 @@ class FocusedPerspectiveStore extends MailspringStore {
     }
 
     // While Calendar or Contacts is showing, the mail perspective still updates (sidebar
-    // selection, saved state) but must not pull the window back to a mail sheet.
+    // selection, saved state) but must not pull the window back to a mail sheet; Mail
+    // shows the perspective's sheet when it is next selected.
+    const desired = perspective.sheet();
     if (SectionStore.current() !== 'mail') {
+      if (desired) {
+        SectionStore.setMailRootSheet(desired);
+      }
       return;
     }
-
-    const desired = perspective.sheet();
 
     // Always switch to the correct sheet and pop to root when perspective set
     if (desired && WorkspaceStore.rootSheet() !== desired) {

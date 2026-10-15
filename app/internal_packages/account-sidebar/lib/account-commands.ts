@@ -71,6 +71,7 @@ export function menuTemplate(
 }
 
 export function _focusAccounts(accounts: Account[]) {
+  Actions.selectSection('mail');
   Actions.focusDefaultMailboxPerspectiveForAccounts(accounts);
   if (!AppEnv.isVisible()) {
     AppEnv.show();

@@ -9,4 +9,5 @@ export function activate() {
 
 export function deactivate() {
   ComponentRegistry.unregister(SectionSidebar);
+  SectionStore.restoreMailPresentation();
 }

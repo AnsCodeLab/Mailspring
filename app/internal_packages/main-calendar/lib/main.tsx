@@ -1,9 +1,11 @@
+import moment from 'moment';
 import { WorkspaceStore, ComponentRegistry, SectionStore, localized } from 'mailspring-exports';
 import { CalendarIcon } from 'mailspring-component-kit';
 import { QuickEventButton } from './quick-event-button';
 import { MailspringCalendar } from './core/mailspring-calendar';
 import { EventSearchBar } from './core/event-search-bar';
 import { CalendarSidebarPanel } from './core/calendar-sidebar-panel';
+import { CalendarViewStore } from './calendar-view-store';
 
 function calendarMenu(): (typeof AppEnv.menu.template)[0] {
   return {
@@ -49,6 +51,12 @@ function activateInCalendarWindow() {
   ComponentRegistry.register(EventSearchBar, { location: WorkspaceStore.Location.Center.Toolbar });
 }
 
+/** CalendarViewStore lives for the whole session, so each entry starts back on today. */
+export function enterCalendarSection() {
+  CalendarViewStore.setFocusedMoment(moment());
+  AppEnv.mailsyncBridge.sendSyncCalendarNow();
+}
+
 function activateInMainWindow() {
   WorkspaceStore.defineSheet(
     'Calendar',
@@ -74,10 +82,11 @@ function activateInMainWindow() {
     id: 'calendar',
     title: localized('Calendar'),
     icon: CalendarIcon,
+    order: 10,
     rootSheet: () => WorkspaceStore.Sheet.Calendar,
     menu: calendarMenu(),
     hiddenMenuIds: HIDDEN_MENUS,
-    onEnter: () => AppEnv.mailsyncBridge.sendSyncCalendarNow(),
+    onEnter: enterCalendarSection,
     openInNewWindowCommand: 'application:show-calendar-window',
   });
 }
