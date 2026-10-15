@@ -1,10 +1,12 @@
 import {
   WorkspaceStore,
   ComponentRegistry,
+  SectionStore,
   Actions,
   AccountStore,
   localized,
 } from 'mailspring-exports';
+import { ContactsIcon } from 'mailspring-component-kit';
 import { ContactPerspectivesList } from './ContactPerspectivesList';
 import { ContactDetailToolbar } from './ContactDetailToolbar';
 import { AddContactToolbar } from './AddContactToolbar';
@@ -14,8 +16,8 @@ import { FoundInMailEnabledBar } from './FoundInMailEnabledBar';
 import { Store } from './Store';
 import { exportContactsToFile, importContactsFromFile } from './VCFImportExport';
 
-function adjustMenus() {
-  const contactMenu: (typeof AppEnv.menu.template)[0] = {
+function contactMenu(): (typeof AppEnv.menu.template)[0] {
+  return {
     id: 'Contact',
     label: localized('Contact'),
     submenu: [
@@ -52,16 +54,12 @@ function adjustMenus() {
       },
     ],
   };
-
-  const template = AppEnv.menu.template.filter(
-    (item) => item.id !== 'Thread' && item.id !== 'View'
-  );
-  const editIndex = template.findIndex((item) => item.id === 'Edit');
-  template.splice(editIndex + 1, 0, contactMenu);
-
-  AppEnv.menu.template = template;
-  AppEnv.menu.update();
 }
+
+const HIDDEN_MENUS = ['Thread', 'View'];
+
+let _section: { dispose(): void } | null = null;
+let _contactsWindowBaseMenu: typeof AppEnv.menu.template | null = null;
 
 let _commandDisposable: { dispose: () => void } | null = null;
 
@@ -75,16 +73,70 @@ function resolveImportAccountId(): string | null {
   return account ? account.id : null;
 }
 
-export function activate() {
+type RegistryDescriptor = Parameters<typeof ComponentRegistry.register>[1];
+
+function registerContactsComponents(sidebarLocation: RegistryDescriptor) {
+  ComponentRegistry.register(ContactPerspectivesList, sidebarLocation);
+  ComponentRegistry.register(FoundInMailEnabledBar, {
+    location: WorkspaceStore.Location.ContactsList,
+  });
+  ComponentRegistry.register(ContactList, { location: WorkspaceStore.Location.ContactsList });
+  ComponentRegistry.register(ContactListSearch, {
+    location: WorkspaceStore.Location.ContactsList.Toolbar,
+  });
+  ComponentRegistry.register(ContactDetail, { location: WorkspaceStore.Location.ContactsDetail });
+  ComponentRegistry.register(ContactDetailToolbar, {
+    location: WorkspaceStore.Location.ContactsDetail.Toolbar,
+  });
+}
+
+function activateInContactsWindow() {
   WorkspaceStore.defineSheet(
     'Contacts',
     { root: true },
     { split: ['ContactsSidebar', 'ContactsList', 'ContactsDetail'] }
   );
-
-  adjustMenus();
+  _contactsWindowBaseMenu = AppEnv.menu.template;
+  const template = AppEnv.menu.template.filter((item) => !HIDDEN_MENUS.includes(item.id));
+  template.splice(template.findIndex((item) => item.id === 'Edit') + 1, 0, contactMenu());
+  AppEnv.menu.template = template;
+  AppEnv.menu.update();
   Actions.selectRootSheet(WorkspaceStore.Sheet.Contacts);
+  registerContactsComponents({ location: WorkspaceStore.Location.ContactsSidebar });
+  ComponentRegistry.register(AddContactToolbar, {
+    location: WorkspaceStore.Location.ContactsSidebar.Toolbar,
+  });
+  // The window is created hidden; show it once the first frame has rendered.
+  window.requestAnimationFrame(() => AppEnv.displayWindow());
+}
 
+function activateInMainWindow() {
+  WorkspaceStore.defineSheet(
+    'Contacts',
+    { root: true },
+    {
+      list: ['RootSidebar', 'ContactsList', 'ContactsDetail'],
+      split: ['RootSidebar', 'ContactsList', 'ContactsDetail'],
+      splitVertical: ['RootSidebar', 'ContactsList', 'ContactsDetail'],
+    }
+  );
+  registerContactsComponents({ role: 'SectionSidebar:contacts' });
+  // The shared sidebar column has no per-section toolbar, so "add contact" sits in the list toolbar.
+  ComponentRegistry.register(AddContactToolbar, {
+    location: WorkspaceStore.Location.ContactsList.Toolbar,
+  });
+  _section = SectionStore.registerSection({
+    id: 'contacts',
+    title: localized('Contacts'),
+    icon: ContactsIcon,
+    rootSheet: () => WorkspaceStore.Sheet.Contacts,
+    menu: contactMenu(),
+    hiddenMenuIds: HIDDEN_MENUS,
+    openInNewWindowCommand: 'application:show-contacts-window',
+  });
+}
+
+export function activate() {
   _commandDisposable = AppEnv.commands.add(document.body, {
     'contacts:import-vcf': () => {
       const accountId = resolveImportAccountId();
@@ -107,28 +159,11 @@ export function activate() {
     },
   });
 
-  ComponentRegistry.register(ContactPerspectivesList, {
-    location: WorkspaceStore.Location.ContactsSidebar,
-  });
-  ComponentRegistry.register(FoundInMailEnabledBar, {
-    location: WorkspaceStore.Location.ContactsList,
-  });
-
-  ComponentRegistry.register(ContactList, {
-    location: WorkspaceStore.Location.ContactsList,
-  });
-  ComponentRegistry.register(ContactListSearch, {
-    location: WorkspaceStore.Location.ContactsList.Toolbar,
-  });
-  ComponentRegistry.register(ContactDetail, {
-    location: WorkspaceStore.Location.ContactsDetail,
-  });
-  ComponentRegistry.register(ContactDetailToolbar, {
-    location: WorkspaceStore.Location.ContactsDetail.Toolbar,
-  });
-  ComponentRegistry.register(AddContactToolbar, {
-    location: WorkspaceStore.Location.ContactsSidebar.Toolbar,
-  });
+  if (AppEnv.getWindowType() === 'contacts') {
+    activateInContactsWindow();
+  } else {
+    activateInMainWindow();
+  }
 }
 
 export function deactivate() {
@@ -141,4 +176,14 @@ export function deactivate() {
   ComponentRegistry.unregister(AddContactToolbar);
   _commandDisposable?.dispose();
   _commandDisposable = null;
+  _section?.dispose();
+  _section = null;
+  if (WorkspaceStore.Sheet.Contacts) {
+    WorkspaceStore.undefineSheet('Contacts');
+  }
+  if (_contactsWindowBaseMenu) {
+    AppEnv.menu.template = _contactsWindowBaseMenu;
+    AppEnv.menu.update();
+    _contactsWindowBaseMenu = null;
+  }
 }

@@ -25,8 +25,6 @@ class ContactsWindowStore extends MailspringStore {
     super();
 
     window.requestAnimationFrame(() => {
-      AppEnv.displayWindow();
-
       const contacts = DatabaseStore.findAll<Contact>(Contact)
         .where(Contact.attributes.refs.greaterThan(0))
         .where(Contact.attributes.hidden.equal(false));

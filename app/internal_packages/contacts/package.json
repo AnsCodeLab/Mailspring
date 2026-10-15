@@ -12,6 +12,7 @@
     "mailspring": "*"
   },
   "windowTypes": {
+    "default": true,
     "contacts": true
   }
 }
