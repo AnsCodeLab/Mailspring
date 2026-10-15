@@ -9,6 +9,8 @@ import { MailboxPerspective } from '../../src/mailbox-perspective';
 import CategoryStore from '../../src/flux/stores/category-store';
 import { AccountStore } from '../../src/flux/stores/account-store';
 import FocusedPerspectiveStore from '../../src/flux/stores/focused-perspective-store';
+import SectionStore from '../../src/flux/stores/section-store';
+import * as Actions from '../../src/flux/actions';
 
 describe('FocusedPerspectiveStore', function () {
   beforeEach(function () {
@@ -198,4 +200,17 @@ describe('FocusedPerspectiveStore', function () {
       FocusedPerspectiveStore._setPerspective(this.inboxPerspective);
       expect(FocusedPerspectiveStore.trigger).not.toHaveBeenCalled();
     }));
+
+  describe('_setPerspective while another section is active', function () {
+    it('does not change the root sheet outside mail', function () {
+      spyOn(SectionStore, 'current').andReturn('calendar');
+      // The spec window never defines the Threads sheet, so give the perspective a real target.
+      spyOn(this.userPerspective, 'sheet').andReturn({ id: 'SpecSheet' });
+      spyOn(Actions, 'selectRootSheet');
+      spyOn(Actions, 'popToRootSheet');
+      FocusedPerspectiveStore._setPerspective(this.userPerspective);
+      expect(Actions.selectRootSheet).not.toHaveBeenCalled();
+      expect(Actions.popToRootSheet).not.toHaveBeenCalled();
+    });
+  });
 });

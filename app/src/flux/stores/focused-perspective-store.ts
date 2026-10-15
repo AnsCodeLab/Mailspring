@@ -5,6 +5,7 @@ import WorkspaceStore from './workspace-store';
 import { MailboxPerspective } from '../../mailbox-perspective';
 import CategoryStore from './category-store';
 import * as Actions from '../actions';
+import SectionStore from './section-store';
 
 class FocusedPerspectiveStore extends MailspringStore {
   _current = MailboxPerspective.forNothing();
@@ -39,20 +40,26 @@ class FocusedPerspectiveStore extends MailspringStore {
   }
 
   _listenToCommands() {
+    const inMail = (fn: () => void) => () => {
+      Actions.selectSection('mail');
+      fn();
+    };
     AppEnv.commands.add(document.body, {
-      'navigation:go-to-inbox': () => this._setPerspectiveByName('inbox'),
-      'navigation:go-to-sent': () => this._setPerspectiveByName('sent'),
-      'navigation:go-to-starred': () =>
-        this._setPerspective(MailboxPerspective.forStarred(this._current.accountIds)),
-      'navigation:go-to-drafts': () =>
-        this._setPerspective(MailboxPerspective.forDrafts(this._current.accountIds)),
-      'navigation:go-to-all': () => {
+      'navigation:go-to-inbox': inMail(() => this._setPerspectiveByName('inbox')),
+      'navigation:go-to-sent': inMail(() => this._setPerspectiveByName('sent')),
+      'navigation:go-to-starred': inMail(() =>
+        this._setPerspective(MailboxPerspective.forStarred(this._current.accountIds))
+      ),
+      'navigation:go-to-drafts': inMail(() =>
+        this._setPerspective(MailboxPerspective.forDrafts(this._current.accountIds))
+      ),
+      'navigation:go-to-all': inMail(() => {
         const categories = this._current.accountIds.map((id) =>
           CategoryStore.getArchiveCategory(id)
         );
         this._setPerspective(MailboxPerspective.forCategories(categories));
-      },
-      'navigation:go-to-contacts': () => {}, // TODO,
+      }),
+      'navigation:go-to-contacts': () => Actions.selectSection('contacts'),
       'navigation:go-to-tasks': () => {}, // TODO,
       'navigation:go-to-label': () => {}, // TODO,
     });
@@ -182,6 +189,12 @@ class FocusedPerspectiveStore extends MailspringStore {
 
     if (shouldTrigger) {
       this.trigger();
+    }
+
+    // While Calendar or Contacts is showing, the mail perspective still updates (sidebar
+    // selection, saved state) but must not pull the window back to a mail sheet.
+    if (SectionStore.current() !== 'mail') {
+      return;
     }
 
     const desired = perspective.sheet();
