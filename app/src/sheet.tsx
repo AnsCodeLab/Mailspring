@@ -34,7 +34,7 @@ export function applyToolbarChromeFloor<T extends { minWidth: number }>(columns:
 }
 
 const COLUMN_META: Record<string, { role: string; label: () => string }> = {
-  RootSidebar: { role: 'complementary', label: () => localized('Account sidebar') },
+  RootSidebar: { role: 'complementary', label: () => localized('Sidebar') },
   ThreadList: { role: 'region', label: () => localized('Thread list') },
   MessageList: { role: 'region', label: () => localized('Messages') },
   MessageListSidebar: { role: 'complementary', label: () => localized('Contact panel') },

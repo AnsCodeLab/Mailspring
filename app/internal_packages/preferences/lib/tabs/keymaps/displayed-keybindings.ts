@@ -79,6 +79,9 @@ export default [
   {
     title: localized('Jumping'),
     items: [
+      ['navigation:section-mail', localized('Show Mail')],
+      ['navigation:section-calendar', localized('Show Calendar')],
+      ['navigation:section-contacts', localized('Show Contacts')],
       ['navigation:go-to-inbox', localized('Go to %@', localized('Inbox'))],
       ['navigation:go-to-starred', localized('Go to %@', localized('Starred'))],
       ['navigation:go-to-sent', localized('Go to %@', localized('Sent Mail'))],

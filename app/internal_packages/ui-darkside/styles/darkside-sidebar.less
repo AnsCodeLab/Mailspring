@@ -7,9 +7,32 @@
 // Make sidebar and corresponding toolbar match
 .column-RootSidebar,
 .account-sidebar,
+.section-sidebar,
 .toolbar-RootSidebar {
   height: 100%;
   background-color: @sidebar;
+}
+
+.section-sidebar .section-sidebar-title {
+  color: @sidebar-text;
+}
+
+.section-dock {
+  border-top-color: fade(@sidebar-text, 15%);
+
+  .section-dock-item {
+    color: fade(@sidebar-text, 60%);
+
+    &:hover {
+      color: @sidebar-text;
+      background: fade(@sidebar-text, 8%);
+    }
+
+    &.active {
+      color: @active-sidebar-text;
+      border-bottom-color: @active-sidebar-text;
+    }
+  }
 }
 
 .notifications {
