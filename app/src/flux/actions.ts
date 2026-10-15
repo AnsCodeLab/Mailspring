@@ -206,6 +206,13 @@ export const updateContainerFolderDefault = create(
 export const selectRootSheet = create('selectRootSheet', ActionScopeWindow);
 
 /*
+  Public: Switch the main window to a top-level section (mail, calendar, contacts).
+
+  *Scope: Window*
+  */
+export const selectSection = create('selectSection', ActionScopeWindow);
+
+/*
   Public: Toggle whether a particular column is visible. Call this action
   with one of the Sheet location constants:
 

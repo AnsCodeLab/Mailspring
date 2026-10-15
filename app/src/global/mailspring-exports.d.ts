@@ -143,6 +143,9 @@ export const FolderSyncProgressStore: FolderSyncProgressStore;
 export type FocusedPerspectiveStore =
   typeof import('../flux/stores/focused-perspective-store').default;
 export const FocusedPerspectiveStore: FocusedPerspectiveStore;
+export type SectionStore = typeof import('../flux/stores/section-store').default;
+export const SectionStore: SectionStore;
+export type { SectionDeclaration, SectionId } from '../flux/stores/section-store';
 export type SearchableComponentStore =
   typeof import('../flux/stores/searchable-component-store').default;
 export const SearchableComponentStore: SearchableComponentStore;
