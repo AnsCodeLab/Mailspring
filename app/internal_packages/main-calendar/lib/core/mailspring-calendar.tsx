@@ -15,18 +15,14 @@ import {
   SyncbackEventTask,
   ICSEventHelpers,
 } from 'mailspring-exports';
-import {
-  ScrollRegion,
-  ResizableRegion,
-  KeyCommandsRegion,
-  MiniMonthView,
-} from 'mailspring-component-kit';
+import { ResizableRegion, KeyCommandsRegion } from 'mailspring-component-kit';
 import { CalendarMenuCommands } from '../calendar-menu-commands';
 import { DayView } from './day-view';
 import { WeekView } from './week-view';
 import { MonthView } from './month-view';
 import { AgendaView } from './agenda-view';
-import { CalendarSourceList } from './calendar-source-list';
+import { CalendarSidebarPanel } from './calendar-sidebar-panel';
+import { CalendarViewStore } from '../calendar-view-store';
 import {
   CalendarDataSource,
   EventOccurrence,
@@ -148,6 +144,7 @@ export class MailspringCalendar extends React.Component<
   _disposable?: Disposable;
   _themeDisposable?: { dispose(): void };
   _unlisten?: () => void;
+  _unlistenView?: () => void;
   _dataSource = new CalendarDataSource();
 
   constructor(props: MailspringCalendarProps) {
@@ -158,7 +155,7 @@ export class MailspringCalendar extends React.Component<
       focusedEvent: null,
       selectedEvents: [],
       view: AppEnv.config.get(CALENDAR_VIEW) || CalendarView.WEEK,
-      focusedMoment: moment(),
+      focusedMoment: CalendarViewStore.focusedMoment(),
       disabledCalendars: AppEnv.config.get(DISABLED_CALENDARS) || [],
       dragState: null,
       calendarListVisible: AppEnv.config.get(CALENDAR_LIST_VISIBLE) !== false,
@@ -170,6 +167,9 @@ export class MailspringCalendar extends React.Component<
   componentDidMount() {
     this._disposable = this._subscribeToCalendars();
     this._unlisten = Actions.focusCalendarEvent.listen(this._focusEvent);
+    this._unlistenView = CalendarViewStore.listen(() =>
+      this.setState({ focusedMoment: CalendarViewStore.focusedMoment(), focusedEvent: null })
+    );
     this._themeDisposable = AppEnv.themes.onDidChangeActiveThemes(() => {
       invalidateThemeTextColorCache();
       this.setState((s) => ({ themeVersion: s.themeVersion + 1 }));
@@ -183,6 +183,7 @@ export class MailspringCalendar extends React.Component<
     if (this._unlisten) {
       this._unlisten();
     }
+    this._unlistenView?.();
   }
 
   _subscribeToCalendars() {
@@ -231,17 +232,20 @@ export class MailspringCalendar extends React.Component<
     const focusedMoment = selected
       ? moment.unix(occurrenceStartUnix(selected))
       : this.state.focusedMoment;
+    CalendarViewStore.setFocusedMoment(focusedMoment);
     // Clear any active drag state when changing views
-    this.setState({ view, dragState: null, focusedMoment });
+    this.setState({ view, dragState: null });
     AppEnv.config.set(CALENDAR_VIEW, view);
   };
 
   onChangeFocusedMoment = (focusedMoment: Moment) => {
-    this.setState({ focusedMoment, focusedEvent: null });
+    CalendarViewStore.setFocusedMoment(focusedMoment);
   };
 
+  // The store listener clears focusedEvent, so focusedEvent is set after the store call.
   _focusEvent = (event: FocusedEventInfo) => {
-    this.setState({ focusedMoment: moment(event.start * 1000), focusedEvent: event });
+    CalendarViewStore.setFocusedMoment(moment(event.start * 1000));
+    this.setState({ focusedEvent: event });
   };
 
   _openEventPopover(eventModel: EventOccurrence) {
@@ -936,7 +940,7 @@ export class MailspringCalendar extends React.Component<
             'calendar:resize-event-right': () => this._onMoveSelectedEvent('right', true),
           }}
         >
-          {this.state.calendarListVisible && (
+          {AppEnv.getWindowType() === 'calendar' && this.state.calendarListVisible && (
             <ResizableRegion
               className="calendar-source-list"
               initialWidth={200}
@@ -945,19 +949,7 @@ export class MailspringCalendar extends React.Component<
               handle={ResizableRegion.Handle.Right}
               style={{ flexDirection: 'column' }}
             >
-              <ScrollRegion style={{ flex: 1 }}>
-                <CalendarSourceList
-                  accounts={this.state.accounts}
-                  calendars={this.state.calendars}
-                  disabledCalendars={this.state.disabledCalendars}
-                />
-              </ScrollRegion>
-              <div style={{ width: '100%' }}>
-                <MiniMonthView
-                  value={this.state.focusedMoment}
-                  onChange={this.onChangeFocusedMoment}
-                />
-              </div>
+              <CalendarSidebarPanel />
             </ResizableRegion>
           )}
           {this._renderMainContent()}

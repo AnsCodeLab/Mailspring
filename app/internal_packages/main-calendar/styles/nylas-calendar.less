@@ -1,13 +1,64 @@
 @import 'ui-variables';
 
 body.platform-win32 {
-  .calendar-source-list {
+  .calendar-sidebar-panel {
     .colored-checkbox {
       border-radius: 0;
       .bg-color {
         border-radius: 0;
       }
     }
+  }
+}
+
+// The panel renders in the calendar window's source list and in the main window's
+// section sidebar, so its styles are not scoped to `.mailspring-calendar`.
+.calendar-sidebar-panel {
+  color: @text-color-subtle;
+  .calendar-source-list-wrap {
+    padding: 12px;
+    padding-top: 0;
+  }
+  .colored-checkbox {
+    position: relative;
+    top: 1px;
+    margin-left: 1px;
+    display: inline-block;
+    border-radius: 3px;
+    width: 12px;
+    height: 12px;
+    box-shadow:
+      0 0 0.5px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(0, 0, 0, 0.13);
+    background: white;
+    .bg-color {
+      width: 100%;
+      height: 100%;
+      border-radius: 3px;
+    }
+  }
+  label {
+    padding-left: 0.4em;
+  }
+  .toggle-wrap,
+  .account-label {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .account-calendars-wrap {
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+  .account-label {
+    cursor: default;
+    color: @text-color-very-subtle;
+    font-weight: @font-weight-semi-bold;
+    font-size: @font-size-small * 0.9;
+    margin-top: @padding-large-vertical;
+    letter-spacing: -0.2px;
   }
 }
 
@@ -20,52 +71,6 @@ body.platform-win32 {
     display: flex;
     background-color: @source-list-bg;
     border-right: 1px solid @border-color-divider;
-    color: @text-color-subtle;
-    .calendar-source-list-wrap {
-      padding: 12px;
-      padding-top: 0;
-    }
-    .colored-checkbox {
-      position: relative;
-      top: 1px;
-      margin-left: 1px;
-      display: inline-block;
-      border-radius: 3px;
-      width: 12px;
-      height: 12px;
-      box-shadow:
-        0 0 0.5px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(0, 0, 0, 0.13);
-      background: white;
-      .bg-color {
-        width: 100%;
-        height: 100%;
-        border-radius: 3px;
-      }
-    }
-    label {
-      padding-left: 0.4em;
-    }
-    .toggle-wrap,
-    .account-label {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      margin-top: 2px;
-    }
-    .account-calendars-wrap {
-      &:first-child {
-        margin-top: 0;
-      }
-    }
-    .account-label {
-      cursor: default;
-      color: @text-color-very-subtle;
-      font-weight: @font-weight-semi-bold;
-      font-size: @font-size-small * 0.9;
-      margin-top: @padding-large-vertical;
-      letter-spacing: -0.2px;
-    }
   }
 
   background: @background-off-primary;
