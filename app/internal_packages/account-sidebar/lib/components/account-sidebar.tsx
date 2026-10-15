@@ -1,5 +1,5 @@
 import React from 'react';
-import { localized, Utils, DOMUtils, Account, AccountStore } from 'mailspring-exports';
+import { localized, Utils, Account, AccountStore } from 'mailspring-exports';
 import { OutlineView, ScrollRegion, Flexbox } from 'mailspring-component-kit';
 import AccountSwitcher from './account-switcher';
 import SidebarStore from '../sidebar-store';
@@ -19,10 +19,6 @@ export default class AccountSidebar extends React.Component<
   static displayName = 'AccountSidebar';
 
   static containerRequired = false;
-  static containerStyles = {
-    minWidth: DOMUtils.getWorkspaceCssNumberProperty('account-sidebar-min-width', 165),
-    maxWidth: DOMUtils.getWorkspaceCssNumberProperty('account-sidebar-max-width', 250),
-  };
 
   unsubscribers = [];
 

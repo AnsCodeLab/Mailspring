@@ -1,0 +1,62 @@
+@import 'ui-variables';
+
+.section-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: @source-list-bg;
+
+  .section-sidebar-title {
+    margin: 0;
+    padding: 10px 12px 6px;
+    font-size: 1.15em;
+    font-weight: 600;
+    color: @text-color;
+  }
+
+  .section-sidebar-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// AccountSidebar's account switcher already heads the mail panel.
+.section-sidebar-mail .section-sidebar-title {
+  display: none;
+}
+
+.section-dock {
+  display: flex;
+  flex-shrink: 0;
+  border-top: 1px solid @border-color-divider;
+
+  .section-dock-item {
+    flex: 1;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: @text-color-subtle;
+    cursor: default;
+
+    &:hover {
+      color: @text-color;
+      background: fade(@text-color, 5%);
+    }
+
+    &.active {
+      color: @component-active-color;
+      border-bottom-color: @component-active-color;
+    }
+
+    &:focus-visible {
+      outline: 2px solid @component-active-color;
+      outline-offset: -2px;
+    }
+  }
+}

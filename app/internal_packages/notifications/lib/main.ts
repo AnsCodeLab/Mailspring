@@ -1,6 +1,6 @@
 /* eslint no-unused-vars:0 */
 
-import { ComponentRegistry, WorkspaceStore } from 'mailspring-exports';
+import { ComponentRegistry } from 'mailspring-exports';
 import ActivitySidebar from './sidebar/activity-sidebar';
 import NotifWrapper from './notif-wrapper';
 
@@ -23,8 +23,8 @@ const notifications = [
 ];
 
 export function activate() {
-  ComponentRegistry.register(ActivitySidebar, { location: WorkspaceStore.Location.RootSidebar });
-  ComponentRegistry.register(NotifWrapper, { location: WorkspaceStore.Location.RootSidebar });
+  ComponentRegistry.register(ActivitySidebar, { role: 'SectionSidebar:mail' });
+  ComponentRegistry.register(NotifWrapper, { role: 'SectionSidebar:mail' });
 
   for (const notification of notifications) {
     ComponentRegistry.register(notification, { role: 'RootSidebar:Notifications' });

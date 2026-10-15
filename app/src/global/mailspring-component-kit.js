@@ -130,6 +130,10 @@ lazyLoadFrom('MailLabel', 'mail-label');
 lazyLoadFrom('LabelColorizer', 'mail-label');
 lazyLoad('MailLabelSet', 'mail-label-set');
 lazyLoad('MailImportantIcon', 'mail-important-icon');
+lazyLoadFrom('MailIcon', 'section-icons');
+lazyLoadFrom('CalendarIcon', 'section-icons');
+lazyLoadFrom('ContactsIcon', 'section-icons');
+lazyLoadFrom('MoreIcon', 'section-icons');
 
 lazyLoad('ScenarioEditor', 'scenario-editor');
 

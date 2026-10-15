@@ -1,9 +1,9 @@
-import { ComponentRegistry, WorkspaceStore } from 'mailspring-exports';
+import { ComponentRegistry } from 'mailspring-exports';
 import AccountSidebar from './components/account-sidebar';
 import { activateMboxExportRunner, deactivateMboxExportRunner } from './mbox-export-runner';
 
 export function activate(state) {
-  ComponentRegistry.register(AccountSidebar, { location: WorkspaceStore.Location.RootSidebar });
+  ComponentRegistry.register(AccountSidebar, { role: 'SectionSidebar:mail' });
   activateMboxExportRunner();
 }
 
