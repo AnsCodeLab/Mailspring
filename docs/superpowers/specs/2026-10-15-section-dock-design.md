@@ -1,7 +1,6 @@
 # Section Dock: In-Place Mail / Calendar / Contacts Switching
 
 Issue: [#30](https://github.com/AnsCodeLab/Mailspring/issues/30)
-Reference UI: eM Client 10/11 bottom navigation rail in the left pane.
 
 ## Goal
 
@@ -94,7 +93,7 @@ flowchart LR
 - The active section gets an accent underline and `aria-current="page"`. Each button is a `role="tab"` inside a `role="tablist"`.
 - Tooltips: title and shortcut (e.g. "Calendar (Ctrl+2)").
 - Context menu on Calendar and Contacts: "Open in New Window", which dispatches `application:show-calendar-window` / `application:show-contacts-window`.
-- Narrow sidebar: icons only. This is the default, and matches eM Client.
+- Narrow sidebar: icons only. This is the default.
 
 ### 6. Commands and keymaps
 

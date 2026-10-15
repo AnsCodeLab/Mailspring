@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** An eM Client-style dock (Mail / Calendar / Contacts / ⋯) at the bottom of the main window's left column switches the whole window between sections in place.
+**Goal:** A dock (Mail / Calendar / Contacts / ⋯) at the bottom of the main window's left column switches the whole window between sections in place.
 
 **Architecture:** A new `SectionStore` owns the active section. Switching selects that section's root sheet, swaps its top-level menus, and runs the section's `onEnter`. Calendar and Contacts load in the main window as root sheets that share the `RootSidebar` column. A `SectionSidebar` component in that column renders the active section's panel, with the `SectionDock` pinned below it. Inactive sections are unmounted, so their `document.body` command handlers detach.
 
@@ -953,7 +953,7 @@ Remove `containerStyles` from `AccountSidebar` (`account-sidebar.tsx:24-27`): th
 }
 ```
 
-Mail's title is redundant with the existing account switcher at the top of `AccountSidebar`, so hide it for Mail only: `.section-sidebar-mail .section-sidebar-title { display: none; }`. eM Client does show "Mail"; keep it shown if the visual check in Task 8 looks right with it. That is a visual call, not a behaviour change.
+Mail's title is redundant with the existing account switcher at the top of `AccountSidebar`, so hide it for Mail only: `.section-sidebar-mail .section-sidebar-title { display: none; }`. That is a visual call, not a behaviour change.
 
 - [ ] **Step 8: Manual check.** Run `npm start`, then look and click:
   - The mail sidebar looks unchanged apart from the dock at the bottom.
