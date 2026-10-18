@@ -44,6 +44,10 @@ function npm(cmd, options) {
   });
 }
 
+// The sync engine is built and published by the AnsCodeLab/Mailspring-Sync fork's CI as a release
+// named mailsync-<first 8 chars of the commit>, matching the submodule pointer.
+const MAILSYNC_RELEASES_URL = 'https://github.com/AnsCodeLab/Mailspring-Sync/releases/download';
+
 function getMailsyncURL(callback) {
   const distKey = `${process.platform}-${process.arch}`;
   const distDir = {
@@ -65,19 +69,31 @@ function getMailsyncURL(callback) {
 
   const out = execSync('git submodule status ./mailsync');
   const [_, hash] = /[\+-]([A-Za-z0-9]{8})/.exec(out.toString());
-  callback(
-    `https://mailspring-builds.s3.amazonaws.com/mailsync/${hash}/${distDir}/mailsync.tar.gz`
-  );
+  callback(`${MAILSYNC_RELEASES_URL}/mailsync-${hash}/mailsync-${distDir}.tar.gz`);
+}
+
+// GitHub release downloads answer with a redirect to a signed storage URL.
+function getFollowingRedirects(url, callback, redirectsLeft = 5) {
+  https.get(url, response => {
+    const { statusCode, headers } = response;
+    if (statusCode >= 300 && statusCode < 400 && headers.location && redirectsLeft > 0) {
+      response.resume();
+      getFollowingRedirects(new URL(headers.location, url).toString(), callback, redirectsLeft - 1);
+      return;
+    }
+    callback(response);
+  });
 }
 
 function downloadMailsync() {
-  getMailsyncURL(distS3URL => {
-    https.get(distS3URL, response => {
+  getMailsyncURL(mailsyncURL => {
+    getFollowingRedirects(mailsyncURL, response => {
       if (response.statusCode === 200) {
-        response.pipe(fs.createWriteStream(`app/mailsync.tar.gz`));
-        response.on('end', () => {
+        const archive = fs.createWriteStream(`app/mailsync.tar.gz`);
+        response.pipe(archive);
+        archive.on('finish', () => {
           console.log(
-            `\nDownloaded Mailsync prebuilt binary from ${distS3URL} to ./app/mailsync.tar.gz.`
+            `\nDownloaded Mailsync prebuilt binary from ${mailsyncURL} to ./app/mailsync.tar.gz.`
           );
           targz.decompress(
             {
@@ -95,7 +111,7 @@ function downloadMailsync() {
         });
       } else {
         console.error(
-          `Sorry, an error occurred while fetching the Mailspring Mailsync build for your machine\n(${distS3URL})\n`
+          `Sorry, an error occurred while fetching the Mailspring Mailsync build for your machine\n(${mailsyncURL})\n`
         );
         if (process.env.CI) {
           throw new Error('Mailsync build not available.');
