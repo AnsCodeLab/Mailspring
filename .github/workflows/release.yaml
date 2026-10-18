@@ -197,6 +197,7 @@ jobs:
             - "Move to Trash" in a message's reply-caret menu trashes only that message, not the whole conversation
             - Fixed the left sidebar (accounts and folders) failing to load in packaged builds
             - The composer's Cut / Copy / Paste toolbar buttons work again with Electron 44
+            - Fixed an error shown in place of the message header for some emails (images setting looked up a folder that had not loaded yet)
 
             **Linux**
             - Fixed "could not store your password securely" error appearing even when a working secret service (GNOME Keyring/KWallet) is reachable, on launchers that don't propagate `XDG_CURRENT_DESKTOP`/`DESKTOP_SESSION` (systemd user units, some window managers, process supervisors)
