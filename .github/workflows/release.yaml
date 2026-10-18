@@ -163,7 +163,12 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Mailspring ${{ github.ref_name }}"
           body: |
-            Custom build of Mailspring 1.22.0 with the following additions:
+            Custom build of Mailspring 1.24.0 with the following additions:
+
+            **Sections**
+            - Mail, Calendar and Contacts switch in place from a dock at the bottom of the left sidebar (Ctrl/Cmd+1/2/3, Window menu). Right-click Calendar or Contacts in the dock to open it in a separate window
+            - Shortcut changes: account selection moved to Ctrl/Cmd+Alt+1…9; calendar Day/Week/Month/Agenda moved to Ctrl/Cmd+Shift+1…4 (Ctrl+Cmd+1…4 on macOS)
+            - Office 365 and Outlook calendars now sync from Microsoft Graph (read-only; events can't be created or edited yet)
 
             **AI Assistant**
             - AI chat sidebar per email thread with citations and knowledge base search
@@ -190,6 +195,7 @@ jobs:
             - Export emails/threads to Markdown with embedded images
             - "Move to Trash" in a message's reply-caret menu trashes only that message, not the whole conversation
             - Fixed the left sidebar (accounts and folders) failing to load in packaged builds
+            - The composer's Cut / Copy / Paste toolbar buttons work again with Electron 44
 
             **Linux**
             - Fixed "could not store your password securely" error appearing even when a working secret service (GNOME Keyring/KWallet) is reachable, on launchers that don't propagate `XDG_CURRENT_DESKTOP`/`DESKTOP_SESSION` (systemd user units, some window managers, process supervisors)
