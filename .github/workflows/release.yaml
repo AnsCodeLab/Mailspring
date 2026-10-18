@@ -169,6 +169,7 @@ jobs:
             - Mail, Calendar and Contacts switch in place from a dock at the bottom of the left sidebar (Ctrl/Cmd+1/2/3, Window menu). Right-click Calendar or Contacts in the dock to open it in a separate window
             - Shortcut changes: account selection moved to Ctrl/Cmd+Alt+1…9; calendar Day/Week/Month/Agenda moved to Ctrl/Cmd+Shift+1…4 (Ctrl+Cmd+1…4 on macOS)
             - Office 365 and Outlook calendars now sync from Microsoft Graph (read-only; events can't be created or edited yet)
+            - Updated sync engine with the latest upstream calendar and sync fixes
 
             **AI Assistant**
             - AI chat sidebar per email thread with citations and knowledge base search
